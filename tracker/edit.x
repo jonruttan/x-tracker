@@ -59,7 +59,8 @@
 (def %heard 19)     ; the place last drawn as heard, (AT . ROW), or nil
 (def %follow 20)    ; whether the pattern and row heard are followed while playing
 (def %pick 21)      ; the song highlighted while :song lists them, or nil
-(def %slots 22)
+(def %stale 22)     ; whether the song heard is behind the song edited
+(def %slots 23)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -126,18 +127,27 @@
     (%put! st %help #f)
     (%put! st %warned #f)
     (%put! st %follow #t)
+    (%put! st %stale #f)
     (%go-song! st 0)))
 
 ; --- changes -----------------------------------------------------------------
 
-; What the song heard is told of a change.
-(def %heard-change!
+; A change is heard from the next pattern, so the song playing is told
+; of it later (edit-settle!), once for any number of keys: telling it
+; reads the whole song into the tracker again.
+(def %heard-change! (fn (_ st) (%put! st %stale #t)))
+
+; The song playing told of the changes since it was last told: what the
+; caller does when no key is waiting.
+(def edit-settle!
   (fn (_ st)
     (def p (%get st %player))
-    (unless (if (null? p) #t (not (player-playing? p)))
-      ((fn (_ e) (unless (null? e) (edit-message! st e)))
-       (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
-         (do (player-update! p (edit-song st) (%get st %pattern)) ()))))))
+    (when (%get st %stale)
+      (do (%put! st %stale #f)
+          (unless (if (null? p) #t (not (player-playing? p)))
+            ((fn (_ e) (unless (null? e) (edit-message! st e)))
+             (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
+               (do (player-update! p (edit-song st) (%get st %pattern)) ()))))))))
 
 ; The song made S: the old document kept to undo to.
 (def %change!
@@ -204,11 +214,12 @@
     (def note (%note-for st semi))
     (def inst (first (List ref (%get st %chan) (%channels st))))
     (def old (%cell st))
-    (%put-cell! st (Str8 append note (if (List includes? (first (Str8 split "/" old)) (list "." "-")) "" (%suffix old))))
+    ; Heard first, before the cell is changed and the screen drawn.
     (unless (null? (%get st %player))
       ((fn (_ e) (unless (null? e) (edit-message! st e)))
        (guard (e (if (Err err? e) (e msg) "the note cannot be played"))
-         (do (player-preview! (%get st %player) (edit-song st) inst note) ()))))))
+         (do (player-preview! (%get st %player) (edit-song st) inst note) (edit-feed! st) ()))))
+    (%put-cell! st (Str8 append note (if (List includes? (first (Str8 split "/" old)) (list "." "-")) "" (%suffix old))))))
 
 ; --- playing -----------------------------------------------------------------
 
@@ -222,7 +233,8 @@
       ((if (eq? mode (lit song)) (null? (song-order (edit-song st))) #f) (edit-message! st "The song has no order: :order NAME ..."))
       (#t ((fn (_ e) (edit-message! st (if (null? e) "" e)))
            (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
-             (do (player-start! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern)) ())))))))
+             (do (%put! st %stale #f)
+                 (player-start! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern)) ())))))))
 
 ; The player's stream topped up, nothing else: what a caller does just
 ; before work that keeps it from coming round for a while.  A song the
@@ -631,4 +643,4 @@
     st))
 
 (provide tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
-  edit-feed! edit-tick! edit-key! edit-draw!)
+  edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)

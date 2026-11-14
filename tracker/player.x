@@ -41,13 +41,13 @@
 (def %pl-rate 44100)
 (def %pl-block 1024)
 ; How far the music is kept ahead of the speaker, in bytes of frames: a
-; second.  The editor's loop is held up by a redraw (some 75 ms) and a
-; collect (up to some 180 ms, measured over music.xon), so a third of a
-; second left little over.  A change is heard from the next pattern
-; anyway, and the place shown is read from the marks, not the queue.  A
-; note typed is queued only two blocks ahead, so it is heard at once.
+; second.  The editor's loop is held up by a note typed (some 90 ms), a
+; redraw (some 105 ms) and a collect (40 to 180 ms), measured over the
+; demo and music.xon, so a third of a second left little over.  A change
+; is heard from the next pattern anyway, and the place shown is read
+; from the marks, not the queue.  A note typed is kept as far ahead: its
+; stream is cleared when the next is typed, so it is still heard at once.
 (def %pl-ahead (* 4 %pl-rate))
-(def %pl-preview-ahead (* 8 %pl-block))
 (def %pl-preview-pattern "x-tracker-preview")
 (def %pl-tail-pattern "x-tracker-tail")
 
@@ -224,14 +224,35 @@
       (#t ()))
     p))
 
+; Song form F with only what a note on instrument INST needs: its props
+; and effects, that instrument, and the preview pattern; the tracker reads
+; every pattern of a form it is given.
+(def %pl-preview-form
+  (fn (_ f inst)
+    (pair (first f)
+      (pair (List ref 1 f)
+        (List filter
+          (fn (_ x)
+            (match ((not (pair? x)) #t)
+                   ((eq? (first x) (lit instrument)) (str=? (symbol->str (List ref 1 x)) inst))
+                   ((eq? (first x) (lit pattern)) (str=? (symbol->str (List ref 1 x)) %pl-preview-pattern))
+                   (#t #t)))
+          (rest (rest f)))))))
+
 ; NOTE played on instrument INST of S, as a cell of four rows would
-; play it, over whatever is playing.  Raises a label 'value for a note
-; or an instrument the tracker cannot read.
+; play it, over whatever is playing.  The note typed before is cut off
+; where it was heard: its stream is cleared, so this one is heard at
+; once.  Raises a label 'value for a note or an instrument the tracker
+; cannot read.
 (def player-preview!
   (fn (_ p s inst note)
-    (def t (Tracker make (%pl-waves-known (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
-                                                     (list %pl-preview-pattern)))))
+    (def t (Tracker make (%pl-waves-known
+                           (%pl-preview-form
+                             (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
+                                        (list %pl-preview-pattern))
+                             inst))))
     (unless (null? (%pl-get p 14)) (Tracker stop! (%pl-get p 14)))
+    ((%pl-get p 0) audio-clear! (%pl-get p 12))
     (Tracker play! t (%pl-get p 13))
     (%pl-put! p 14 t)
     p))
@@ -254,7 +275,7 @@
   (fn (_ p)
     (+ (if (%pl-get p 9) (%pl-feed! p (%pl-get p 1) (%pl-get p 2) %pl-ahead (fn (_) (%pl-mark! p))) 0)
        (if (if (null? (%pl-get p 14)) (= 0 (Mixer playing (%pl-get p 13))) #f) 0
-         (%pl-feed! p (%pl-get p 12) (%pl-get p 13) %pl-preview-ahead
+         (%pl-feed! p (%pl-get p 12) (%pl-get p 13) %pl-ahead
            (fn (_) (unless (null? (%pl-get p 14)) (do (Tracker stop! (%pl-get p 14)) (%pl-put! p 14 ())))))))))
 
 (def player-tension!

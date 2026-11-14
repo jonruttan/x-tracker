@@ -93,3 +93,18 @@ spec-play!.  Nothing here opens an audio device.
 ```
 ---
     (#t #t "Not following the playing." #t)
+
+### a note typed is made from its own instrument alone, and cuts off the one before
+
+```tracker
+(def s (song-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (instrument b (wave spec-missing))\n  (pattern p (a \"C4 . E4 .\") (b \"C3\"))\n  (order p))"))
+(def pl (player-open (spec-front) ()))
+(player-preview! pl s "a" "C4")
+(player-pump! pl)
+(def first-queued (< 0 (Vector ref 1 spec-streams)))
+(player-preview! pl s "a" "E4")
+(def cleared (Vector ref 1 spec-streams))
+(write (list first-queued cleared (guard (e (e msg)) (player-preview! pl s "b" "C3") "played")))
+```
+---
+    (#t 0 "x-tracker: no wave named spec-missing: read the file its (wave ...) form is in with -w FILE")
