@@ -20,7 +20,7 @@
 (import x/sys/gc)
 (import x/repl/term)
 (import x/tui/screen)
-(import tracker/edit edit-make edit-quit? edit-player edit-message! edit-tick! edit-key! edit-draw!)
+(import tracker/edit edit-make edit-quit? edit-player edit-message! edit-feed! edit-tick! edit-key! edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
 (import tracker/song song-name song-order)
 
@@ -51,10 +51,20 @@
   (fn (_ reader ms)
     (if (reader (lit ask)) #t (not (null? (Sys poll (list (pair 0 (list (lit in)))) ms))))))
 
+; The screen drawn and sent, the stream topped up first: the drawing
+; keeps the loop from coming round, and the music plays on what is
+; queued meanwhile.
 (def %ap-show!
   (fn (_ st screen)
+    (edit-feed! st)
     (edit-draw! st screen)
     (Term emit 1 (Screen render screen))))
+
+; The heap collected, the stream topped up first, for the same reason.
+(def %ap-collect!
+  (fn (_ st)
+    (edit-feed! st)
+    (Heap collect)))
 
 (def %ap-playing?
   (fn (_ st) (if (null? (edit-player st)) #f (player-playing? (edit-player st)))))
@@ -77,13 +87,13 @@
              (do (if (eq? key (lit clear)) (Screen repaint screen) (edit-key! st key))
                  (edit-tick! st)
                  (%ap-show! st screen)
-                 (Heap collect)
+                 (%ap-collect! st)
                  (self st screen reader 0))))
          (Term key reader)))
       (#t (do (when (edit-tick! st) (%ap-show! st screen))
               (%ap-resize! st screen)
               (if (< rounds %ap-collect-rounds) (self st screen reader (+ rounds 1))
-                (do (Heap collect) (self st screen reader 0))))))))
+                (do (%ap-collect! st) (self st screen reader 0))))))))
 
 ; Edit DOC, read from PATH, on the terminal, heard through PLAYER (nil
 ; for none); MSG shown first.  Answers the exit status.

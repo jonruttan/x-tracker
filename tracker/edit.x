@@ -54,10 +54,12 @@
 (def %redo 14)
 (def %player 15)    ; the player (tracker/player), or nil when there is no sound
 (def %quit 16)
-(def %help 17)
+(def %help 17)      ; the lines shown over the grid, ? or :song, or #f
 (def %warned 18)    ; whether :q was refused once for a change not written
 (def %heard 19)     ; the place last drawn as heard, (AT . ROW), or nil
-(def %slots 20)
+(def %follow 20)    ; whether the pattern and row heard are followed while playing
+(def %pick 21)      ; the song highlighted while :song lists them, or nil
+(def %slots 22)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -123,6 +125,7 @@
     (%put! st %quit #f)
     (%put! st %help #f)
     (%put! st %warned #f)
+    (%put! st %follow #t)
     (%go-song! st 0)))
 
 ; --- changes -----------------------------------------------------------------
@@ -221,16 +224,28 @@
            (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
              (do (player-start! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern)) ())))))))
 
+; The player's stream topped up, nothing else: what a caller does just
+; before work that keeps it from coming round for a while.  A song the
+; mixer cannot play is stopped, and why is the message.
+(def edit-feed!
+  (fn (_ st)
+    (def p (%get st %player))
+    (unless (null? p)
+      ((fn (_ e) (unless (null? e) (do (player-stop! p) (edit-message! st e))))
+       (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
+         (do (player-pump! p) ()))))))
+
 ; The player fed, and the place heard: answers whether it moved since
 ; the screen was drawn.
 (def edit-tick!
   (fn (_ st)
     (def p (%get st %player))
     (if (null? p) #f
-      (do (player-pump! p)
+      (do (edit-feed! st)
           (def heard (if (player-playing? p) (player-place p) ()))
           (def moved (not (equal? heard (%get st %heard))))
           (%put! st %heard heard)
+          (when (if moved (if (%get st %follow) (not (null? heard)) #f) #f) (%follow! st p heard))
           moved))))
 
 ; --- the order ---------------------------------------------------------------
@@ -242,6 +257,13 @@
       (do (%put! st %at (int% (+ at (List length order)) (List length order)))
           (%put! st %pattern (List ref (%get st %at) order))
           (%clamp! st)))))
+
+; The pattern HEARD is in edited, and the cursor on the row heard.
+(def %follow!
+  (fn (_ st p heard)
+    (unless (if (eq? (player-mode p) (lit pattern)) #t (%same? (first heard) (%get st %at)))
+      (%goto-at! st (first heard)))
+    (%put! st %row (%min (rest heard) (- (%rows st) 1)))))
 
 (def %goto-pattern!
   (fn (_ st name)
@@ -331,7 +353,7 @@
          (guard (e (if (Err err? e) (e msg) "not an instrument"))
            (do (%change! st (song-set-instrument s (Str8 append "(" line ")"))) ()))))
       ((str=? cmd "song")
-        (if (null? args) (edit-message! st (Str8 join "  " (List map song-name (file-songs (%get st %doc)))))
+        (if (null? args) (do (%put! st %pick (%get st %song)) (%put! st %help (%song-lines st)))
           ((fn (_ name i)
              (if (null? i)
                (do (%put! st %undo (pair (pair (%get st %doc) (%get st %pattern)) (%get st %undo)))
@@ -386,14 +408,18 @@
     (match
       ((null? key) ())
       ((not (null? (%get st %input))) (%input-key! st key))
+      ((not (null? (%get st %pick))) (%pick-key! st key))
       ((%get st %help) (%put! st %help #f))
       ((eq? key (lit interrupt)) (%quit! st #f))
       ((%is? key ":") (%put! st %input (pair (lit command) "")))
-      ((%is? key "?") (%put! st %help #t))
+      ((%is? key "?") (%put! st %help %help-lines))
       ((%is? key "U") (%undo-step! st %undo %redo "undo"))
       ((%is? key "R") (%undo-step! st %redo %undo "redo"))
       ((%is? key " ") (%play! st (lit song)))
       ((%is? key "p") (%play! st (lit pattern)))
+      ((%is? key "F")
+        (do (%put! st %follow (not (%get st %follow)))
+            (edit-message! st (if (%get st %follow) "Following the playing." "Not following the playing."))))
       ((%is? key "[") (%goto-at! st (- (if (null? (%get st %at)) 0 (%get st %at)) 1)))
       ((%is? key "]") (%goto-at! st (+ (if (null? (%get st %at)) -1 (%get st %at)) 1)))
       ((%is? key "<") (%put! st %octave (%max 0 (- (%get st %octave) 1))))
@@ -445,6 +471,7 @@
         "  E   edit the channel's instrument     I D   insert, delete a row"
         "  [ ]   the pattern before, after in the order"
         "  Space   play the song from here     p   play the pattern"
+        "  F   follow the playing, or stop following"
         "  U R   undo, redo     ?   this     ctrl-c   quit"
         "Commands"
         "  :w [FILE]  :q  :q!  :wq            :song [NAME]  :rename NAME"
@@ -455,6 +482,46 @@
         "  t tremolo  f fade  l low-pass  c cut  d delay  r retrigger"
         ""
         "Any key closes this."))
+
+; The songs of the document, the one edited marked.
+(def %song-lines
+  (fn (_ st)
+    (def here (song-name (edit-song st)))
+    (pair "Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one"
+      (List map (fn (_ s) (Str8 append (if (str=? (song-name s) here) "  > " "    ") (song-name s) " "))
+        (file-songs (%get st %doc))))))
+
+; A key while :song lists the songs: up and down move the highlight,
+; Enter edits the song highlighted, any other key closes the list.
+(def %pick-key!
+  (fn (_ st key)
+    (def n (List length (file-songs (%get st %doc))))
+    (def close! (fn (_) (do (%put! st %pick ()) (%put! st %help #f))))
+    (match
+      ((eq? key (lit up)) (%put! st %pick (int% (+ (- (%get st %pick) 1) n) n)))
+      ((eq? key (lit down)) (%put! st %pick (int% (+ (%get st %pick) 1) n)))
+      ((eq? key (lit home)) (%put! st %pick 0))
+      ((eq? key (lit end)) (%put! st %pick (- n 1)))
+      ((eq? key (lit enter)) ((fn (_ i) (close!) (%go-song! st i) (edit-message! st "")) (%get st %pick)))
+      (#t (close!)))))
+
+; LINES put on SCREEN from row TOP, HIGH rows: the first a heading on a
+; row of its own, the rest beneath it, a column of HIGH less one, the
+; columns side by side as wide as the widest line.  A line not starting
+; with a blank is a heading, in bold; the line HI of the rest, when it
+; is not nil, is highlighted.
+(def %draw-panel!
+  (fn (_ screen lines top high hi)
+    (def h (%max 1 (- high 1)))
+    (def body (rest lines))
+    (def w (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 body)))
+    (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 %bold) 0)))
+    (Screen put screen top 0 (first lines) (style (first lines)))
+    (List fold
+      (fn (_ i l)
+        (Screen put screen (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
+        (+ i 1))
+      0 body)))
 
 (def %title
   (fn (_ st)
@@ -546,9 +613,7 @@
     (Screen put screen 0 0 (%title st) %bar)
     (Screen put screen 1 0 (%order-line st) 0)
     (match
-      ((%get st %help)
-        (List for-each (fn (_ i) (when (< (+ i 2) (- rows 1)) (Screen put screen (+ i 2) 0 (List ref i %help-lines) (if (< 0 (Str8 length (List ref i %help-lines))) (if (Str8 starts? " " (List ref i %help-lines)) 0 %bold) 0))))
-          (List range 0 (List length %help-lines))))
+      ((%get st %help) (%draw-panel! screen (%get st %help) 2 (- rows 3) (%get st %pick)))
       ((null? (%get st %pattern)) (Screen put screen 3 1 "The song has no pattern: :pattern NAME makes one." 0))
       (#t (%draw-grid! st screen 3 (- rows 2))))
     (def input (%get st %input))
@@ -566,4 +631,4 @@
     st))
 
 (provide tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
-  edit-tick! edit-key! edit-draw!)
+  edit-feed! edit-tick! edit-key! edit-draw!)

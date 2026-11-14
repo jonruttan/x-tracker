@@ -101,9 +101,18 @@
                    (guard (e (pair () (Str8 append "No sound: " (%cl-err-text e))))
                      (pair (player-open Sdl (%cl-waves doc opts)) "")))))))))))
 
+; The terminal back on fd 0.  The launcher pipes the program to the
+; engine on fd 0 and parks the terminal on fd 3, as x/repl/loop.x
+; reclaims it; read before then, fd 0 is the rest of the boot stream.
+(def %cl-terminal!
+  (fn (_)
+    (when (Sys isatty 3)
+      (do (Sys dup2 3 0) (Sys close 3)))))
+
 ; The command line ARGS run: the exit status.
 (def tracker-main
   (fn (_ args)
+    (%cl-terminal!)
     (def opts (Opts parse tracker-options args))
     (match
       ((not (null? (Opts unknown opts)))
