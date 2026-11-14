@@ -20,7 +20,7 @@
 (import x/sys/gc)
 (import x/repl/term)
 (import x/tui/screen)
-(import tracker/edit edit-make edit-quit? edit-player edit-message! edit-feed! edit-tick! edit-key! edit-draw!)
+(import tracker/edit edit-make edit-quit? edit-player edit-message! edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
 (import tracker/song song-name song-order)
 
@@ -90,7 +90,8 @@
                  (%ap-collect! st)
                  (self st screen reader 0))))
          (Term key reader)))
-      (#t (do (when (edit-tick! st) (%ap-show! st screen))
+      (#t (do (edit-settle! st)
+              (when (edit-tick! st) (%ap-show! st screen))
               (%ap-resize! st screen)
               (if (< rounds %ap-collect-rounds) (self st screen reader (+ rounds 1))
                 (do (%ap-collect! st) (self st screen reader 0))))))))
