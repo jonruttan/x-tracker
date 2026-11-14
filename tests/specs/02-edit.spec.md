@@ -210,11 +210,11 @@ draws.
   2  E4:50    .
   3  .        G2/v20,4
 
- ? keys   Space play   p pattern   : command
+ ? help   Space play   p pattern   : command
 (#t #f)
 ```
 
-### a command being typed is shown on the last line; ? shows the keys
+### a command being typed is shown on the last line; ? shows the help's topics
 
 ```tracker
 (def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") () ()))
@@ -227,7 +227,7 @@ draws.
 (write (list line (Str8 trim-right (Screen row-text screen 2)) (Str8 trim-right (Screen row-text screen 3))))
 ```
 ---
-    (":bpm 7" "Keys" "  z s x d c v g b h n j m ,   a note, C to C, in the octave")
+    (":bpm 7" "Help: :help TOPIC, or :help WORD for every command, effect, prop or se" "  keys        every key, and the action :set key binds it by")
 
 ### :song alone lists the songs to pick from, in columns when they do not fit one
 

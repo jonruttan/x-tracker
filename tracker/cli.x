@@ -10,6 +10,7 @@
 ;   x -l tracker -- [OPTIONS] play FILE       a song played
 ;   x -l tracker -- list FILE                 the songs of a file
 ;   x -l tracker -- render FILE -o OUT.wav    a song played once, to a WAV file
+;   x -l tracker -- help [WORD]               the help, or the help on WORD
 ;
 ; The options are one declaration to the platform's Opts, which parses
 ; them and prints the help.  A file is any .xon file of (song ...) forms
@@ -30,11 +31,12 @@
 (import tracker/player player-open player-render!)
 (import tracker/app app-edit app-play)
 (import tracker/config config-load config-get config-problems)
+(import tracker/help help-index help-on help-word)
 
 (def tracker-version "0.1.0")
 
 (def tracker-options
-  (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE | render FILE -o OUT.wav"
+  (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE | render FILE -o OUT.wav | help [WORD]"
     "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs,\nrender writes a song played once to a WAV file.\nSettings are read from $X_TRACKER_CONFIG, else ~/.config/x/tracker.xon; :set in the editor lists them."
     (list (Opts arg "-s" "--song" "NAME" "The song to edit or play (the file's first)")
           (Opts arg "-w" "--waves" "FILE" "Read the (wave ...) forms of FILE too; again for another")
@@ -91,14 +93,24 @@
     (List for-each (fn (_ p) (%cl-say 2 (Str8 append "x-tracker: " p "\n"))) (config-problems cfg))
     cfg))
 
+; The help LOOK finds on WORD (help-on, help-word), or the topics when
+; WORD is nil, to standard output.
+(def %cl-help
+  (fn (_ word look)
+    ((fn (_ lines)
+       (if (null? lines) (do (%cl-say 2 (Str8 append "x-tracker: no help on " word "; help lists the topics\n")) 1)
+         (do (%cl-say 1 (Str8 append (Str8 join "\n" lines) "\n")) 0)))
+     (if (null? word) (help-index) (look word)))))
+
 (def %cl-run
   (fn (_ opts)
     (def ops (Opts operands opts))
     (def word (if (null? ops) "edit" (first ops)))
-    (def named (List includes? word (list "edit" "play" "list" "render")))
+    (def named (List includes? word (list "edit" "play" "list" "render" "help")))
     (def files (if named (rest ops) ops))
     (def path (if (null? files) () (first files)))
     (match
+      ((str=? word "help") (%cl-help (if (null? files) () (first files)) help-on))
       ((< 1 (List length files)) (do (%cl-say 2 "x-tracker: one file at a time\n") 2))
       ((if (str=? word "edit") #f (null? path)) (do (%cl-say 2 (Str8 append "x-tracker: " word " needs a FILE\n")) 2))
       ((str=? word "list") (%cl-list (file-read path)))
@@ -145,7 +157,12 @@
     (match
       ((not (null? (Opts unknown opts)))
         (do (%cl-say 2 (Str8 append "x-tracker: unknown option " (Opts unknown opts) "\n" (Opts usage tracker-options))) 2))
-      ((Opts on? opts "-h") (do (%cl-say 1 (Opts usage tracker-options)) 0))
+      ((Opts on? opts "-h")
+        ((fn (_ ops)
+           (if (if (null? ops) #f (List includes? (first ops) (list "edit" "play" "list" "render" "help")))
+             (%cl-help (first ops) help-word)
+             (do (%cl-say 1 (Str8 append (Opts usage tracker-options) "help lists the topics of the help; help WORD, or WORD -h, the help on WORD\n")) 0)))
+         (Opts operands opts)))
       ((Opts on? opts "-V") (do (%cl-say 1 (Str8 append "x-tracker " tracker-version "\n")) 0))
       (#t (guard (e (do (%cl-say 2 (Str8 append (%cl-err-text e) "\n")) 1)) (%cl-run opts))))))
 
