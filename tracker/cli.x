@@ -11,6 +11,7 @@
 ;   x -l tracker -- list FILE                 the songs of a file
 ;   x -l tracker -- render FILE -o OUT.wav    a song played once, to a WAV file
 ;   x -l tracker -- help [WORD]               the help, or the help on WORD
+;   x -l tracker -- import FILE -o OUT.xon    a MIDI or SID file read into a song
 ;
 ; The options are one declaration to the platform's Opts, which parses
 ; them and prints the help.  A file is any .xon file of (song ...) forms
@@ -32,16 +33,22 @@
 (import tracker/app app-edit app-play)
 (import tracker/config config-load config-get config-problems)
 (import tracker/help help-index help-on help-word)
+(import tracker/import import-file!)
 
 (def tracker-version "0.1.0")
 
+(def %cl-words (list "edit" "play" "list" "render" "import" "help"))
+
 (def tracker-options
-  (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE | render FILE -o OUT.wav | help [WORD]"
-    "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs,\nrender writes a song played once to a WAV file.\nSettings are read from $X_TRACKER_CONFIG, else ~/.config/x/tracker.xon; :set in the editor lists them."
-    (list (Opts arg "-s" "--song" "NAME" "The song to edit or play (the file's first)")
+  (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE | render FILE -o OUT.wav | import FILE -o OUT.xon | help [WORD]"
+    "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs,\nrender writes a song played once to a WAV file, import reads a MIDI or SID file into a song.\nSettings are read from $X_TRACKER_CONFIG, else ~/.config/x/tracker.xon; :set in the editor lists them."
+    (list (Opts arg "-s" "--song" "NAME" "The song to edit or play (the file's first); the name import gives")
           (Opts arg "-w" "--waves" "FILE" "Read the (wave ...) forms of FILE too; again for another")
           (Opts flag "-l" "--loop" "Play the song over and over, until q")
-          (Opts arg "-o" "--output" "FILE" "The WAV file render writes")
+          (Opts arg "-o" "--output" "FILE" "The WAV file render writes, the song file import adds to")
+          (Opts arg "-r" "--rows" "N" "Rows a beat import places a MIDI file's notes on, 1-64 (4)")
+          (Opts arg "-u" "--tune" "N" "The tune of a SID file import plays (the one it starts with)")
+          (Opts arg "-t" "--time" "SECS" "Seconds of a SID tune import plays, 1-3600 (60)")
           (Opts flag "-n" "--no-sound" "Edit without opening the audio")
           (Opts flag "-V" "--version" "Print the version and exit")
           (Opts flag "-h" "--help" "Print this help and exit"))
@@ -102,11 +109,37 @@
          (do (%cl-say 1 (Str8 append (Str8 join "\n" lines) "\n")) 0)))
      (if (null? word) (help-index) (look word)))))
 
+; N, the text an option was given, as a number from LEAST to MOST, or
+; DEFAULT when the option was not given; nil when it is no such number.
+(def %cl-number
+  (fn (_ given least most default)
+    (if (null? given) default
+      ((fn (_ n) (if (if (null? n) #t (if (< n least) #t (< most n))) () n))
+       (guard (e ()) ((prim-ref (lit convert) (lit to)) given (Type named INTEGER) 10))))))
+
+; The file at PATH imported into the -o file: the exit status.
+(def %cl-import
+  (fn (_ path opts)
+    (def out (Opts value opts "-o"))
+    (def rows (%cl-number (Opts value opts "-r") 1 64 4))
+    (def tune (%cl-number (Opts value opts "-u") 1 256 0))
+    (def secs (%cl-number (Opts value opts "-t") 1 3600 60))
+    (match
+      ((null? out) (do (%cl-say 2 "x-tracker: import needs -o OUT.xon, the song file to add to\n") 2))
+      ((null? rows) (do (%cl-say 2 "x-tracker: -r takes rows a beat, 1-64\n") 2))
+      ((null? tune) (do (%cl-say 2 "x-tracker: -u takes a tune, 1-256\n") 2))
+      ((null? secs) (do (%cl-say 2 "x-tracker: -t takes seconds, 1-3600\n") 2))
+      (#t ((fn (_ s)
+             (%cl-say 1 (Str8 append "Imported " (song-name s) " to " out ": " (%cl-length s) "  "
+                          (Str8 str (List length (song-patterns s))) " patterns  " (Str8 str (List length (song-order s))) " in the order\n"))
+             0)
+           (import-file! path out (Opts value opts "-s") rows tune secs))))))
+
 (def %cl-run
   (fn (_ opts)
     (def ops (Opts operands opts))
     (def word (if (null? ops) "edit" (first ops)))
-    (def named (List includes? word (list "edit" "play" "list" "render" "help")))
+    (def named (List includes? word %cl-words))
     (def files (if named (rest ops) ops))
     (def path (if (null? files) () (first files)))
     (match
@@ -114,6 +147,7 @@
       ((< 1 (List length files)) (do (%cl-say 2 "x-tracker: one file at a time\n") 2))
       ((if (str=? word "edit") #f (null? path)) (do (%cl-say 2 (Str8 append "x-tracker: " word " needs a FILE\n")) 2))
       ((str=? word "list") (%cl-list (file-read path)))
+      ((str=? word "import") (%cl-import path opts))
       ((if (str=? word "render") (null? (Opts value opts "-o")) #f)
         (do (%cl-say 2 "x-tracker: render needs -o OUT.wav, the file to write\n") 2))
       (#t
@@ -159,7 +193,7 @@
         (do (%cl-say 2 (Str8 append "x-tracker: unknown option " (Opts unknown opts) "\n" (Opts usage tracker-options))) 2))
       ((Opts on? opts "-h")
         ((fn (_ ops)
-           (if (if (null? ops) #f (List includes? (first ops) (list "edit" "play" "list" "render" "help")))
+           (if (if (null? ops) #f (List includes? (first ops) %cl-words))
              (%cl-help (first ops) help-word)
              (do (%cl-say 1 (Str8 append (Opts usage tracker-options) "help lists the topics of the help; help WORD, or WORD -h, the help on WORD\n")) 0)))
          (Opts operands opts)))

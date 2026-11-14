@@ -26,4 +26,8 @@
 (import tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
   edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
 (import tracker/app app-edit app-play)
+(import tracker/score score-song)
+(import tracker/midi midi-song)
+(import tracker/sid sid-song sid-run)
+(import tracker/import import-bytes import-song import-name import-file!)
 (import tracker/cli tracker-version tracker-options tracker-main)
