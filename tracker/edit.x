@@ -1076,24 +1076,45 @@
   (fn (_ screen cols row col text style)
     (when (int< col cols) (Screen put screen row col text style))))
 
+; A panel's lines to a column, in HIGH rows; its columns' width, of LINES.
+(def %panel-high (fn (_ high) (%max 1 (- high 1))))
+(def %panel-width (fn (_ lines) (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 (rest lines)))))
+
+; Whether LINES as a panel of HIGH rows are wider than COLS.
+(def %panel-cut?
+  (fn (_ lines high cols)
+    (< (* (%max 1 (int/ cols (%panel-width lines))) (%panel-high high)) (List length (rest lines)))))
+
 ; LINES put on SCREEN from row TOP, HIGH rows: the first a heading on a
 ; row of its own, the rest beneath it, a column of HIGH less one, the
 ; columns side by side as wide as the widest line, as many as the screen
 ; is wide for.  A line not starting with a blank is a heading, in bold;
-; the line HI of the rest, when it is not nil, is highlighted.
+; the line HI of the rest, when it is not nil, is highlighted.  More
+; columns than fit start from the one HI is in, and the heading counts
+; the lines left out to either side.
 (def %draw-panel!
   (fn (_ st screen lines top high hi)
-    (def h (%max 1 (- high 1)))
+    (def h (%panel-high high))
     (def body (rest lines))
+    (def n (List length body))
     (def cols (Screen cols screen))
-    (def w (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 body)))
+    (def w (%panel-width lines))
+    (def shown (%max 1 (int/ cols w)))
+    (def first-col (if (null? hi) 0 (%max 0 (+ (- (int/ hi h) shown) 1))))
+    (def from (* first-col h))
+    (def to (%min n (* (+ first-col shown) h)))
     (def heading (%style st (lit heading)))
     (def cursor (%style st (lit cursor)))
     (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 heading) 0)))
-    (Screen put screen top 0 (first lines) (style (first lines)))
+    (Screen put screen top 0
+      (Str8 append (first lines)
+        (if (< 0 from) (Str8 append "   (" (Str8 str from) " to the left)") "")
+        (if (< to n) (Str8 append "   (" (Str8 str (- n to)) " to the right)") ""))
+      (style (first lines)))
     (List fold
       (fn (_ i l)
-        (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) cursor (style l)))
+        (when (if (<= from i) (< i to) #f)
+          (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (- (int/ i h) first-col)) l (if (%same? i hi) cursor (style l))))
         (+ i 1))
       0 body)))
 
@@ -1121,45 +1142,92 @@
         (+ i 1))
       0 body)))
 
+; PARTS, each (RANK . TEXT), in WIDTH columns: while they are wider, the
+; last of the highest RANK left out.  Rank 0 is never left out.
+(def %fit-parts
+  (fn (self parts width)
+    (def worst (List fold (fn (_ m p) (%max m (first p))) 0 parts))
+    (if (if (< 0 worst) (< width (List fold (fn (_ m p) (+ m (Str8 length (rest p)))) 0 parts)) #f)
+      (self (List reverse ((fn (go l) (if (= worst (first (first l))) (rest l) (pair (first l) (go (rest l)))))
+                           (List reverse parts)))
+            width)
+      parts)))
+
+; The title bar, COLS wide: the file, the song, its settings, the
+; editor's, and what plays.  On a narrow screen the least needed go
+; first: rows and ticks, octave and step, bpm and the player's
+; settings, the song's name; what plays and the file stay.
 (def %title
-  (fn (_ st)
+  (fn (_ st cols)
     (def s (edit-song st))
     (def p (%get st %player))
-    (Str8 append " x-tracker  " (if (null? (%get st %path)) "(no file)" (%get st %path))
-      (if (file-changed? (%get st %doc)) " [+]" "")
-      "   \"" (song-name s) "\""
-      "   bpm " (Str8 str (song-prop s "bpm" 90)) "  rows " (Str8 str (song-prop s "rows" 4))
-      "  ticks " (Str8 str (song-prop s "ticks" 6))
-      "   octave " (Str8 str (%get st %octave)) "  step " (Str8 str (%get st %step))
-      (match ((null? p) "   (no sound)")
-             ((not (player-playing? p)) "")
-             ((eq? (player-mode p) (lit song)) "   > song")
-             ((null? (player-loop p)) "   > pattern")
-             (#t (Str8 append "   > rows " (Str8 str (first (player-loop p))) "-" (Str8 str (rest (player-loop p))))))
-      (if (null? p) ""
-        (Str8 append
-          (if (= 0 (player-tension p)) "" (Str8 append "  tension " (Str8 str (player-tension p))))
-          (if (= 100 (player-pace p)) "" (Str8 append "  pace " (Str8 str (player-pace p)) "%"))
-          (if (= 100 (player-volume p)) "" (Str8 append "  volume " (Str8 str (player-volume p)) "%")))))))
+    (Str8 join ""
+      (List map rest
+        (%fit-parts
+          (list
+            (pair 0 (Str8 append " x-tracker  " (if (null? (%get st %path)) "(no file)" (%get st %path))
+                      (if (file-changed? (%get st %doc)) " [+]" "")))
+            (pair 2 (Str8 append "   \"" (song-name s) "\""))
+            (pair 3 (Str8 append "   bpm " (Str8 str (song-prop s "bpm" 90))))
+            (pair 5 (Str8 append "  rows " (Str8 str (song-prop s "rows" 4))))
+            (pair 5 (Str8 append "  ticks " (Str8 str (song-prop s "ticks" 6))))
+            (pair 4 (Str8 append "   octave " (Str8 str (%get st %octave))))
+            (pair 4 (Str8 append "  step " (Str8 str (%get st %step))))
+            (pair 0 (match ((null? p) "   (no sound)")
+                           ((not (player-playing? p)) "")
+                           ((eq? (player-mode p) (lit song)) "   > song")
+                           ((null? (player-loop p)) "   > pattern")
+                           (#t (Str8 append "   > rows " (Str8 str (first (player-loop p))) "-" (Str8 str (rest (player-loop p)))))))
+            (pair 3 (if (if (null? p) #t (= 0 (player-tension p))) "" (Str8 append "  tension " (Str8 str (player-tension p)))))
+            (pair 3 (if (if (null? p) #t (= 100 (player-pace p))) "" (Str8 append "  pace " (Str8 str (player-pace p)) "%")))
+            (pair 3 (if (if (null? p) #t (= 100 (player-volume p))) "" (Str8 append "  volume " (Str8 str (player-volume p)) "%"))))
+          cols)))))
 
-; The order, the place edited marked [NAME], the place heard >NAME.
+; The width of ITEMS joined by blanks.
+(def %joined-length (fn (_ items) (List fold (fn (_ m s) (+ m (+ 1 (Str8 length s)))) -1 items)))
+
+; ITEMS from S to E, E not included.
+(def %slice (fn (_ items s e) (List take (- e s) (List drop s items))))
+
+; ITEMS joined by blanks in WIDTH columns, item F among them: from the
+; first item that leaves room for F, as many as fit after it.  "..."
+; stands for the items left out at either end.
+(def %window
+  (fn (_ items f width)
+    (def n (List length items))
+    (def fits? (fn (_ s e) (<= (+ (+ (if (< 0 s) 4 0) (%joined-length (%slice items s e))) (if (< e n) 4 0)) width)))
+    (def s ((fn (self s) (if (if (< s f) (not (fits? s (+ f 1))) #f) (self (+ s 1)) s)) 0))
+    (def e ((fn (self e) (if (if (< e n) (fits? s (+ e 1)) #f) (self (+ e 1)) e)) (%min n (+ f 1))))
+    (Str8 append (if (< 0 s) "... " "") (Str8 join " " (%slice items s e)) (if (< e n) " ..." ""))))
+
+; The order, COLS wide: the place edited marked [NAME], the place picked
+; while O edits it <NAME>, the place heard >NAME.  An order wider than
+; the screen shows the part around the place picked, else the place
+; heard while the song plays, else the place edited.
 (def %order-line
-  (fn (_ st)
+  (fn (_ st cols)
     (def order (song-order (edit-song st)))
     (def heard (if (null? (%get st %heard)) () (first (%get st %heard))))
     (def playing-song (if (null? (%get st %player)) #f (if (player-playing? (%get st %player)) (eq? (player-mode (%get st %player)) (lit song)) #f)))
+    (def tail (if (if (null? (%get st %at)) (not (null? (%get st %pattern))) #f)
+                (Str8 append "   editing " (%get st %pattern) ", not in the order") ""))
+    (def focus (match ((not (null? (%get st %order-at))) (%get st %order-at))
+                      ((if playing-song (not (null? heard)) #f) heard)
+                      ((not (null? (%get st %at))) (%get st %at))
+                      (#t 0)))
     (Str8 append " order: "
       (if (null? order) "(none)"
-        (Str8 join " "
+        (%window
           (List map (fn (_ i)
                       (def name (List ref i order))
                       (def mark (if (if playing-song (%same? i heard) #f) (Str8 append ">" name) name))
                       (match ((%same? i (%get st %order-at)) (Str8 append "<" mark ">"))
                              ((if (null? (%get st %order-at)) (%same? i (%get st %at)) #f) (Str8 append "[" mark "]"))
                              (#t mark)))
-            (List range 0 (List length order)))))
-      (if (if (null? (%get st %at)) (not (null? (%get st %pattern))) #f)
-        (Str8 append "   editing " (%get st %pattern) ", not in the order") ""))))
+            (List range 0 (List length order)))
+          (%min focus (- (List length order) 1))
+          (- (- cols 8) (Str8 length tail))))
+      tail)))
 
 ; Whether S has a / from byte I on.
 (def %slash?
@@ -1256,10 +1324,15 @@
     (def rows (Screen rows screen))
     (def cols (Screen cols screen))
     (Screen fill screen 0 0 cols (%style st (lit title)))
-    (Screen put screen 0 0 (%title st) (%style st (lit title)))
-    (Screen put screen 1 0 (%order-line st) 0)
+    (Screen put screen 0 0 (%title st cols) (%style st (lit title)))
+    (Screen put screen 1 0 (%order-line st cols) 0)
     (match
       ((not (null? (%get st %browse))) (%draw-page! st screen (%get st %help) (rest (%get st %browse)) 2 (- rows 3)))
+      ; A list with nothing picked in it, too wide for the screen, pages
+      ; as the help does.
+      ((if (%get st %help) (if (null? (%get st %pick)) (%panel-cut? (%get st %help) (- rows 3) cols) #f) #f)
+        (do (%put! st %browse (pair () 0)) (edit-message! st %browse-hint)
+            (%draw-page! st screen (%get st %help) 0 2 (- rows 3))))
       ((%get st %help) (%draw-panel! st screen (%get st %help) 2 (- rows 3) (%get st %pick)))
       ((null? (%get st %pattern)) (Screen put screen 3 1 "The song has no pattern: :pattern NAME makes one." 0))
       (#t (%draw-grid! st screen 3 (- rows 2))))
