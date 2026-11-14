@@ -28,7 +28,7 @@
 (import x/type/vector)
 (import x/tui/screen)
 (import x/tui/style)
-(import x/core/doors int/ int%)
+(import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-new song-name song-rename song-patterns song-pattern song-order song-prop
   song-instruments song-instrument-text song-set-pattern song-set-order song-set-prop song-set-instrument
   pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row pattern-delete-row
@@ -470,7 +470,16 @@
 (def %cursor (Style make (list (lit reverse)) () ()))
 (def %playing (Style make (list (lit bold)) 2 ()))
 
-(def %pad (fn (_ w s) (if (< (Str8 length s) w) (Str8 pad-right w #\space s) (Str8 sub 0 w s))))
+; S padded with blanks or cut to W bytes.  A cell is ASCII by its syntax,
+; and a screen of them is drawn for every row heard, so this is the byte
+; doors and one concatenation, not class sends.
+(def %blanks "                                                                ")
+(def %pad
+  (fn (_ w s)
+    (def n (str-byte-len s))
+    (match ((int< w n) (str-byte-sub s 0 w))
+           ((int< (int- w n) (str-byte-len %blanks)) (%str-concat (list s (str-byte-sub %blanks 0 (int- w n)))))
+           (#t (Str8 pad-right w #\space s)))))
 
 (def %help-lines
   (list "Keys"
@@ -567,9 +576,17 @@
       (if (if (null? (%get st %at)) (not (null? (%get st %pattern))) #f)
         (Str8 append "   editing " (%get st %pattern) ", not in the order") ""))))
 
+; Whether S has a / from byte I on.
+(def %slash?
+  (fn (self s i) (if (int< i (str-byte-len s)) (if (int= (str-byte-ref s i) 47) #t (self s (int+ i 1))) #f)))
+
 (def %cell-style
   (fn (_ cell)
-    (match ((str=? cell ".") %dim) ((Str8 starts? "-" cell) %off) ((Str8 includes? "/" cell) %fx) (#t 0))))
+    (def b (if (int< 0 (str-byte-len cell)) (str-byte-ref cell 0) 0))
+    (match ((if (int= b 46) (int= 1 (str-byte-len cell)) #f) %dim)
+           ((int= b 45) %off)
+           ((%slash? cell 0) %fx)
+           (#t 0))))
 
 ; The row being heard, in the pattern edited, or nil.
 (def %heard-row
@@ -595,26 +612,37 @@
     (def shown (- (- bottom top) 1))
     (when (< (%get st %row) (%get st %top)) (%put! st %top (%get st %row)))
     (when (not (< (%get st %row) (+ (%get st %top) shown))) (%put! st %top (+ (- (%get st %row) shown) 1)))
-    (def chans (List range (%get st %left) (%min (List length chs) (+ (%get st %left) fit))))
+    (def left (%get st %left))
+    (def shown-chs (List take (%min (List length chs) fit) (List drop left chs)))
     (def heard (%heard-row st))
-    (List for-each
-      (fn (_ k) (Screen put screen top (+ 5 (* w (- k (%get st %left)))) (%pad (- w 1) (first (List ref k chs))) %bold))
-      chans)
-    (List for-each
-      (fn (_ y)
-        (def r (+ (%get st %top) y))
-        (when (< r rows)
-          (do (Screen put screen (+ (+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
-                (if (%same? r heard) %playing (if (= 0 (int% r beat)) %beat %dim)))
-              (when (%same? r heard) (Screen put screen (+ (+ top 1) y) 3 ">" %playing))
-              (List for-each
-                (fn (_ k)
-                  (def cell (pattern-cell chs k r))
-                  (def here (if (= r (%get st %row)) (= k (%get st %chan)) #f))
-                  (Screen put screen (+ (+ top 1) y) (+ 5 (* w (- k (%get st %left)))) (%pad (- w 1) cell)
-                    (if here %cursor (%cell-style cell))))
-                chans))))
-      (List range 0 shown))))
+    (def first-row (%get st %top))
+    (def cur-row (%get st %row))
+    (def cur-chan (int- (%get st %chan) left))
+    ((fn (self cs k)
+       (unless (null? cs)
+         (do (Screen put screen top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
+             (self (rest cs) (int+ k 1)))))
+     shown-chs 0)
+    ; Each channel's cells from the first row shown, walked a row at a
+    ; time: a row's cells put, the lists of the rows after it answered.
+    (def put-row!
+      (fn (self y r cs k acc)
+        (if (null? cs) acc
+          ((fn (_ cells)
+             (def cell (if (null? cells) "." (first cells)))
+             (Screen put screen (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
+               (if (if (int= r cur-row) (int= k cur-chan) #f) %cursor (%cell-style cell)))
+             (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
+           (first cs)))))
+    (def rev (fn (self xs acc) (if (null? xs) acc (self (rest xs) (pair (first xs) acc)))))
+    ((fn (self y cs)
+       (def r (int+ first-row y))
+       (when (if (int< y shown) (int< r rows) #f)
+         (do (Screen put screen (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
+               (if (%same? r heard) %playing (if (int= 0 (int% r beat)) %beat %dim)))
+             (when (%same? r heard) (Screen put screen (int+ (int+ top 1) y) 3 ">" %playing))
+             (self (int+ y 1) (rev (put-row! y r cs 0 ()) ())))))
+     0 (List map (fn (_ ch) (List drop first-row (rest ch))) shown-chs))))
 
 (def edit-draw!
   (fn (_ st screen)
