@@ -164,3 +164,41 @@ document and written back, and the songs in it.
 ```
 ---
     (() () () () "no note H4" "an empty cell" "a cell has no spaces")
+
+### effects are added, changed and dropped in order; instruments and patterns renamed everywhere
+
+```tracker
+(def s (song-parse "(song \"t\" (bpm 90)\n  (echo 300 40 20)\n  (instrument a (wave sine))\n  (pattern p (a \"C4 D4\"))\n  (order p p))"))
+(def s2 (song-drop-effect (song-set-effect (song-set-effect (song-set-effect s 1 "(reverb 100 70 25)") 0 "(echo 200 30 10)") 2 "(limit 90 100)") 1))
+(def s3 (song-rename-pattern (song-rename-instrument (song-copy-instrument s2 "a" "b") "a" "lead") "p" "verse"))
+(spec-lines (song-text s3))
+(write (list (song-effects s2) (song-instrument-uses s3 "lead") (song-instrument-uses s3 "b")
+             (guard (e (e msg)) (song-set-effect s 0 "(bpm 3)"))))
+```
+---
+```output
+(song "t" (bpm 90)
+  (echo 200 30 10)
+  (limit 90 100)
+  (instrument lead (wave sine))
+  (instrument b (wave sine))
+  (pattern verse
+    (lead "C4 D4"))
+  (order verse verse))
+(("(echo 200 30 10)" "(limit 90 100)") ("verse") () "x-tracker: an effect is (NAME N ...), NAME one of echo reverb phase chorus drive crush sweep limit")
+```
+
+### a block is copied, pasted, transposed and set to a gain; channels move
+
+```tracker
+(def chs (list (list "a" "C4" "D4/v20,4" "." "-") (list "b" "E4:50" "." "F#4" ".")))
+(def blk (pattern-block chs 0 1 0 1))
+(write (list blk
+             (pattern-paste chs 1 2 blk)
+             (pattern-map-block chs 0 1 0 2 (fn (_ c) (cell-transpose c 2)))
+             (pattern-map-block chs 0 0 0 3 (fn (_ c) (cell-gain c 60)))
+             (pattern-move-channel chs 0 1) (pattern-move-channel chs 1 1)
+             (cell-transpose "B9" 1) (cell-transpose "C0:40/a3,7" -1) (cell-gain "G2:30/v1,2" 100)))
+```
+---
+    ((("C4" "D4/v20,4") ("E4:50" ".")) (("a" "C4" "D4/v20,4" "." "-") ("b" "E4:50" "." "C4" "D4/v20,4")) (("a" "D4" "E4/v20,4" "." "-") ("b" "F#4:50" "." "G#4" ".")) (("a" "C4:60" "D4:60/v20,4" "." "-") ("b" "E4:50" "." "F#4" ".")) (("b" "E4:50" "." "F#4" ".") ("a" "C4" "D4/v20,4" "." "-")) (("a" "C4" "D4/v20,4" "." "-") ("b" "E4:50" "." "F#4" ".")) "B9" "C0:40/a3,7" "G2/v1,2")

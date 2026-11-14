@@ -61,6 +61,13 @@ and heard as they are typed.  The other keys:
     p               play the pattern edited over and over, or stop
     F               follow the playing, or stop: while it follows, the
                     pattern heard is shown and the cursor is on its row
+    O               edit the order in place: left, right pick a place, up,
+                    down change its pattern, i copy it, d drop it, [ ] move
+                    it, Enter edit its pattern, Escape done
+    ( )             move the channel left, right
+    V               mark a block from the cursor; move to its other corner
+    Y X P           copy, cut, paste the block (or the cell)
+    Delete          clear the block marked
     U R             undo, redo
     ?               the keys and the commands
     ctrl-c          quit
@@ -84,6 +91,22 @@ and heard as they are typed.  The other keys:
     :waves keep                       copy the waves borrowed from -w files
                                       into this file
     :wave NAME [AMP ...]              show a wave, or make or change it
+    :effects                          list the effects over the whole mix
+    :effect (NAME N ...)              add one: echo reverb phase chorus
+                                      drive crush sweep limit
+    :effect K  :effect K (NAME N ...)  edit the Kth, or put it in
+    :effect drop K                    drop the Kth
+    :instruments                      list the instruments, and where each
+                                      plays
+    :instrument NAME                  edit an instrument's form, or make it
+    :copy-instrument NAME NEW  :rename-instrument NAME NEW
+    :drop-instrument NAME             one no channel plays
+    :channel-instrument NAME          the cursor's channel played by NAME
+    :patterns                         list the patterns
+    :copy-pattern NEW  :rename-pattern NEW  :drop-pattern [NAME]
+    :copy-song NAME  :drop-song
+    :transpose N  :gain PCT           the block marked, or the cell:
+                                      semitones up or down, a gain set
 
 A change is heard from the next pattern while the song plays.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):
