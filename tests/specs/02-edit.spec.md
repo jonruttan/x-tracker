@@ -142,6 +142,7 @@ draws.
 (spec-keys! st (list "x" ":w" 'enter))
 (spec-lines (File read-all path))
 (File unlink path)
+(File unlink (Str8 append path ".bak"))
 (write (Str8 starts? "Written: " (edit-message st)))
 ```
 ---

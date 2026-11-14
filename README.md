@@ -24,6 +24,9 @@ one to start from:
 
     x -l tracker -- data/demo.xon
 
+[docs/writing.md](docs/writing.md) is a guide to writing songs: the
+format, every effect, and how to make music with them.
+
 `play` plays a song once through, or with `--loop` until q, the pattern
 heard written to standard error; `list` prints each song of a file with
 how long it lasts, its patterns and its order; `render` writes a song
@@ -106,6 +109,8 @@ and heard as they are typed.  The other keys:
     :waves keep                       copy the waves borrowed from -w files
                                       into this file
     :wave NAME [AMP ...]              show a wave, or make or change it
+    :set                              list the settings, the keys among them
+    :set NAME VALUE ...               change a setting for this session
 
 A change is heard from the next pattern while the song plays; a mute
 or a solo from the next row.  A muted channel's heading is dim, a
@@ -118,6 +123,69 @@ is C4 at 60 percent with a vibrato.
 Written back, a file keeps everything the editor did not change as it
 was, comments and layout; a song that was changed is written from the
 song, its patterns a row a line with the cells lined up.
+
+## Settings
+
+The settings are read from `$X_TRACKER_CONFIG`, else
+`$XDG_CONFIG_HOME/x/tracker.xon`, else `~/.config/x/tracker.xon`, as
+x's own theme and syntax files are found; an empty `X_TRACKER_CONFIG`
+reads none.  The file is data, read and never run: each form is a
+setting, and `:set` in the editor takes the same form without its
+parentheses, for the session.  `:set` alone lists every setting with
+its value.
+
+    ; ~/.config/x/tracker.xon
+    (octave 3)                 ; the octave notes are typed in, 0-8 (4)
+    (step 1)                   ; rows the cursor moves after a note, 0-64 (1)
+    (follow on)                ; follow the playing (on)
+    (backup on)                ; :w first copies the file to FILE.bak, once a session (on)
+    (undo 200)                 ; changes kept to undo, 1-10000 (200)
+    (sound on)                 ; off edits without the audio, as -n does (on)
+    (waves "sounds.xon")       ; wave files read as -w reads them, from this file's directory
+    (colour beat (bold) yellow ())
+    (key undo "u")
+    (key play enter)
+
+A switch is `on` or `off` (`yes`, `no`, `#t`, `#f`).  `sound` and
+`waves` are read as the editor starts, so `:set` does not change them.
+
+`(colour NAME ATTRIBUTES FOREGROUND BACKGROUND)` is the style the editor
+draws NAME in, as x/tui/style's `Style make` takes it: the attributes a
+list of `bold dim italic underline reverse strike`, a colour 0 to 255,
+`black red green yellow blue magenta cyan white`, `bright-` any of
+those, or `()` for the terminal's own.  The names and their defaults:
+
+    title    (reverse) () ()    the line at the top
+    empty    (dim) () ()        an empty cell, a row off the beat, the hint line
+    heading  (bold) () ()       a channel's instrument, a heading
+    beat     () 3 ()            a row on the beat
+    off      () 1 ()            a let-go cell
+    effect   () 6 ()            a cell with effects
+    cursor   (reverse) () ()    the cursor, a song picked
+    playing  (bold) 2 ()        the row heard
+
+`(key ACTION KEY ...)` binds an action to other keys: each a character
+in a string, `"u"`, or a key's name, as `enter up down left right
+page-up page-down home end complete interrupt`.  A bound action's own key
+no longer does it; `(key ACTION)` gives it back.  The actions, and their
+own keys:
+
+    command :        help ?          undo U          redo R
+    play Space       play-pattern p  follow F
+    previous [       next ]          octave-down <   octave-up >
+    step-down {      step-up }       up down left right page-up page-down
+    top Home         bottom End      next-channel Tab
+    edit-cell Enter  edit-instrument E
+    insert-row I     delete-row D    hold .          let-go -
+    quit ctrl-c
+    play-here P      loop L
+    mute-channel M   solo-channel S  mute-instrument H  solo-instrument O
+    tension-down (   tension-up )    pace-down _     pace-up +
+    volume-down 9    volume-up 0
+
+A form that is not a setting is one line on standard error, and the
+first is shown in the editor; the rest of the file is still read.  A
+file that does not read is one line, and the defaults.
 
 ## Install
 
