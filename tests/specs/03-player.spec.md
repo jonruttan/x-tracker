@@ -1,9 +1,9 @@
 # The player
 @weight 2
 
-tracker/player through a stand-in for SDL's audio: a front that takes
-what is put on a stream and plays 1024 bytes of it each time it is asked
-how much is queued.  Nothing here opens an audio device.
+tracker/player through a stand-in for SDL's audio: a front that counts
+what is put on a stream and plays it only as the spec says, with
+spec-play!.  Nothing here opens an audio device.
 
 ## playing
 
@@ -14,7 +14,7 @@ how much is queued.  Nothing here opens an audio device.
 (player-start! pl spec-tune 'once 0 ())
 (def places ())
 (def spin (fn (self n) (if (if (< 0 n) (not (player-over? pl)) #f)
-                         (do (player-pump! pl) (set! places (pair (first (player-place pl)) places)) (self (- n 1))) n)))
+                         (do (spec-play! 4096) (player-pump! pl) (set! places (pair (first (player-place pl)) places)) (self (- n 1))) n)))
 (def left (spin 400))
 (write (list (player-playing? pl) (player-over? pl) (< 0 left) (List includes? 0 places) (List includes? 1 places)))
 ```
@@ -55,7 +55,41 @@ how much is queued.  Nothing here opens an audio device.
 (player-pump! pl)
 (player-update! pl (song-set-order spec-tune (list "q" "p" "q")) ())
 (player-preview! pl spec-tune "a" "A4")
+(spec-play! 4096)
 (write (list (< 0 (player-pump! pl)) (player-playing? pl)))
 ```
 ---
     (#t #t)
+
+### a song naming a wave the mixer lacks is refused before it plays, and a waves file mends it
+
+```tracker
+(def s (song-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave spec-reedy))\n  (pattern p (a \"C4 . E4 .\"))\n  (order p))"))
+(def pl (player-open (spec-front) ()))
+(def refused (guard (e (e msg)) (player-start! pl s 'song 0 ())))
+(def heard (guard (e (e msg)) (player-preview! pl s "a" "C4")))
+(def pl2 (player-open (spec-front) (list '(wave spec-reedy 6 0 3))))
+(player-start! pl2 s 'song 0 ())
+(player-pump! pl2)
+(write (list refused (str=? refused heard) (player-playing? pl2)))
+```
+---
+    ("x-tracker: no wave named spec-reedy: read the file its (wave ...) form is in with -w FILE" #t #t)
+
+## the editor playing
+
+### the editor follows the pattern and row heard, until F stops it
+
+```tracker
+(def doc (file-parse (song-text spec-tune)))
+(def st (edit-make doc () (player-open (spec-front) ())))
+(spec-keys! st (list " "))
+(def spin (fn (self n seen) (if (< 0 n) (do (spec-play! 4096) (edit-tick! st) (self (- n 1) (if (List includes? (first (edit-place st)) seen) seen (pair (first (edit-place st)) seen)))) seen)))
+(def seen (spin 60 ()))
+(spec-keys! st (list "F"))
+(def at (edit-place st))
+(spin 30 ())
+(write (list (List includes? "p" seen) (List includes? "q" seen) (edit-message st) (equal? at (edit-place st))))
+```
+---
+    (#t #t "Not following the playing." #t)

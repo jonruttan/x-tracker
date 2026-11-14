@@ -40,9 +40,13 @@
 
 (def %pl-rate 44100)
 (def %pl-block 1024)
-; How far the music is kept ahead of the speaker, in bytes of frames; a
-; note typed, only two blocks, so it is heard at once.
-(def %pl-ahead (* 4 (int/ (* %pl-rate 3) 10)))
+; How far the music is kept ahead of the speaker, in bytes of frames: a
+; second.  The editor's loop is held up by a redraw (some 75 ms) and a
+; collect (up to some 180 ms, measured over music.xon), so a third of a
+; second left little over.  A change is heard from the next pattern
+; anyway, and the place shown is read from the marks, not the queue.  A
+; note typed is queued only two blocks ahead, so it is heard at once.
+(def %pl-ahead (* 4 %pl-rate))
 (def %pl-preview-ahead (* 8 %pl-block))
 (def %pl-preview-pattern "x-tracker-preview")
 (def %pl-tail-pattern "x-tracker-tail")
@@ -75,9 +79,36 @@
 ; ORDER turned to start at AT.
 (def %pl-turn (fn (_ order at) (List append (List drop at order) (List take at order))))
 
+; The first wave named by an instrument of song form F that the mixer
+; does not have, or nil.
+(def %pl-missing-wave
+  (fn (_ f)
+    (def named
+      (List flat-map
+        (fn (_ x)
+          (if (if (pair? x) (eq? (first x) (lit instrument)) #f)
+            (List map (fn (_ prop) (List ref 1 prop))
+              (List filter (fn (_ prop) (if (pair? prop) (if (eq? (first prop) (lit wave)) (if (pair? (rest prop)) (symbol? (List ref 1 prop)) #f) #f) #f))
+                (rest (rest x))))
+            ()))
+        (rest (rest f))))
+    (List find (fn (_ w) (null? (guard (e ()) (Mixer wave w)))) named)))
+
+; Song form F, when the mixer has every wave it names.  Raises a label
+; 'value for one it does not have, before the tracker meets it mid-block.
+(def %pl-waves-known
+  (fn (_ f)
+    ((fn (_ w)
+       (unless (null? w)
+         (Err raise (lit value)
+           (Str8 append "x-tracker: no wave named " (symbol->str w) ": read the file its (wave ...) form is in with -w FILE") ())))
+     (%pl-missing-wave f))
+    f))
+
 ; The form for S, named afresh, with ORDER, and the turn recorded.
 (def %pl-form
   (fn (_ p s order turn)
+    (%pl-waves-known (song-form s ()))
     (%pl-put! p 6 (+ (%pl-get p 6) 1))
     (def name (Str8 append "x-tracker " (Str8 str (%pl-get p 6))))
     (%pl-put! p 5 (pair (pair name turn) (List take 8 (%pl-get p 5))))
@@ -198,8 +229,8 @@
 ; or an instrument the tracker cannot read.
 (def player-preview!
   (fn (_ p s inst note)
-    (def t (Tracker make (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
-                                    (list %pl-preview-pattern))))
+    (def t (Tracker make (%pl-waves-known (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
+                                                     (list %pl-preview-pattern)))))
     (unless (null? (%pl-get p 14)) (Tracker stop! (%pl-get p 14)))
     (Tracker play! t (%pl-get p 13))
     (%pl-put! p 14 t)

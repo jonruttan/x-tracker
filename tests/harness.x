@@ -44,8 +44,8 @@
 ; The song ST edits, as text.
 (def spec-song (fn (_ st) (song-text (edit-song st))))
 
-; A stand-in for Sdl's audio messages: a stream's bytes put on it, a block
-; of them, 1024 bytes, played each time it is asked how many are queued.
+; A stand-in for Sdl's audio messages: a stream's bytes put on it and
+; counted, played only as a spec says (spec-play!).
 (import x/type/vector)
 (import x/type/class)
 (def spec-streams (Vector make 4 0))
@@ -56,7 +56,7 @@
       ((fn (_ n) (Vector set! 0 (+ n 1) spec-opened) n) (Vector ref 0 spec-opened)))
     (method audio-put! (self s buf n) (Vector set! s (+ (Vector ref s spec-streams) n) spec-streams) n)
     (method audio-queued (self s)
-      ((fn (_ q) (Vector set! s (if (< q 1024) 0 (- q 1024)) spec-streams) q) (Vector ref s spec-streams)))
+      (Vector ref s spec-streams))
     (method audio-clear! (self s) (Vector set! s 0 spec-streams) s)
     (method audio-close (self s) ())))
 ; The stand-in, its streams empty.
@@ -67,3 +67,10 @@
     SpecAudio))
 (def spec-tune
   (song-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine) (env (0 0) (5 60) (100 0)) (release 20))\n  (pattern p (a \"C4 . E4 .\"))\n  (pattern q (a \"G4 . . .\"))\n  (order p q))"))
+
+; N bytes of every stream of the stand-in played: the time a speaker
+; takes over them passed.
+(def spec-play!
+  (fn (_ n)
+    (List for-each (fn (_ i) (Vector set! i (if (< (Vector ref i spec-streams) n) 0 (- (Vector ref i spec-streams) n)) spec-streams))
+      (List range 0 4))))

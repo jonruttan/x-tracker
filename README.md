@@ -53,6 +53,8 @@ and heard as they are typed.  The other keys:
     [ ]             the pattern before, after in the order
     Space           play the song from the pattern edited, or stop
     p               play the pattern edited over and over, or stop
+    F               follow the playing, or stop: while it follows, the
+                    pattern heard is shown and the cursor is on its row
     U R             undo, redo
     ?               the keys and the commands
     ctrl-c          quit
@@ -60,7 +62,8 @@ and heard as they are typed.  The other keys:
 `:` takes a command, as vi does:
 
     :w [FILE]   :q   :q!   :wq       write, quit
-    :song [NAME]                      pick or make a song; alone, list them
+    :song [NAME]                      edit or make a song; alone, list
+                                      them to pick one with up, down, Enter
     :rename NAME                      rename the song
     :bpm N  :rows N  :ticks N  :tension-bpm N
     :len N                            the pattern's rows

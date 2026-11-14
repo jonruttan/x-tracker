@@ -209,3 +209,28 @@ draws.
 ```
 ---
     (":bpm 7" "Keys" "  z s x d c v g b h n j m ,   a note, C to C, in the octave")
+
+### :song alone lists the songs to pick from, in columns when they do not fit one
+
+```tracker
+(def songs (Str8 join "\n" (List map (fn (_ n) (Str8 append "(song \"s" (Str8 str n) "\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))")) (List range 0 7))))
+(def st (edit-make (file-parse songs) () ()))
+(def screen (Screen make 8 90))
+(spec-keys! st (list ":song" 'enter 'down 'down))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 7)))
+(def lit-row (list (Style has? (Screen style-at screen 5 4) 'reverse) (Style has? (Screen style-at screen 3 4) 'reverse)))
+(spec-keys! st (list 'enter))
+(def picked (song-name (edit-song st)))
+(spec-keys! st (list ":song" 'enter 'up 'escape))
+(write (list lit-row picked (song-name (edit-song st))))
+```
+---
+```output
+Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one
+  > s0       s4
+    s1       s5
+    s2       s6
+    s3
+((#t #f) "s2" "s2")
+```
