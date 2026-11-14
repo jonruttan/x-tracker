@@ -14,6 +14,9 @@ takes `lighthouse` apart.  To hear either:
     x -l tracker -- data/demo.xon
     x -l tracker -- -s lighthouse play data/demo.xon
 
+`data/hungarian-dance-5.xon` is a longer song, Brahms's Hungarian Dance
+No. 5; the section after `lighthouse` says how it is made.
+
 Every example below in an `xon` block is a whole file, and the spec
 suite plays each one, so any of them can be copied into a file and
 heard.
@@ -652,3 +655,41 @@ minor at 96 bpm, its tempo rising to 120 at full tension.
 
 Play it at `:tension 0` and at `:tension 100` to hear the two layers
 trade places.
+
+## The demo: hungarian-dance-5
+
+`data/hungarian-dance-5.xon` is Brahms's Hungarian Dance No. 5 in G
+minor, its notes from Albert Parlow's orchestration (Simrock, 1876).
+It is a piece with sudden changes of tempo, and a song has one: the
+changes are written into the rows instead.
+
+- The song runs at 200 bpm, 4 rows a beat.  The Allegro gives a
+  sixteenth 2 rows, a bar of 2/4 16 rows; the Vivace gives an eighth 2
+  rows, a bar 8, so it is twice as fast with no change of bpm.  A poco
+  rit. gives a sixteenth 3 rows, and the Vivace's ritardandos an eighth
+  3 rows and then 4, slowing over two bars before snapping back.  A
+  pattern's rows need not be the same in every bar.
+- Its waves are kept in the file: `fiddle`, close to a saw, for the
+  violins; `horn`, `soft`, `flute`, `cimbalom` and `glass`.
+- The lead is the first violins, two detuned voices.  It slides up into
+  the theme with `p2`, wavers on its long notes with `v15,7` and `v20,6`
+  put on a `.` cell partway through, plays the second strain's repeated
+  notes short with `c3`, trembles with `t20,4`, swells from 50 percent
+  with `f100` in the Vivace's slow bars and fades with `f50` and `f40`.
+- The horns are the offbeat chords, two channels, each note a row long
+  and let go.  The bass is the cellos and basses on the beat.
+- The cimbalom, the Hungarian hammered dulcimer, is not in Parlow's
+  score: it plays the Vivace's chords as arpeggios, `a4,7` and
+  `a4,7,10`, rolled with `r2` in the slow bars and darkened with `l40`
+  in the fast ones; it closes the dance with `a3,7,12`.
+- The timpani roll with `r1` at the cadences; the triangle comes in
+  where Parlow wrote it, the second time through the Vivace, rolling
+  with `r1`.  The last chord is strummed with `d1` and `d2`.
+- The flute is the tension layer, doubling the lead, an octave up in the
+  theme's second time and in the Vivace; at full tension the dance is 40
+  bpm faster.
+- Its effects are a chorus, for a section of strings, a reverb, for a
+  hall, and a limit.
+- Its order is the score's form with its repeats: the theme, the second
+  strain twice, the Vivace twice and its slow bars twice, then the theme
+  and the strain again, and the coda.
