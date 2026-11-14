@@ -18,12 +18,15 @@
 ; The form is the score's, with its repeats: the theme, the second strain
 ; twice, the Vivace, the theme again and the strain twice to the end.
 
+; The violins, horns, bass and cimbalom are harmonic waves, kept here:
+; they are band-limited, where the mixer's saw and square fold back on
+; the lead's high notes.  The flute is the mixer's triangle, the
+; cimbalom's hammer a pulse whose width sweeps from 8 to 40 percent, and
+; the triangle the mixer's metal.
 (wave fiddle 12 9 7 5 4 3 3 2 2 1)
 (wave horn 10 7 4 2 1)
 (wave soft 8 3 1)
-(wave flute 10 3 1)
 (wave cimbalom 6 5 4 3 3 2 2 1 1 1)
-(wave glass 5 0 0 2 0 0 0 1)
 
 ; The flute is the tension layer: at :tension 100 it doubles the lead and
 ; the whole dance is 40 bpm faster.
@@ -33,12 +36,13 @@
   (limit 92 120)
   (instrument lead (wave fiddle) (cut 45) (env (0 0) (30 60) (250 48)) (release 140) (gain 26) (pan -10)
     (voice (detune -5)) (voice (detune 5)))
-  (instrument flute (layer tension) (wave flute) (cut 60) (env (0 0) (20 40) (300 34)) (release 120) (gain 12) (pan -30))
+  (instrument flute (layer tension) (wave triangle) (cut 60) (env (0 0) (20 40) (300 34)) (release 120) (gain 12) (pan -30))
   (instrument horn (wave horn) (cut 30) (env (0 0) (8 55) (160 30)) (release 60) (gain 13) (pan 25))
   (instrument bass (wave soft) (cut 30) (env (0 0) (6 85) (200 55)) (release 70) (gain 44))
-  (instrument cimb (wave cimbalom) (cut 70) (env (0 0) (2 45) (500 0)) (release 200) (gain 13) (pan 35))
+  (instrument cimb (cut 70) (env (0 0) (2 45) (500 0)) (release 200) (gain 13) (pan 35)
+    (voice (wave cimbalom)) (voice (wave pulse) (width (0 8) (300 40)) (gain 45)))
   (instrument timp (wave sine) (env (0 0) (3 90) (600 0)) (bend (0 40) (60 0)) (release 300) (gain 40))
-  (instrument tri (wave glass) (note "E7") (env (0 0) (1 30) (900 0)) (release 400) (gain 10) (pan -40))
+  (instrument tri (wave metal) (note "A6") (cut 90) (env (0 0) (1 30) (900 0)) (release 400) (gain 10) (pan -40))
   (pattern theme
     (lead   "D4 . . . ./v15,7 . . . . . . . G4/p2 . . . Bb4 . . . . . . . . . . . G4 . . . F#4 . . . . . . . . . . . G4 . A4 . G4 . . . ./v20,6 . . . . . . . . . . . Eb4 . . . . . . . . . . . F4 . G4 . D4 . . . ./v20,6 . . . . . . . . . . . C4 . Bb3 . . . A3 . . . . . . . D4 . G3 . . . ./v15,7 . . . . . . . . . . .")
     (bass   "G2 . . . - . . . D2 . . . - . . . G2 . . . - . . . D2 . . . - . . . G2 . . . - . . . C2 . . . - . . . G2 . . . - . . . D2 . . . - . . . G2 . . . - . . . C2 . . . - . . . G2 . . . - . . . D2 . . . - . . . F#2 . . . - . . . D2 . . . - . . . G2 . . . - . . . D2 . . . - . . .")
