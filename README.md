@@ -22,6 +22,8 @@ one to start from:
 
     x -l tracker -- data/demo.xon
 
+[docs/guide.md](docs/guide.md) is a guide to using the tracker: a first
+track written key by key, then each kind of work the editor does.
 [docs/writing.md](docs/writing.md) is a guide to writing songs: the
 format, every effect, and how to make music with them.
 
