@@ -77,11 +77,49 @@ its tempo, 10 to 400, without changing the file.
 ## Waves
 
 A voice reads one cycle of a wave over and over at the pitch of its
-note.  There are two waves always there:
+note.  These waves are always there, the mixer's own:
 
 - `sine`, the pure tone, which is also what an instrument with no
   `(wave ...)` plays;
-- `noise`, a long table of random values, the stuff of drums.
+- `square`, high for half the cycle and low for the other: hollow and
+  loud, the chip-music lead;
+- `triangle`, rising and falling in straight lines: soft, close to a
+  sine with a little edge, the chip-music bass;
+- `saw`, rising and dropping: every harmonic, the bright buzz of brass
+  and strings; `inverse-saw` falls and leaps, and sounds the same on
+  its own;
+- `pulse`, the saw played at a width (below): a square at 50, thinner
+  and more nasal as the width narrows;
+- `noise`, a long table of random values, the stuff of drums;
+- `metal`, a short run of noise that repeats, so it rings at the note's
+  pitch: hats, bells, clanks.
+
+The square, the saw and the pulse are drawn exact, so on high notes
+their top harmonics fold back as tones of their own and they turn
+rough; the triangle and the sine stay clean.  A `cut` tames the
+brightness, though not the roughness.
+
+### Pulse width
+
+`(width (MS PCT) ...)` plays a voice's wave less itself PCT of a cycle
+on.  On `pulse` (or `saw`) that is a pulse high for PCT of the cycle:
+50 is the square, 25 thinner, 12 thin and buzzy.  The width moves over
+the note like a bend, PCT at each MS, in straight lines between: a
+width that moves is a pulse sweep, the classic chip-music shimmer.
+
+```xon
+(song "sweep" (bpm 100) (rows 4)
+  (instrument chip (wave pulse) (width (0 12) (400 50) (800 12)) (env (0 0) (5 60) (800 40)) (release 100) (gain 40))
+  (pattern a (chip "A3 . . . C4 . . . E4 . . . C4 . . ."))
+  (order a))
+```
+
+On other waves a width reshapes their harmonics: at 50 the even ones
+cancel and the odd ones stay, so a saw becomes a square and a triangle
+stays a triangle.  A sine stays a sine at any width, quieter as the
+width narrows.
+
+### Waves of harmonics
 
 Any other wave is made of harmonics and is defined in the file:
 
@@ -139,6 +177,7 @@ The props are the voice's sound, and a few that only a song has:
     (note "C2")          a pitch of its own, whatever note starts it
     (hz N)               the same, in hertz
     (bend (MS CENTS) ...) the pitch's path from the note, CENTS at each MS
+    (width (MS PCT) ...) a pulse's width at each MS (see Waves)
     (at MS)              start this long after the note
     (layer calm)         heard less as the tension rises
     (layer tension)      heard more as the tension rises
