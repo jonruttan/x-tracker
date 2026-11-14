@@ -7,10 +7,12 @@ terminal and heard through SDL's audio.
     x -l tracker -- [OPTIONS] [edit] [FILE]
     x -l tracker -- [OPTIONS] play FILE
     x -l tracker -- list FILE
+    x -l tracker -- [OPTIONS] render FILE -o OUT.wav
 
       -s, --song NAME    the song to edit or play (the file's first)
       -w, --waves FILE   read the (wave ...) forms of FILE too; again for another
       -l, --loop         play the song over and over, until q
+      -o, --output FILE  the WAV file render writes
       -n, --no-sound     edit without opening the audio
       -V, --version      print the version and exit
       -h, --help         print the help and exit
@@ -27,7 +29,9 @@ format, every effect, and how to make music with them.
 
 `play` plays a song once through, or with `--loop` until q, the pattern
 heard written to standard error; `list` prints each song of a file with
-how long it lasts, its patterns and its order.  With no operands
+how long it lasts, its patterns and its order; `render` writes a song
+played once through, ringing out, to a WAV file (16-bit stereo, 44100
+frames a second).  With no operands
 `x -l tracker` is the lang's REPL.
 
 To edit x-roguelike's delve music, whose waves are kept in another file:
@@ -62,6 +66,15 @@ and heard as they are typed.  The other keys:
     [ ]             the pattern before, after in the order
     Space           play the song from the pattern edited, or stop
     p               play the pattern edited over and over, or stop
+    G               play from the cursor's row: the song, or the pattern
+                    when it is not in the order
+    L               loop rows: L on the first row, L on the last plays
+                    them over and over; Escape forgets the first
+    M S             mute, solo the cursor's channel; again to undo it
+    H A             mute, solo the channel's instrument
+    ; '             tension down, up by 10
+    _ +             pace down, up by 10 percent
+    9 0             volume down, up by 10 percent
     F               follow the playing, or stop: while it follows, the
                     pattern heard is shown and the cursor is on its row
     O               edit the order in place: left, right pick a place, up,
@@ -89,6 +102,15 @@ and heard as they are typed.  The other keys:
     :instrument NAME PROP ...         make or change an instrument
     :octave N  :step N
     :tension N  :pace N               how the song is heard: 0-100, 10-400
+    :volume N                         0-100 percent
+    :mute [INSTRUMENT]                mute an instrument; alone, say what
+                                      is muted and soloed
+    :solo [INSTRUMENT]                solo an instrument
+    :unmute                           hear every channel and instrument
+    :loop [FROM TO]                   play rows FROM to TO of the pattern
+                                      over and over; alone, all of it
+    :render FILE                      write the song played once to a WAV
+                                      file, as it is heard
     :waves                            list the waves the songs name, and
                                       where each comes from
     :waves keep                       copy the waves borrowed from -w files
@@ -113,7 +135,9 @@ and heard as they are typed.  The other keys:
     :set                              list the settings, the keys among them
     :set NAME VALUE ...               change a setting for this session
 
-A change is heard from the next pattern while the song plays.  A cell's
+A change is heard from the next pattern while the song plays; a mute
+or a solo from the next row.  A muted channel's heading is dim, a
+soloed one's green.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):
 `a` arpeggio, `v` vibrato, `s` slide, `p` portamento, `t` tremolo, `f`
 fade, `l` low-pass, `c` cut, `d` delay, `r` retrigger; `C4:60/v20,4`
@@ -179,6 +203,10 @@ own keys:
     insert-row I     delete-row D    hold .          let-go -
     quit ctrl-c      order O         channel-left (  channel-right )
     mark V           copy Y          cut X           paste P
+    play-here G      loop L
+    mute-channel M   solo-channel S  mute-instrument H  solo-instrument A
+    tension-down ;   tension-up '    pace-down _     pace-up +
+    volume-down 9    volume-up 0
 
 A form that is not a setting is one line on standard error, and the
 first is shown in the editor; the rest of the file is still read.  A

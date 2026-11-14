@@ -86,7 +86,11 @@
         (pair (lit insert-row) "I") (pair (lit delete-row) "D")
         (pair (lit hold) ".") (pair (lit let-go) "-") (pair (lit quit) (lit interrupt))
         (pair (lit order) "O") (pair (lit channel-left) "(") (pair (lit channel-right) ")")
-        (pair (lit mark) "V") (pair (lit copy) "Y") (pair (lit cut) "X") (pair (lit paste) "P")))
+        (pair (lit mark) "V") (pair (lit copy) "Y") (pair (lit cut) "X") (pair (lit paste) "P")
+        (pair (lit play-here) "G") (pair (lit loop) "L")
+        (pair (lit mute-channel) "M") (pair (lit solo-channel) "S") (pair (lit mute-instrument) "H") (pair (lit solo-instrument) "A")
+        (pair (lit tension-down) ";") (pair (lit tension-up) "'") (pair (lit pace-down) "_") (pair (lit pace-up) "+")
+        (pair (lit volume-down) "9") (pair (lit volume-up) "0")))
 
 (def %cf-find (fn (_ name alist) (List find (fn (_ e) (eq? (first e) name)) alist)))
 
