@@ -8,6 +8,7 @@ terminal and heard through SDL's audio.
     x -l tracker -- [OPTIONS] play FILE
     x -l tracker -- list FILE
     x -l tracker -- [OPTIONS] render FILE -o OUT.wav
+    x -l tracker -- help [WORD]
 
       -s, --song NAME    the song to edit or play (the file's first)
       -w, --waves FILE   read the (wave ...) forms of FILE too; again for another
@@ -15,7 +16,7 @@ terminal and heard through SDL's audio.
       -o, --output FILE  the WAV file render writes
       -n, --no-sound     edit without opening the audio
       -V, --version      print the version and exit
-      -h, --help         print the help and exit
+      -h, --help         print the help and exit; after a word, that word's
 
 The songs are the ones x/audio/tracker plays, and x-roguelike's music
 is made of: a file is any `.xon` file of `(song ...)` forms, with the
@@ -92,7 +93,7 @@ and heard as they are typed.  The other keys:
     Y X P           copy, cut, paste the block (or the cell)
     Delete          clear the block marked
     U R             undo, redo
-    ?               the keys and the commands
+    ?               the help: n p turn the topic, the arrows scroll
     ctrl-c          quit
 
 `:` takes a command, as vi does:
@@ -141,6 +142,7 @@ and heard as they are typed.  The other keys:
                                       semitones up or down, a gain set
     :set                              list the settings, the keys among them
     :set NAME VALUE ...               change a setting for this session
+    :help [WORD]                      the help's topics, a topic, or every entry named WORD
 
 A change is heard from the next pattern while the song plays; a mute
 or a solo from the next row.  A muted channel's heading is dim, a
@@ -153,6 +155,22 @@ is C4 at 60 percent with a vibrato.
 Written back, a file keeps everything the editor did not change as it
 was, comments and layout; a song that was changed is written from the
 song, its patterns a row a line with the cells lined up.
+
+## Help
+
+The help is one set of tables (tracker/help.x), shown three ways: `?`
+in the editor pages through its topics, `:help` lists them, and
+`x -l tracker -- help` prints them.  The topics are keys, commands,
+cells, effects, song, instruments, waves, order, settings and cli.
+
+    :help effects          a topic
+    :help loop             every entry named loop: here the :loop command
+    :help /v  :help :mute  an effect by its slash, a command by its colon
+    x -l tracker -- help gain     the same, printed
+    x -l tracker -- render -h     the help on a word of the command line
+
+The suite checks that every command the editor takes, every action a
+key can be bound to and every setting has an entry.
 
 ## Settings
 

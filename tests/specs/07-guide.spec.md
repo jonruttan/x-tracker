@@ -4,10 +4,10 @@
 
 docs/guide.md: its walkthrough's keys pressed in an editor playing
 through the stand-in for SDL's audio, from a new file to the song it
-ends with.  Each screen the guide shows, and the file it ends with, are
-in the guide as the editor draws and writes them; each command and
-string of keys pressed is in the guide; and the song plays through to
-its end.
+ends with.  Each screen and message the guide shows, and the file it
+ends with, are in the guide as the editor draws and writes them; each
+command and string of keys pressed is in the guide; and the song plays
+through to its end.
 
 ## the walkthrough
 
@@ -17,7 +17,7 @@ its end.
 (def guide (File read-all (Str8 append %lang-root "/docs/guide.md")))
 (def pl (player-open (spec-front) ()))
 (def st (edit-make () "harbour.xon" pl))
-(def screen (Screen make 24 100))
+(def screen (Screen make 24 120))
 (def pressed ())
 (def press (fn (_ keys) (set! pressed (List append pressed (List filter str? keys))) (spec-keys! st keys)))
 (def shots ())
@@ -45,9 +45,16 @@ its end.
 (press (list ":effect (reverb 90 70 22)" 'enter ":effect (echo 300 30 15)" 'enter))
 (def text (file-text (edit-doc st)))
 (set! shots (List append shots (list text)))
-(press (list " "))
+(def said (fn (_) (set! shots (List append shots (list (edit-message st))))))
+(press (list ":tension 60" 'enter " "))
 (def playing (player-playing? pl))
-(press (list " " ":tension 60" 'enter))
+(shot (list 0))
+(press (list "M")) (said)
+(press (list "M")) (said)
+(press (list 'home "L")) (said)
+(press (list 'down 'down 'down 'down 'down 'down 'down "L")) (said)
+(shot (list 0))
+(press (list "p"))
 (def bdoc (file-parse text))
 (def song (first (file-songs bdoc)))
 (def heard

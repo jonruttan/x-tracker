@@ -23,6 +23,7 @@ A file that does exist opens on its first song; `-s NAME` opens another.
     x -l tracker -- -n harbour.xon                  edit without sound
     x -l tracker -- play harbour.xon                hear it once, no editor
     x -l tracker -- --loop play harbour.xon         hear it until q
+    x -l tracker -- render harbour.xon -o harbour.wav   write it to a WAV file
     x -l tracker -- list data/demo.xon              each song, its length, its order
 
 A file whose instruments name waves kept in another file is opened with
@@ -232,10 +233,12 @@ bottom of `?`, and [writing.md](writing.md) has each with an example.
 ### Listening
 
 Space plays the song from the pattern being edited, round and round,
-and stops it.  `p` plays only the pattern being edited, over and over.
-`F` follows the playing: the pattern heard is shown, and the cursor
-moves down its rows; `F` again stops following, to edit elsewhere
-while it plays.  A change is heard from the next pattern.
+and stops it.  `p` plays only the pattern being edited, over and over,
+and stops it.  `G` plays from the cursor's row.  `F` follows the
+playing: the pattern heard is shown, and the cursor moves down its
+rows; `F` again stops following, to edit elsewhere while it plays.  A
+change is heard from the next pattern.  "Hearing it" below has the
+rest: looping rows, muting and soloing, tension, pace and volume.
 
 ### A second pattern
 
@@ -307,10 +310,20 @@ G in octave 5, comes in only with the tension:
  15  .     .     .     .     .
 ```
 
-`:tension 60` plays the song at a tension of 60, 0 to 100, to hear the
-bell; it does not change the file.  `:tension-bpm N` sets how much the
-tempo rises at full tension.  `:pace N` plays everything at N percent
-of its tempo, 10 to 400, to hear a fast part slowly.
+To hear the bell, set the tension and play the song:
+
+    :tension 60
+    Space
+
+The top line says what is playing, and the tension when it is not 0:
+
+```
+ x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 5  step 8   > song  tension 60
+```
+
+The tension, 0 to 100, is how the song is heard, not part of the file:
+`;` and `'` take it down and up by 10 while it plays.  `:tension-bpm N`
+sets how much the tempo rises at full tension.
 
 ### Effects over the mix
 
@@ -435,6 +448,52 @@ set its timing.
 where each comes from.  A file opened with `-w FILE` borrows the waves
 of that file: `:waves keep` copies them into this one, so it needs no
 other.
+
+### Hearing it
+
+What is heard is the player's, not the song's: none of it changes the
+file.
+
+- Space plays the song from the pattern edited and stops it; `p` plays
+  the pattern edited over and over and stops it; `G` plays from the
+  cursor's row, the song, or the pattern alone when it is not in the
+  order.
+- `L` loops rows.  `L` on the first row marks it; `L` on the last plays
+  the rows between over and over.  Escape forgets a first row marked.
+  `:loop FROM TO` does the same by number, and `:loop` alone loops the
+  whole pattern.  With the cursor at the top of `b`:
+
+      L
+
+  says `Loop from row 0: L on its last row plays it, Escape forgets.`,
+  and seven rows down,
+
+      L
+
+  says `Looping rows 0 to 7: p plays the whole pattern.`  The top line
+  shows the rows looping:
+
+```
+ x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 5  step 8   > rows 0-7  tension 60
+```
+
+- `M` mutes the cursor's channel and `S` solos it; again, it is heard as
+  before.  The channels are counted from 0 at the left, so `M` on the
+  bell's channel says `Channel 4 muted.`, and again,
+  `Channel 4 heard again.`  `H` and `A` mute and solo the channel's instrument, in every
+  channel it plays.  `:mute INSTRUMENT` and `:solo INSTRUMENT` do the
+  same by name; `:mute` alone says what is muted and soloed, and
+  `:unmute` hears everything again.  A muted channel's heading is drawn
+  dim and a soloed one's green.  A mute or a solo is heard from the next
+  row.
+- `;` and `'` take the tension down and up by 10, `_` and `+` the pace
+  by 10 percent, `9` and `0` the volume by 10 percent; `:tension N`,
+  `:pace N` (10 to 400) and `:volume N` (0 to 100) set them.  They are
+  heard at once, and the top line shows each that is not at its usual.
+- `:render FILE` writes the song played once, ringing out, to a WAV
+  file, as it is heard: with its mutes, tension, pace and volume.  From
+  the command line, `render FILE -o OUT.wav` writes it as written, at
+no tension and nothing muted.
 
 ### Undo
 
