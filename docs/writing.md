@@ -708,8 +708,11 @@ changes are written into the rows instead.
   rit. gives a sixteenth 3 rows, and the Vivace's ritardandos an eighth
   3 rows and then 4, slowing over two bars before snapping back.  A
   pattern's rows need not be the same in every bar.
-- Its waves are kept in the file: `fiddle`, close to a saw, for the
-  violins; `horn`, `soft`, `flute`, `cimbalom` and `glass`.
+- Its harmonic waves are kept in the file: `fiddle`, close to a saw,
+  for the violins; `horn`, `soft` and `cimbalom`.  They are
+  band-limited, where the mixer's `saw` and `square` fold back on the
+  lead's high notes.  The flute is the mixer's `triangle` and the
+  triangle its `metal`, a short loop of noise that rings at its note.
 - The lead is the first violins, two detuned voices.  It slides up into
   the theme with `p2`, wavers on its long notes with `v15,7` and `v20,6`
   put on a `.` cell partway through, plays the second strain's repeated
@@ -718,9 +721,12 @@ changes are written into the rows instead.
 - The horns are the offbeat chords, two channels, each note a row long
   and let go.  The bass is the cellos and basses on the beat.
 - The cimbalom, the Hungarian hammered dulcimer, is not in Parlow's
-  score: it plays the Vivace's chords as arpeggios, `a4,7` and
-  `a4,7,10`, rolled with `r2` in the slow bars and darkened with `l40`
-  in the fast ones; it closes the dance with `a3,7,12`.
+  score.  Two voices make it: the `cimbalom` wave, and a `pulse` at 45
+  percent of its gain whose `(width (0 8) (300 40))` sweeps from 8 to
+  40 percent of a cycle, the bright, changing ring of a struck string.
+  It plays the Vivace's chords as arpeggios, `a4,7` and `a4,7,10`,
+  rolled with `r2` in the slow bars and darkened with `l40` in the fast
+  ones; it closes the dance with `a3,7,12`.
 - The timpani roll with `r1` at the cadences; the triangle comes in
   where Parlow wrote it, the second time through the Vivace, rolling
   with `r1`.  The last chord is strummed with `d1` and `d2`.
