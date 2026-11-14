@@ -24,6 +24,20 @@ document and written back, and the songs in it.
 ---
     (('wave 'hollow 6 0 2) ('wave 'thin 2 0 3))
 
+### a wave set in a file takes its form's place, or a line after the last wave, or before the first song
+
+```tracker
+(def two "; w\n(wave hollow 6 0 2)\n\n(song \"s\" (instrument a (wave hollow)) (instrument b (wave thin)) (pattern p (a \"C3\")) (order p))\n")
+(def changed (file-set-wave (file-parse two) "hollow" (list 4 0 1)))
+(def added (file-set-wave (file-parse two) "thin" (list 2 0 3)))
+(def first-one (file-set-wave (file-parse "(song \"s\" (pattern p (a \"C3\")) (order p))\n") "reed" (list 6 4)))
+(write (list (file-text changed) (file-text added) (file-text first-one)
+             (file-changed? added) (file-changed? (file-written added)) (file-wave added "thin")
+             (song-waves (first (file-songs added)))))
+```
+---
+    ("; w\n(wave hollow 4 0 1)\n\n(song \"s\" (instrument a (wave hollow)) (instrument b (wave thin)) (pattern p (a \"C3\")) (order p))\n" "; w\n(wave hollow 6 0 2)\n(wave thin 2 0 3)\n\n(song \"s\" (instrument a (wave hollow)) (instrument b (wave thin)) (pattern p (a \"C3\")) (order p))\n" "(wave reed 6 4)\n\n(song \"s\" (pattern p (a \"C3\")) (order p))\n" #t #f ('wave 'thin 2 0 3) ("hollow" "thin"))
+
 ### a song is read into its name, its props, its patterns and its order
 
 ```tracker
