@@ -751,15 +751,17 @@ changes are written into the rows instead.
 - The horns are the offbeat chords, two channels, each note a row long
   and let go.  The bass is the cellos and basses on the beat.
 - The cimbalom, the Hungarian hammered dulcimer, is not in Parlow's
-  score.  Two voices make it: the `cimbalom` wave, and a `pulse` at 45
-  percent of its gain whose `(width (0 8) (300 40))` sweeps from 8 to
-  40 percent of a cycle, the bright, changing ring of a struck string.
-  It plays the Vivace's chords as arpeggios, `a4,7` and `a4,7,10`,
-  rolled with `r2` in the slow bars and darkened with `l40` in the fast
-  ones; it closes the dance with `a3,7,12`.
+  score.  Two voices make it: the `cimbalom` wave, and a `pulse` at 30
+  percent of its gain whose `(width (0 25) (300 45))` sweeps from 25 to
+  45 percent of a cycle, the changing ring of a struck string.  In the
+  Vivace it plays the chords broken, a note at a time, its offbeat
+  notes at 70 percent; it darkens the fast bars' downbeats with `l40`
+  and rolls the slow bars' D7 with `r4`.  It closes the dance with an
+  arpeggio, `a3,7,12`.
 - The timpani roll with `r1` at the cadences; the triangle comes in
-  where Parlow wrote it, the second time through the Vivace, rolling
-  with `r1`.  The last chord is strummed with `d1` and `d2`.
+  where Parlow wrote it, the second time through the Vivace, one stroke
+  a bar or a beat, low-passed so it rings and does not hiss.  The last
+  chord is strummed with `d1` and `d2`.
 - The flute is the tension layer, doubling the lead, an octave up in the
   theme's second time and in the Vivace; at full tension the dance is 40
   bpm faster.
