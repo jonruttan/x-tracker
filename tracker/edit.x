@@ -111,6 +111,13 @@
   (fn (_ st)
     (when (if (null? (%get st %pattern)) #f (null? (%channels st)))
       (do (def fp (%first-pattern (edit-song st))) (%put! st %pattern (first fp)) (%put! st %at (rest fp))))
+    ; The place in the order kept to the pattern edited: still its place
+    ; when the order there still plays it, else its first place, or nil
+    ; when the order has none of it.
+    ((fn (_ order at name)
+       (unless (if (null? at) #f (if (< at (List length order)) (str=? (List ref at order) name) #f))
+         (%put! st %at (if (null? name) () (List index-of name order)))))
+     (song-order (edit-song st)) (%get st %at) (%get st %pattern))
     (%put! st %row (%max 0 (%min (%get st %row) (- (%rows st) 1))))
     (%put! st %chan (%max 0 (%min (%get st %chan) (- (List length (%channels st)) 1))))
     st))
