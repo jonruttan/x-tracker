@@ -1343,8 +1343,14 @@
           (if (str=? (%get st %msg) "") " ? help   Space play   p pattern   : command" (Str8 append " " (%get st %msg)))
           (if (str=? (%get st %msg) "") (%style st (lit empty)) 0)))
       (#t ((fn (_ prompt)
-             (Screen put screen (- rows 1) 0 (Str8 append prompt (rest input)) 0)
-             (Screen cursor screen (- rows 1) (%min (- cols 1) (+ (Str8 length prompt) (Str8 length (rest input))))))
+             ; The cursor is at the end: a line too long for the screen
+             ; shows its end, ... for the rest.
+             (def text (rest input))
+             (def room (- (- cols 1) (Str8 length prompt)))
+             (def shown (if (< (Str8 length text) room) text
+                          (Str8 append "..." (Str8 sub (- (Str8 length text) (%max 0 (- room 3))) (%max 0 (- room 3)) text))))
+             (Screen put screen (- rows 1) 0 (Str8 append prompt shown) 0)
+             (Screen cursor screen (- rows 1) (%min (- cols 1) (+ (Str8 length prompt) (Str8 length shown)))))
            (match ((eq? (first input) (lit command)) ":")
                   ((eq? (first input) (lit cell)) "cell: ")
                   (#t "instrument: ")))))
