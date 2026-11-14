@@ -50,7 +50,7 @@
 (def %step 10)      ; rows the cursor moves after a note is typed
 (def %msg 11)
 (def %input 12)     ; (KIND . TEXT) while a line is typed: command, cell or instrument
-(def %undo 13)      ; ((DOC . PATTERN) ...), the latest first
+(def %undo 13)      ; ((DOC SONG PATTERN) ...), the latest first
 (def %redo 14)
 (def %player 15)    ; the player (tracker/player), or nil when there is no sound
 (def %quit 16)
@@ -104,8 +104,16 @@
     (%put! st %chan (%max 0 (%min (%get st %chan) (- (List length (%channels st)) 1))))
     st))
 
+; The Ith song edited, from its start: the song playing stopped, and the
+; place heard and any change it was still to be told of forgotten.  The
+; octave, the step and following are the editor's, not the song's.
 (def %go-song!
   (fn (_ st i)
+    (def p (%get st %player))
+    (unless (null? p) (when (player-playing? p) (player-stop! p)))
+    (%put! st %heard ())
+    (%put! st %stale #f)
+    (%put! st %input ())
     (%put! st %song i)
     (def fp (%first-pattern (edit-song st)))
     (%put! st %pattern (first fp))
@@ -153,6 +161,9 @@
              (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
                (do (player-update! p (edit-song st) (%get st %pattern)) ()))))))))
 
+; Where the editor is, to undo to: (DOC SONG PATTERN).
+(def %here (fn (_ st) (list (%get st %doc) (%get st %song) (%get st %pattern))))
+
 ; The mixer given the document's waves, and the borrowed ones it does
 ; not have, as they were: after a change or an undo of one.
 (def %sync-waves!
@@ -166,7 +177,7 @@
 ; The document made DOC: the old one kept to undo to.
 (def %doc-change!
   (fn (_ st doc)
-    (%put! st %undo (pair (pair (%get st %doc) (%get st %pattern)) (List take 200 (%get st %undo))))
+    (%put! st %undo (pair (%here st) (List take 200 (%get st %undo))))
     (%put! st %redo ())
     (%put! st %doc doc)
     (%put! st %warned #f)
@@ -181,13 +192,16 @@
 (def %set-channels!
   (fn (_ st chs) (%change! st (song-set-pattern (edit-song st) (%get st %pattern) chs))))
 
-; One step of undo, FROM the list taken from and TO the list given to.
+; One step of undo, FROM the list taken from and TO the list given to:
+; back in the song the step was made in.
 (def %undo-step!
   (fn (_ st from to what)
     (if (null? (%get st from)) (edit-message! st (Str8 append "Nothing to " what "."))
-      (do (%put! st to (pair (pair (%get st %doc) (%get st %pattern)) (%get st to)))
-          (%put! st %doc (first (first (%get st from))))
-          (%put! st %pattern (rest (first (%get st from))))
+      (do (def back (first (%get st from)))
+          (%put! st to (pair (%here st) (%get st to)))
+          (%put! st %doc (first back))
+          (unless (= (List ref 1 back) (%get st %song)) (%go-song! st (List ref 1 back)))
+          (%put! st %pattern (List ref 2 back))
           (%put! st from (rest (%get st from)))
           (edit-message! st "")
           (%sync-waves! st)
@@ -448,7 +462,7 @@
         (if (null? args) (do (%put! st %pick (%get st %song)) (%put! st %help (%song-lines st)))
           ((fn (_ name i)
              (if (null? i)
-               (do (%put! st %undo (pair (pair (%get st %doc) (%get st %pattern)) (%get st %undo)))
+               (do (%put! st %undo (pair (%here st) (%get st %undo)))
                    (%put! st %doc (file-add-song (%get st %doc) (song-new name)))
                    (%go-song! st (- (List length (file-songs (%get st %doc))) 1))
                    (edit-message! st (Str8 append "New song " name ".")))

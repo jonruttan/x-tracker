@@ -34,6 +34,24 @@ spec-play!.  Nothing here opens an audio device.
 ---
     (1 #f 0)
 
+### at a pattern's end its last row is heard, not the next pattern's first
+
+```tracker
+(def pl (player-open (spec-front) ()))
+(player-start! pl spec-tune 'song 0 ())
+(player-pump! pl)
+(spec-play! 38000)
+(def ending (player-place pl))
+(spec-play! 8000)
+(def begun (player-place pl))
+(player-start! pl spec-tune 'pattern 0 "q")
+(player-pump! pl)
+(spec-play! 38000)
+(write (list ending begun (player-place pl)))
+```
+---
+    ((0 . 3) (1 . 0) (0 . 3))
+
 ### a pattern played alone keeps to it, and a song the tracker cannot read is refused
 
 ```tracker
@@ -139,3 +157,21 @@ Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowe
 ```
 ---
     (#t 0 "x-tracker: no wave named spec-missing: read the file its (wave ...) form is in with -w FILE")
+
+### a song loaded starts afresh: the playing stopped, and an undo goes back to its own song
+
+```tracker
+(def two (file-parse (Str8 append (song-text spec-tune) "\n(song \"t\" (instrument a (wave sine)) (pattern r (a \"C4\")) (order r))\n")))
+(def st (edit-make two () (player-open (spec-front) ())))
+(spec-keys! st (list "x" " "))
+(spec-play! 8000)
+(edit-tick! st)
+(def playing (player-playing? (edit-player st)))
+(spec-keys! st (list ":song t" 'enter))
+(def after (list (song-name (edit-song st)) (player-playing? (edit-player st)) (edit-place st)))
+(spec-keys! st (list "U"))
+(def p-first (fn (_) (pattern-cell (song-pattern (edit-song st) "p") 0 0)))
+(write (list playing after (song-name (edit-song st)) (first (edit-place st)) (p-first)))
+```
+---
+    (#t ("t" #f ("r" 0 0)) "s" "p" "C4")

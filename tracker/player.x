@@ -27,8 +27,9 @@
 ; it is playing, 10 the tension, 11 the pace, and for a note heard as
 ; it is typed (player-preview!), 12 a stream, 13 a mixer of their own
 ; and 14 the tracker that starts it, stopped once it has; 15 the rows
-; of the tail a song played once rings out over, and 16 where the tracker
-; stood after each block rendered (%pl-mark!).
+; of the tail a song played once rings out over, 16 where the tracker
+; stood after each block rendered (%pl-mark!), and 17 the rows of each
+; place in the order played (the song's own order, or the one pattern).
 
 (module tracker/player)
 
@@ -36,7 +37,7 @@
 (import x/audio/mixer)
 (import x/audio/tracker)
 (import x/core/doors int/ int%)
-(import tracker/song song-form song-order song-set-pattern song-prop song-instruments)
+(import tracker/song song-form song-order song-set-pattern song-prop song-instruments song-pattern pattern-rows)
 
 (def %pl-rate 44100)
 (def %pl-block 1024)
@@ -61,7 +62,7 @@
   (fn (_ front waves)
     (Mixer jit!)
     (List for-each (fn (_ w) (Mixer wave! (List ref 1 w) (rest (rest w)))) waves)
-    (def p (Vector make 17 ()))
+    (def p (Vector make 18 ()))
     (%pl-put! p 0 front)
     (%pl-put! p 1 (front audio-open %pl-rate 2))
     (%pl-put! p 6 0)
@@ -158,6 +159,12 @@
     (if (null? inst) s
       (song-set-pattern s %pl-tail-pattern (list (pair (first inst) (List repeat tail ".")))))))
 
+; The rows of each pattern of ORDER, a pattern of S each, kept for
+; player-place.
+(def %pl-rows!
+  (fn (_ p s order)
+    (%pl-put! p 17 (List map (fn (_ name) (pattern-rows (song-pattern s name))) order))))
+
 ; Play S through P: its order from place AT when MODE is song, round to
 ; AT again; its pattern PATTERN over and over when MODE is pattern; its
 ; order once from the start, and ringing out, when MODE is once.
@@ -171,6 +178,7 @@
                       (#t (list pattern))))
     (%pl-put! p 4 mode)
     (%pl-put! p 7 (List length (song-order s)))
+    (%pl-rows! p s (if (eq? mode (lit pattern)) (list pattern) (song-order s)))
     (%pl-put! p 15 (if once (%pl-tail-rows s) ()))
     (def t (Tracker make (%pl-form p (if once (%pl-with-tail s (%pl-tail-rows s)) s) order (if (eq? mode (lit song)) at 0))))
     (def m (Mixer make %pl-rate %pl-block))
@@ -200,7 +208,9 @@
 ; Where the song is being heard: (AT . ROW), AT a place in the song's
 ; own order and ROW a row of the pattern there.  The frame at the speaker
 ; is the frames rendered less those queued; the tracker stood at the
-; place last marked by then, and the row before its next one is sounding.
+; place last marked by then, and the row before its next one is
+; sounding: when the next is a pattern's first, the last row of the
+; pattern before it in the order.
 (def player-place
   (fn (_ p)
     (if (not (%pl-get p 9)) (pair 0 0)
@@ -210,9 +220,18 @@
           (def at (List ref 1 mark))
           (def row (List ref 2 mark))
           (def n (%pl-get p 7))
-          (match ((if (eq? (%pl-get p 4) (lit once)) (not (< at n)) #f) (pair (- n 1) 0))
-                 (#t (pair (if (if (eq? (%pl-get p 4) (lit pattern)) #t (= n 0)) at (int% (+ (List ref 3 mark) at) n))
-                           (if (< 0 row) (- row 1) 0))))))))
+          (def mode (%pl-get p 4))
+          (def rows (%pl-get p 17))
+          ; The place in the order played: the song's own, the one pattern.
+          (def place (if (if (eq? mode (lit pattern)) #t (= n 0)) at (int% (+ (List ref 3 mark) at) n)))
+          (def size (if (eq? mode (lit pattern)) 1 n))
+          (match ((if (eq? mode (lit once)) (not (< at n)) #f) (pair (- n 1) 0))
+                 ((< 0 row) (pair place (- row 1)))
+                 ; Nothing sounded yet, or a song played once at its start.
+                 ((if (= 0 (first mark)) #t (if (eq? mode (lit once)) (= at 0) #f)) (pair place 0))
+                 ((null? rows) (pair place 0))
+                 (#t ((fn (_ before) (pair before (- (List ref (if (eq? mode (lit pattern)) 0 before) rows) 1)))
+                      (if (eq? mode (lit pattern)) at (int% (+ (- place 1) size) size)))))))))
 
 ; Whether a song played once has rung out: every row of its tail
 ; started.  Its last frames may still be queued (player-queued).
@@ -238,9 +257,12 @@
         ((fn (_ t n)
            (def next (if (= n 0) 0 (int% (+ (+ (%pl-turn-now p t) (first (Tracker place t))) 1) n)))
            (Tracker song! t (%pl-form p s (%pl-turn (song-order s) next) next))
-           (%pl-put! p 7 n))
+           (%pl-put! p 7 n)
+           (%pl-rows! p s (song-order s)))
          (%pl-get p 3) (List length (song-order s))))
-      ((eq? (%pl-get p 4) (lit pattern)) (Tracker song! (%pl-get p 3) (%pl-form p s (list pattern) 0)))
+      ((eq? (%pl-get p 4) (lit pattern))
+        (do (Tracker song! (%pl-get p 3) (%pl-form p s (list pattern) 0))
+            (%pl-rows! p s (list pattern))))
       (#t ()))
     p))
 
