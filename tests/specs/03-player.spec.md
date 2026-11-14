@@ -108,3 +108,21 @@ spec-play!.  Nothing here opens an audio device.
 ```
 ---
     (#t 0 "x-tracker: no wave named spec-missing: read the file its (wave ...) form is in with -w FILE")
+
+### a song loaded starts afresh: the playing stopped, and an undo goes back to its own song
+
+```tracker
+(def two (file-parse (Str8 append (song-text spec-tune) "\n(song \"t\" (instrument a (wave sine)) (pattern r (a \"C4\")) (order r))\n")))
+(def st (edit-make two () (player-open (spec-front) ())))
+(spec-keys! st (list "x" " "))
+(spec-play! 8000)
+(edit-tick! st)
+(def playing (player-playing? (edit-player st)))
+(spec-keys! st (list ":song t" 'enter))
+(def after (list (song-name (edit-song st)) (player-playing? (edit-player st)) (edit-place st)))
+(spec-keys! st (list "U"))
+(def p-first (fn (_) (pattern-cell (song-pattern (edit-song st) "p") 0 0)))
+(write (list playing after (song-name (edit-song st)) (first (edit-place st)) (p-first)))
+```
+---
+    (#t ("t" #f ("r" 0 0)) "s" "p" "C4")
