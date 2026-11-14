@@ -22,6 +22,9 @@ one to start from:
 
     x -l tracker -- data/demo.xon
 
+[docs/writing.md](docs/writing.md) is a guide to writing songs: the
+format, every effect, and how to make music with them.
+
 `play` plays a song once through, or with `--loop` until q, the pattern
 heard written to standard error; `list` prints each song of a file with
 how long it lasts, its patterns and its order.  With no operands
