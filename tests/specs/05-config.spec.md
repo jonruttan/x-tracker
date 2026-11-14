@@ -77,7 +77,7 @@ tracker/config: the user's file, read as data, and :set in the editor.
              (config-set! cfg '(colour nope ()) #f)))
 ```
 ---
-    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect cursor playing")
+    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect cursor playing block")
 
 ## :set
 
@@ -120,15 +120,15 @@ tracker/config: the user's file, read as data, and :set in the editor.
 ```
 ---
 ```output
-  octave 5                         key step-down "{"
-  step 1                           key step-up "}"
-  follow on                        key up up
-  backup on                        key down down
-  undo 200                         key left left
-  sound on                         key right right
-  waves                            key page-up page-up
-  colour title (reverse) () ()     key page-down page-down
-  colour empty (dim) () ()         key top home
+  octave 5                         key octave-up ">"
+  step 1                           key step-down "{"
+  follow on                        key step-up "}"
+  backup on                        key up up
+  undo 200                         key down down
+  sound on                         key left left
+  waves                            key right right
+  colour title (reverse) () ()     key page-up page-up
+  colour empty (dim) () ()         key page-down page-down
 #t
 ```
 

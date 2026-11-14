@@ -64,6 +64,13 @@ and heard as they are typed.  The other keys:
     p               play the pattern edited over and over, or stop
     F               follow the playing, or stop: while it follows, the
                     pattern heard is shown and the cursor is on its row
+    O               edit the order in place: left, right pick a place, up,
+                    down change its pattern, i copy it, d drop it, [ ] move
+                    it, Enter edit its pattern, Escape done
+    ( )             move the channel left, right
+    V               mark a block from the cursor; move to its other corner
+    Y X P           copy, cut, paste the block (or the cell)
+    Delete          clear the block marked
     U R             undo, redo
     ?               the keys and the commands
     ctrl-c          quit
@@ -87,6 +94,22 @@ and heard as they are typed.  The other keys:
     :waves keep                       copy the waves borrowed from -w files
                                       into this file
     :wave NAME [AMP ...]              show a wave, or make or change it
+    :effects                          list the effects over the whole mix
+    :effect (NAME N ...)              add one: echo reverb phase chorus
+                                      drive crush sweep limit
+    :effect K  :effect K (NAME N ...)  edit the Kth, or put it in
+    :effect drop K                    drop the Kth
+    :instruments                      list the instruments, and where each
+                                      plays
+    :instrument NAME                  edit an instrument's form, or make it
+    :copy-instrument NAME NEW  :rename-instrument NAME NEW
+    :drop-instrument NAME             one no channel plays
+    :channel-instrument NAME          the cursor's channel played by NAME
+    :patterns                         list the patterns
+    :copy-pattern NEW  :rename-pattern NEW  :drop-pattern [NAME]
+    :copy-song NAME  :drop-song
+    :transpose N  :gain PCT           the block marked, or the cell:
+                                      semitones up or down, a gain set
     :set                              list the settings, the keys among them
     :set NAME VALUE ...               change a setting for this session
 
@@ -139,6 +162,7 @@ those, or `()` for the terminal's own.  The names and their defaults:
     effect   () 6 ()            a cell with effects
     cursor   (reverse) () ()    the cursor, a song picked
     playing  (bold) 2 ()        the row heard
+    block    () 0 6             the cells of the block marked
 
 `(key ACTION KEY ...)` binds an action to other keys: each a character
 in a string, `"u"`, or a key's name, as `enter up down left right
@@ -153,7 +177,8 @@ own keys:
     top Home         bottom End      next-channel Tab
     edit-cell Enter  edit-instrument E
     insert-row I     delete-row D    hold .          let-go -
-    quit ctrl-c
+    quit ctrl-c      order O         channel-left (  channel-right )
+    mark V           copy Y          cut X           paste P
 
 A form that is not a setting is one line on standard error, and the
 first is shown in the editor; the rest of the file is still read.  A

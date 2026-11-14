@@ -70,7 +70,19 @@
       (if (str=? gap "") () (list (list (lit gap) gap)))
       (list (list (lit song) "" song #t) (list (lit gap) "\n")))))
 
-; Whether piece P has been changed: a song changed, or a form made.
+; DOC without its Ith song: in its place an empty gap marked changed,
+; until the document is written.
+(def file-drop-song
+  (fn (_ doc i)
+    ((fn (self ps k)
+       (match ((null? ps) ())
+              ((not (eq? (first (first ps)) (lit song))) (pair (first ps) (self (rest ps) k)))
+              ((= k i) (pair (list (lit gap) "" () #t) (rest ps)))
+              (#t (pair (first ps) (self (rest ps) (+ k 1))))))
+     doc 0)))
+
+; Whether piece P has been changed: a song changed, a form made, a song
+; dropped.
 (def %fl-changed?
   (fn (_ p) (if (< (List length p) 4) #f (eq? (List ref 3 p) #t))))
 
@@ -126,5 +138,5 @@
     (File write-all path (file-text doc))
     (file-written doc)))
 
-(provide tracker/file file-parse file-text file-songs file-song! file-add-song file-changed? file-written
+(provide tracker/file file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
   file-waves file-wave file-set-wave file-read file-write!)

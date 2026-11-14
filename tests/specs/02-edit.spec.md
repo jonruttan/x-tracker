@@ -235,3 +235,79 @@ Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one
     s3
 ((#t #f) "s2" "s2")
 ```
+
+## editing the rest of a song
+
+### a block is marked, copied, pasted, cut and transposed; channels move
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (instrument b (wave noise))\n  (pattern p (a \"C4 D4 E4 F4\") (b \"G4 . . .\"))\n  (order p))") () ()))
+(spec-keys! st (list "V" 'down 'right "Y" 'down 'down "P"))
+(def pasted (spec-song st))
+(spec-keys! st (list 'home 'left "V" 'down ":transpose 12" 'enter ":gain 40" 'enter 'escape))
+(def moved (spec-song st))
+(spec-keys! st (list 'end "V" 'up "X" ")" ":channel-instrument b" 'enter))
+(spec-lines pasted) (spec-lines moved) (spec-lines (spec-song st))
+(write (list (edit-place st) (edit-message st)))
+```
+---
+```output
+(song "t" (instrument a (wave sine)) (instrument b (wave noise))
+  (pattern p
+    (a "C4 D4 E4 F4")
+    (b "G4 .  .  C4"))
+  (order p))
+(song "t" (instrument a (wave sine)) (instrument b (wave noise))
+  (pattern p
+    (a "C5:40 D5:40 E4    F4")
+    (b "G4    .     .     C4"))
+  (order p))
+(song "t" (instrument a (wave sine)) (instrument b (wave noise))
+  (pattern p
+    (b "G4    .     .     C4")
+    (b "C5:40 D5:40 .     ."))
+  (order p))
+(("p" 2 1) "")
+```
+
+### O edits the order in place
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine))\n  (pattern p (a \"C4\")) (pattern q (a \"D4\"))\n  (order p q))") () ()))
+(spec-keys! st (list "O" 'right "i" 'down "[" 'left 'down))
+(def during (song-order (edit-song st)))
+(spec-keys! st (list 'enter))
+(write (list during (edit-place st) (edit-message st)))
+```
+---
+    (("q" "p" "q") ("q" 0 0) "")
+
+### effects, instruments, patterns and songs are listed, copied, renamed and dropped
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (echo 300 40 20)\n  (instrument a (wave sine))\n  (pattern p (a \"C4\"))\n  (order p))\n(song \"u\" (instrument a (wave sine)) (pattern r (a \"C4\")) (order r))") () ()))
+(def screen (Screen make 8 110))
+(spec-keys! st (list ":effects" 'enter))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 4)))
+(spec-keys! st (list 'escape ":effect (reverb 120 80 30)" 'enter ":effect 1" 'enter 'kill-bol "(echo 100 20 10)" 'enter ":effect drop 2" 'enter))
+(def fx (song-effects (edit-song st)))
+(spec-keys! st (list ":copy-instrument a b" 'enter ":rename-instrument a lead" 'enter ":drop-instrument lead" 'enter))
+(def dropped (edit-message st))
+(spec-keys! st (list ":drop-instrument b" 'enter ":copy-pattern q" 'enter ":rename-pattern chorus" 'enter ":drop-pattern p" 'enter))
+(def pats (list (List map first (song-patterns (edit-song st))) (song-order (edit-song st)) (song-instruments (edit-song st))))
+(spec-keys! st (list ":instrument bass" 'enter))
+(def typed (edit-message st))
+(spec-keys! st (list 'enter ":copy-song v" 'enter))
+(def copied (List map song-name (file-songs (edit-doc st))))
+(spec-keys! st (list ":drop-song" 'enter))
+(def after-drop (list (List map song-name (file-songs (edit-doc st))) (song-name (edit-song st)) (edit-message st)))
+(spec-keys! st (list "U"))
+(write (list fx dropped pats (song-instruments (edit-song st)) copied after-drop (List map song-name (file-songs (edit-doc st)))))
+```
+---
+```output
+Effects over the mix, in order   :effect (NAME N ...) adds one   :effect K edits the Kth   :effect drop K
+   1  (echo 300 40 20)
+(("(echo 100 20 10)") "lead plays in p: drop its channels first." (("chorus") () ("lead")) ("lead" "bass") ("t" "u" "v") (("t" "u") "u" "Dropped v: U brings it back.") ("t" "u" "v"))
+```

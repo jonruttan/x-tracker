@@ -66,7 +66,8 @@
         (list (lit off) () 1 ())
         (list (lit effect) () 6 ())
         (list (lit cursor) (list (lit reverse)) () ())
-        (list (lit playing) (list (lit bold)) 2 ())))
+        (list (lit playing) (list (lit bold)) 2 ())
+        (list (lit block) () 0 6)))
 
 (def %cf-colour-names
   (list (lit black) (lit red) (lit green) (lit yellow) (lit blue) (lit magenta) (lit cyan) (lit white)))
@@ -83,7 +84,9 @@
         (pair (lit top) (lit home)) (pair (lit bottom) (lit end)) (pair (lit next-channel) (lit complete))
         (pair (lit edit-cell) (lit enter)) (pair (lit edit-instrument) "E")
         (pair (lit insert-row) "I") (pair (lit delete-row) "D")
-        (pair (lit hold) ".") (pair (lit let-go) "-") (pair (lit quit) (lit interrupt))))
+        (pair (lit hold) ".") (pair (lit let-go) "-") (pair (lit quit) (lit interrupt))
+        (pair (lit order) "O") (pair (lit channel-left) "(") (pair (lit channel-right) ")")
+        (pair (lit mark) "V") (pair (lit copy) "Y") (pair (lit cut) "X") (pair (lit paste) "P")))
 
 (def %cf-find (fn (_ name alist) (List find (fn (_ e) (eq? (first e) name)) alist)))
 
@@ -267,7 +270,7 @@
 (def config-problems (fn (_ cfg) (%cf-get cfg %cf-problems)))
 
 ; The style the editor draws NAME in, a symbol: title, empty, heading,
-; beat, off, effect, cursor or playing.
+; beat, off, effect, cursor, playing or block.
 (def config-style (fn (_ cfg name) (List ref 4 (%cf-find name (%cf-get cfg %cf-colours)))))
 
 ; KEY as the editor takes it: the key of the action it is bound to; nil

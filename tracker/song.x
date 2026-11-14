@@ -29,7 +29,7 @@
 
 (import x/codec/xon)
 (import x/audio/mixer)
-(import x/core/doors str->sym)
+(import x/core/doors str->sym int/ int%)
 (import tracker/node node-read node-form? node-text node-parts node-head node-value)
 
 (def %sg-fail (fn (_ what) (Err raise (lit value) (Str8 append "x-tracker: " what) ())))
@@ -224,6 +224,95 @@
                (fn (_ i) (if (eq? (first i) (lit text)) (str=? (List ref 4 i) "instrument") #f))
                (list (lit text) #f text (first forms) "instrument"))))
 
+; --- effects, instruments and patterns by name ------------------------------
+
+(def %sg-effect-heads (list "echo" "reverb" "phase" "chorus" "drive" "crush" "sweep" "limit"))
+(def %sg-effect? (fn (_ i) (if (eq? (first i) (lit text)) (List includes? (List ref 4 i) %sg-effect-heads) #f)))
+
+; The text of each of S's effects over the whole mix, in order.
+(def song-effects
+  (fn (_ s) (List map (fn (_ i) (List ref 2 i)) (List filter %sg-effect? (song-items s)))))
+
+; The index among ITEMS of the Kth item PRED answers true for, or nil.
+(def %sg-nth
+  (fn (_ items pred k)
+    ((fn (self i n)
+       (match ((= i (List length items)) ())
+              ((not (pred (List ref i items))) (self (+ i 1) n))
+              ((= n k) i)
+              (#t (self (+ i 1) (+ n 1)))))
+     0 0)))
+
+; S with TEXT, an effect's form, as its Kth effect from 0, in place of
+; the one there; after its last when there is no Kth.  Raises a label
+; 'value for text that is no effect.
+(def song-set-effect
+  (fn (_ s k text)
+    (def forms (guard (e ()) (Xon parse text)))
+    (unless (if (= (List length forms) 1)
+              (if (pair? (first forms)) (if (symbol? (first (first forms))) (List includes? (symbol->str (first (first forms))) %sg-effect-heads) #f) #f)
+              #f)
+      (%sg-fail (Str8 append "an effect is (NAME N ...), NAME one of " (Str8 join " " %sg-effect-heads))))
+    (def item (list (lit text) #f text (first forms) (symbol->str (first (first forms)))))
+    (def at (%sg-nth (song-items s) %sg-effect? k))
+    (if (null? at) (%sg-put s (fn (_ i) #f) %sg-effect? item)
+      (%sg-make (song-name s) (List update at item (song-items s))))))
+
+; S without its Kth effect.
+(def song-drop-effect
+  (fn (_ s k)
+    (def at (%sg-nth (song-items s) %sg-effect? k))
+    (if (null? at) s (%sg-make (song-name s) (List remove at 1 (song-items s))))))
+
+(def %sg-instrument-item?
+  (fn (_ i name) (if (eq? (first i) (lit text)) (if (str=? (List ref 4 i) "instrument") (str=? (Str8 str (List ref 1 (List ref 3 i))) name) #f) #f)))
+
+; An instrument's TEXT with its name OLD made NEW.
+(def %sg-renamed-text
+  (fn (_ text old new)
+    (def at (Str8 index-of old text))
+    (Str8 append (Str8 sub 0 at text) new (Str8 sub (+ at (Str8 length old)) (- (Str8 length text) (+ at (Str8 length old))) text))))
+
+; S with a copy of instrument OLD named NEW, after the others.
+(def song-copy-instrument
+  (fn (_ s old new)
+    (song-set-instrument s (%sg-renamed-text (song-instrument-text s old) old new))))
+
+; S with instrument OLD named NEW, in its form and in every channel.
+(def song-rename-instrument
+  (fn (_ s old new)
+    (%sg-make (song-name s)
+      (List map
+        (fn (_ i)
+          (match ((%sg-instrument-item? i old)
+                   ((fn (_ text) (list (lit text) (List ref 1 i) text (first (Xon parse text)) "instrument"))
+                    (%sg-renamed-text (List ref 2 i) old new)))
+                 ((eq? (first i) (lit pattern))
+                   (list (lit pattern) (List ref 1 i) (List ref 2 i)
+                     (List map (fn (_ ch) (if (str=? (first ch) old) (pair new (rest ch)) ch)) (List ref 3 i))))
+                 (#t i)))
+        (song-items s)))))
+
+; S without instrument NAME.
+(def song-drop-instrument
+  (fn (_ s name)
+    (%sg-make (song-name s) (List filter (fn (_ i) (not (%sg-instrument-item? i name))) (song-items s)))))
+
+; The patterns of S with a channel of instrument NAME.
+(def song-instrument-uses
+  (fn (_ s name)
+    (List map first (List filter (fn (_ p) (List any? (fn (_ ch) (str=? (first ch) name)) (rest p))) (song-patterns s)))))
+
+; S with pattern OLD named NEW, in the order too.
+(def song-rename-pattern
+  (fn (_ s old new)
+    (song-set-order
+      (%sg-make (song-name s)
+        (List map (fn (_ i) (if (if (eq? (first i) (lit pattern)) (str=? (List ref 2 i) old) #f)
+                              (list (lit pattern) (List ref 1 i) new (List ref 3 i)) i))
+          (song-items s)))
+      (List map (fn (_ p) (if (str=? p old) new p)) (song-order s)))))
+
 ; --- a pattern's channels --------------------------------------------------
 
 (def pattern-rows
@@ -265,6 +354,74 @@
   (fn (_ chs inst) (List append chs (list (pair inst (List repeat (%sg-max 1 (pattern-rows chs)) "."))))))
 
 (def pattern-drop-channel (fn (_ chs c) (List remove c 1 chs)))
+
+; Channel C played by instrument INST.
+(def pattern-set-instrument
+  (fn (_ chs c inst) (List update c (pair inst (rest (List ref c chs))) chs)))
+
+; Channel C moved to C + D, the one there moved to C; as it was when
+; C + D is outside the pattern.
+(def pattern-move-channel
+  (fn (_ chs c d)
+    (def to (+ c d))
+    (if (if (< to 0) #t (not (< to (List length chs)))) chs
+      (List update to (List ref c chs) (List update c (List ref to chs) chs)))))
+
+; The cells of channels C0 to C1 and rows R0 to R1, both ends in: a list
+; of columns, each a list of cells.
+(def pattern-block
+  (fn (_ chs c0 c1 r0 r1)
+    (List map (fn (_ c) (List map (fn (_ r) (pattern-cell chs c r)) (List range r0 (+ r1 1)))) (List range c0 (+ c1 1)))))
+
+; BLOCK, a list of columns, put in from channel C and row R; what falls
+; outside the pattern is left out.
+(def pattern-paste
+  (fn (_ chs c r block)
+    (def rows (pattern-rows chs))
+    (List fold
+      (fn (_ acc k)
+        (def col (List ref k block))
+        (if (< (+ c k) (List length acc))
+          (List fold (fn (_ a j) (if (< (+ r j) rows) (pattern-set-cell a (+ c k) (+ r j) (List ref j col)) a))
+            acc (List range 0 (List length col)))
+          acc))
+      chs (List range 0 (List length block)))))
+
+; Channels C0 to C1 and rows R0 to R1 with F applied to each cell.
+(def pattern-map-block
+  (fn (_ chs c0 c1 r0 r1 f)
+    (pattern-paste chs c0 r0 (List map (fn (_ col) (List map f col)) (pattern-block chs c0 c1 r0 r1)))))
+
+(def %sg-note-names (list "C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B"))
+
+; A note's name from its semitones above C0.
+(def song-note-name
+  (fn (_ semi) (Str8 append (List ref (int% semi 12) %sg-note-names) (Str8 str (int/ semi 12)))))
+
+; CELL with its note moved N semitones, its gain and effects kept; a
+; held or let-go cell, or one the move would take below C0 or above B9,
+; as it was.
+(def cell-transpose
+  (fn (_ cell n)
+    (def slash (Str8 index-of "/" cell))
+    (def head (if (null? slash) cell (Str8 sub 0 slash cell)))
+    (def tail (if (null? slash) "" (Str8 sub slash (- (Str8 length cell) slash) cell)))
+    (def colon (Str8 index-of ":" head))
+    (def note (if (null? colon) head (Str8 sub 0 colon head)))
+    (def gain (if (null? colon) "" (Str8 sub colon (- (Str8 length head) colon) head)))
+    (def semi (if (List includes? note (list "." "-")) () (guard (e ()) (Mixer semitone note))))
+    (if (if (null? semi) #t (if (< (+ semi n) 0) #t (< 119 (+ semi n)))) cell
+      (Str8 append (song-note-name (+ semi n)) gain tail))))
+
+; CELL at PCT percent: a note's gain set, held and let-go cells as they were.
+(def cell-gain
+  (fn (_ cell pct)
+    (def slash (Str8 index-of "/" cell))
+    (def head (if (null? slash) cell (Str8 sub 0 slash cell)))
+    (def tail (if (null? slash) "" (Str8 sub slash (- (Str8 length cell) slash) cell)))
+    (def note (first (Str8 split ":" head)))
+    (if (List includes? note (list "." "-")) cell
+      (Str8 append note (if (= pct 100) "" (Str8 append ":" (Str8 str pct))) tail))))
 
 ; --- the form and the text -------------------------------------------------
 
@@ -340,4 +497,7 @@
 (provide tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
   song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
-  pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem)
+  pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem
+  song-effects song-set-effect song-drop-effect song-copy-instrument song-rename-instrument song-drop-instrument
+  song-instrument-uses song-rename-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste
+  pattern-map-block song-note-name cell-transpose cell-gain)
