@@ -121,6 +121,24 @@ draws.
 ---
     (("q" 0 0) ("p" 0 0) ("two" ("a" 0 0)) "one" ("one" "two"))
 
+### the pattern edited keeps its place in the order as the order changes
+
+```tracker
+(def st (edit-make (file-parse "(song \"one\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") () ()))
+(def screen (Screen make 6 80))
+(def order-row (fn (_) (spec-draw! st screen) (Str8 trim-right (Screen row-text screen 1))))
+(spec-keys! st (list ":pattern b" 'enter))
+(def before (order-row))
+(spec-keys! st (list ":order p b" 'enter))
+(def put-in (order-row))
+(spec-keys! st (list ":order b p b" 'enter))
+(def moved (order-row))
+(spec-keys! st (list ":order p" 'enter))
+(write (list before put-in moved (order-row)))
+```
+---
+    (" order: p   editing b, not in the order" " order: p [b]" " order: [b] p b" " order: p   editing b, not in the order")
+
 ### :q refuses once while there are changes, and :q! leaves
 
 ```tracker
