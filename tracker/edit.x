@@ -486,6 +486,15 @@
 ; The borrowed wave named NAME, from a file read with -w, or nil.
 (def %borrowed-wave (fn (_ st name) (List find (fn (_ w) (str=? (%wave-name w) name)) (%get st %borrowed))))
 
+; Whether the wave named NAME is one the mixer has of its own: one it has
+; that the player did not give it.
+(def %mixer-own?
+  (fn (_ st name)
+    (def p (%get st %player))
+    (if (player-wave? name)
+      (not (List any? (fn (_ w) (str=? (%wave-name w) name)) (if (null? p) () (player-waves p))))
+      #f)))
+
 ; Where the wave named NAME comes from, and its harmonics.
 (def %wave-source
   (fn (_ st name)
@@ -493,7 +502,7 @@
     (def theirs (%borrowed-wave st name))
     (match ((not (null? mine)) (Str8 append "in the file      " (%amps-text mine)))
            ((not (null? theirs)) (Str8 append "borrowed (-w)    " (%amps-text theirs)))
-           ((List includes? name (list "sine" "noise")) "the mixer's own")
+           ((%mixer-own? st name) "the mixer's own")
            ((player-wave? name) "given to the mixer")
            (#t "missing: :wave NAME AMP ... makes it"))))
 
@@ -522,7 +531,7 @@
       ((null? args) (edit-message! st ":wave NAME AMP ...   :waves lists them"))
       ((null? (rest args)) (edit-message! st (Str8 append (first args) ": " (%wave-source st (first args)))))
       ((not (%name? (first args))) (edit-message! st "A wave's name is a word."))
-      ((List includes? (first args) (list "sine" "noise")) (edit-message! st (Str8 append (first args) " is the mixer's own.")))
+      ((%mixer-own? st (first args)) (edit-message! st (Str8 append (first args) " is the mixer's own.")))
       ((if (List any? (fn (_ a) (if (null? a) #t (< a 0))) amps) #t (List all? (fn (_ a) (= a 0)) amps))
         (edit-message! st "A wave's harmonics are whole numbers from 0, not all 0: (wave hollow 6 0 2 0 1)."))
       (#t (do (%doc-change! st (file-set-wave (%get st %doc) (first args) amps))

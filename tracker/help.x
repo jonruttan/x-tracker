@@ -153,13 +153,14 @@
 
 ; An instrument's props, and a voice's: what x/audio/mixer plays.
 (def %hp-props
-  (list (list "wave" "(wave NAME)" "the wave a voice reads: sine, noise, or one a (wave ...) form makes")
+  (list (list "wave" "(wave NAME)" "the wave a voice reads: one of the mixer's own (:help waves), or one a (wave ...) form makes")
         (list "env" "(env (MS PCT) ...)" "the level over time, straight between points; ends at the last")
         (list "release" "(release MS)" "how long a note fades once let go (200)")
         (list "gain" "(gain PCT)" "the voice's level")
         (list "pan" "(pan -100..100)" "left to right")
         (list "cut" "(cut PCT)" "a low-pass, as a percentage of the pitch's range")
         (list "filter" "(filter (MS PCT) ...)" "the low-pass moving over time")
+        (list "width" "(width (MS PCT) ...)" "the wave less itself PCT of a cycle on: a saw's pulse, swept as it moves")
         (list "detune" "(detune CENTS)" "the voice moved off its pitch")
         (list "note" "(note \"C4\")  (hz N)" "a pitch of its own: a cell's note only starts it, as a drum")
         (list "hz" "(hz N)" "a pitch of its own, in hertz")
@@ -243,7 +244,9 @@
         "  (wave hollow 6 0 2 0 1)     odd harmonics: hollow, like a clarinet"
         "  (wave reed 6 4 3 2 1 1)     every harmonic, falling: bright, like a saw"
         "  (wave glass 5 0 0 2 0 0 0 1)"
-        "sine and noise are the mixer's own.  An instrument names one with (wave NAME)."
+        "The mixer's own: sine, square, triangle, saw, inverse-saw, pulse, noise, metal."
+        "pulse is the saw at (width (0 50)); give it a width of its own, or sweep one."
+        "An instrument names a wave with (wave NAME)."
         "A file keeps its waves as (wave ...) forms beside its songs; -w FILE reads another's."
         ":waves lists them, :waves keep copies the borrowed in, :wave NAME AMP ... makes one."))
 
@@ -255,7 +258,7 @@
         (list "effects" "a cell's effects, after /" (fn (_) (%hp-entry-lines %hp-effects 12)))
         (list "song" "a song's props and the effects over its mix" (fn (_) (%hp-entry-lines %hp-song 44)))
         (list "instruments" "an instrument's props, and its voices'" (fn (_) (%hp-entry-lines %hp-props 24)))
-        (list "waves" "a wave's harmonics, and where waves are kept" (fn (_) %hp-wave-lines))
+        (list "waves" "the mixer's own waves, harmonics, and where waves are kept" (fn (_) %hp-wave-lines))
         (list "order" "the order, edited in place with O" (fn (_) %hp-order-lines))
         (list "settings" "the settings file and :set" (fn (_)
                                                         (List append
