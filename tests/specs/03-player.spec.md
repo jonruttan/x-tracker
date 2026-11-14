@@ -94,6 +94,20 @@ spec-play!.  Nothing here opens an audio device.
 ---
     ("x-tracker: no wave named spec-reedy: read the file its (wave ...) form is in with -w FILE" #t #t)
 
+### a wave of points is drawn by its points, and one of harmonics by its harmonics
+
+```tracker
+(import x/core/doors ptr-ref-word int->ptr)
+(def pl (player-open (spec-front) (list '(wave spec-stair (0 100) (1 100) (1 -100) (2 -100)) '(wave spec-pair 1 1))))
+(def at (fn (_ name i) (ptr-ref-word (int->ptr (List ref 1 (Mixer wave name))) (* i %word-size))))
+(def s (song-parse "(song \"s\" (bpm 240) (rows 2)\n  (instrument a (wave spec-stair))\n  (pattern p (a \"C4 .\"))\n  (order p))"))
+(player-start! pl s 'song 0 ())
+(player-pump! pl)
+(write (list (at 'spec-stair 0) (at 'spec-stair 1023) (at 'spec-stair 1024) (< (at 'spec-pair 300) 32768) (player-playing? pl)))
+```
+---
+    (32767 32767 -32767 #t #t)
+
 ## the editor playing
 
 ### a borrowed wave is kept in the file, and a wave made is heard; undo puts the mixer back

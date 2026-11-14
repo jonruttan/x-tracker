@@ -5,8 +5,8 @@
 data/hungarian-dance-5.xon: its one song read by tracker/file, played
 once through the tracker into the stand-in for SDL's audio at a tension
 of 50, so both layers sound, and rung out.  Its forms are checked to be
-ones the tracker knows, so a misspelt effect is caught here, and its
-waves are the file's own.
+ones the tracker knows, so a misspelt effect is caught here, and it
+plays on the file's waves and the mixer's shaped ones.
 
 The player is over only while the tracker renders the last row of the
 ring-out, so the stand-in plays one block of 1024 frames a pump, less
@@ -15,7 +15,7 @@ comes round to its start.
 
 ## the dance
 
-### the song plays through to its end on the file's own waves
+### the song plays through to its end on the file's waves and the mixer's
 
 ```tracker
 (def hdoc (file-read (Str8 append %lang-root "/data/hungarian-dance-5.xon")))

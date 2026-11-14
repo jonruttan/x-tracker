@@ -84,14 +84,23 @@
 (def %pl-get (fn (_ p k) (Vector ref k p)))
 (def %pl-put! (fn (_ p k x) (Vector set! k x p)))
 
-; A player playing through FRONT, nothing yet; WAVES the (wave NAME AMP
-; ...) forms its songs' instruments may name.  Raises what FRONT raises
+; The (wave NAME ...) form W made in the mixer: drawn through its points
+; when it has them, (wave NAME (POSITION LEVEL) ...), else of its
+; harmonics, (wave NAME AMP ...).
+(def %pl-give!
+  (fn (_ w)
+    (if (pair? (List ref 2 w))
+      (Mixer shape! (List ref 1 w) (rest (rest w)))
+      (Mixer wave! (List ref 1 w) (rest (rest w))))))
+
+; A player playing through FRONT, nothing yet; WAVES the (wave ...)
+; forms its songs' instruments may name.  Raises what FRONT raises
 ; when there is no audio to open.  With FRONT nil, a player that only
 ; renders (player-render!): it opens no audio.
 (def player-open
   (fn (_ front waves)
     (Mixer jit!)
-    (List for-each (fn (_ w) (Mixer wave! (List ref 1 w) (rest (rest w)))) waves)
+    (List for-each %pl-give! waves)
     (def p (Vector make 26 ()))
     (%pl-put! p 0 front)
     (unless (null? front) (%pl-put! p 1 (front audio-open %pl-rate 2)))
@@ -105,17 +114,17 @@
     (%pl-put! p 22 100)
     p))
 
-; The (wave NAME AMP ...) forms the mixer was given.
+; The (wave ...) forms the mixer was given.
 (def player-waves (fn (_ p) (%pl-get p 8)))
 
-; The (wave NAME AMP ...) forms WAVES given to the mixer, each in place
+; The (wave ...) forms WAVES given to the mixer, each in place
 ; of a wave of its name; one the mixer already has as it is, is not
 ; made again.  A song playing hears them from its next pattern.
 (def player-waves!
   (fn (_ p waves)
     (def had (%pl-get p 8))
     (def fresh (List filter (fn (_ w) (not (List any? (fn (_ h) (equal? h w)) had))) waves))
-    (List for-each (fn (_ w) (Mixer wave! (List ref 1 w) (rest (rest w)))) fresh)
+    (List for-each %pl-give! fresh)
     (%pl-put! p 8
       (List append (List filter (fn (_ h) (not (List any? (fn (_ w) (eq? (List ref 1 w) (List ref 1 h))) fresh))) had) fresh))
     p))
