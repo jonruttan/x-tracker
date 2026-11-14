@@ -244,6 +244,8 @@
         "  (wave hollow 6 0 2 0 1)     odd harmonics: hollow, like a clarinet"
         "  (wave reed 6 4 3 2 1 1)     every harmonic, falling: bright, like a saw"
         "  (wave glass 5 0 0 2 0 0 0 1)"
+        "Or the points it is drawn through, (POSITION LEVEL), straight lines between:"
+        "  (wave stair (0 100) (1 100) (1 0) (2 0) (2 -100) (3 -100))"
         "The mixer's own: sine, square, triangle, saw, inverse-saw, pulse, noise, metal."
         "pulse is the saw at (width (0 50)); give it a width of its own, or sweep one."
         "An instrument names a wave with (wave NAME)."

@@ -143,6 +143,36 @@ strong high harmonics with gaps between give bells and metal.  The
 instrument's `cut` then decides how much of that brightness gets
 through.
 
+### Waves drawn by points
+
+A wave can instead be drawn, as the points its one cycle passes
+through, in straight lines between:
+
+    (wave NAME (POSITION LEVEL) (POSITION LEVEL) ...)
+
+Positions start at 0 and never go back; the last one is the end of the
+cycle, so the scale is yours: `(0 ..) (1 ..) (2 ..)` cuts the cycle in
+halves, `(0 ..) (8 ..)` in eighths.  Levels run from -100 to 100.  Two
+points at the same position are a jump, and the end jumps back to the
+start's level.
+
+    (wave stair (0 100) (1 100) (1 0) (2 0) (2 -100) (3 -100))   three steps: a coarse, buzzy square
+    (wave ramp (0 -100) (3 100) (4 -100))                        a saw leaning back: softer at the top
+    (wave spike (0 0) (1 100) (2 0) (16 0))                      a short blip: thin and reedy
+
+The mixer's own square, triangle and saws are drawn this way.  A shape
+with sharp corners and jumps is bright; one of long, gentle slopes is
+soft.
+
+```xon
+(wave stair (0 100) (1 100) (1 0) (2 0) (2 -100) (3 -100))
+
+(song "stairs" (bpm 120) (rows 4)
+  (instrument steps (wave stair) (cut 60) (env (0 0) (5 60) (300 30)) (release 120) (gain 40))
+  (pattern a (steps "C3 . E3 . G3 . E3 . C3 . G2 . C3 . . ."))
+  (order a))
+```
+
 A wave is named by an instrument as `(wave NAME)`.  A file can keep its
 waves at its top, before its songs, so it needs no other file; one
 whose waves are in another file is read with `-w FILE` (and `:waves
