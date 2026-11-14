@@ -626,21 +626,30 @@
       ((eq? key (lit enter)) ((fn (_ i) (close!) (%go-song! st i) (edit-message! st "")) (%get st %pick)))
       (#t (close!)))))
 
+; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
+; past its right edge.  x/tui/screen's put keeps to the rows but not to
+; the columns: one past the edge is written past the row's end, and past
+; the last row's, into whatever the heap holds there.
+(def %put-text!
+  (fn (_ screen cols row col text style)
+    (when (int< col cols) (Screen put screen row col text style))))
+
 ; LINES put on SCREEN from row TOP, HIGH rows: the first a heading on a
 ; row of its own, the rest beneath it, a column of HIGH less one, the
-; columns side by side as wide as the widest line.  A line not starting
-; with a blank is a heading, in bold; the line HI of the rest, when it
-; is not nil, is highlighted.
+; columns side by side as wide as the widest line, as many as the screen
+; is wide for.  A line not starting with a blank is a heading, in bold;
+; the line HI of the rest, when it is not nil, is highlighted.
 (def %draw-panel!
   (fn (_ screen lines top high hi)
     (def h (%max 1 (- high 1)))
     (def body (rest lines))
+    (def cols (Screen cols screen))
     (def w (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 body)))
     (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 %bold) 0)))
     (Screen put screen top 0 (first lines) (style (first lines)))
     (List fold
       (fn (_ i l)
-        (Screen put screen (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
+        (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
         (+ i 1))
       0 body)))
 
@@ -720,7 +729,7 @@
     (def cur-chan (int- (%get st %chan) left))
     ((fn (self cs k)
        (unless (null? cs)
-         (do (Screen put screen top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
+         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
              (self (rest cs) (int+ k 1)))))
      shown-chs 0)
     ; Each channel's cells from the first row shown, walked a row at a
@@ -730,7 +739,7 @@
         (if (null? cs) acc
           ((fn (_ cells)
              (def cell (if (null? cells) "." (first cells)))
-             (Screen put screen (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
+             (%put-text! screen cols (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
                (if (if (int= r cur-row) (int= k cur-chan) #f) %cursor (%cell-style cell)))
              (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
            (first cs)))))
@@ -738,9 +747,9 @@
     ((fn (self y cs)
        (def r (int+ first-row y))
        (when (if (int< y shown) (int< r rows) #f)
-         (do (Screen put screen (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
+         (do (%put-text! screen cols (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
                (if (%same? r heard) %playing (if (int= 0 (int% r beat)) %beat %dim)))
-             (when (%same? r heard) (Screen put screen (int+ (int+ top 1) y) 3 ">" %playing))
+             (when (%same? r heard) (%put-text! screen cols (int+ (int+ top 1) y) 3 ">" %playing))
              (self (int+ y 1) (rev (put-row! y r cs 0 ()) ())))))
      0 (List map (fn (_ ch) (List drop first-row (rest ch))) shown-chs))))
 
