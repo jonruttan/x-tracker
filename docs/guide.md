@@ -62,16 +62,21 @@ A new file looks like this:
 
 The top line is the file, `[+]` when it has changes not yet written,
 the song's name, its tempo (`bpm`, `rows` a beat, `ticks` a row), and
-the octave and the step the keys type with.  Below it is the order:
-the patterns in the order they play, the one being edited in brackets,
-and while the song plays, the one heard marked `>`.
+the octave and the step the keys type with; on a narrow screen it
+leaves out `rows` and `ticks` first, then the octave and the step,
+then the tempo and the name.  Below it is the order: the patterns in
+the order they play, the one being edited in brackets, and while the
+song plays, the one heard marked `>`.  An order wider than the screen
+shows the part around the one heard while the song plays, else the
+one edited, `...` for the rest.
 
 Then the pattern: a row a line, numbered from 0, and a channel a
 column, headed by the instrument that plays it.  The rows on the beat
 are drawn in a colour of their own.  The cursor is the cell drawn
 reversed.  The last line shows the keys to start with, a command being
 typed, or a message.  `?` shows every key and command; any key closes
-it.
+it.  A list too wide for the screen, such as `:patterns` in a song of
+many, pages the way `?` does.
 
 The new song has one instrument, `lead`, a sine, and one pattern, `a`,
 of sixteen rows, with the lead's channel in it.  At 4 rows a beat,

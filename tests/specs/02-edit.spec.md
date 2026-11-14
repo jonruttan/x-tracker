@@ -254,6 +254,93 @@ Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one
 ((#t #f) "s2" "s2")
 ```
 
+### an order wider than the screen shows the part around the place edited, picked or heard
+
+```tracker
+(def names (List map (fn (_ n) (Str8 append "p" (Str8 str n))) (List range 0 20)))
+(def st (edit-make (file-parse (Str8 append "(song \"t\" (instrument a (wave sine))"
+  (Str8 join "" (List map (fn (_ n) (Str8 append " (pattern " n " (a \"C4\"))")) names))
+  " (order " (Str8 join " " names) "))")) () ()))
+(def screen (Screen make 6 40))
+(def order-row (fn (_) (spec-draw! st screen) (Str8 trim-right (Screen row-text screen 1))))
+(def start (order-row))
+(spec-keys! st (List repeat 12 "]"))
+(def edited (order-row))
+(spec-keys! st (list "O" 'left 'left 'left 'left 'left 'left 'left 'left))
+(def picked (order-row))
+(spec-keys! st (list 'escape "]]]]]]]"))
+(write (list start edited picked (order-row)))
+```
+---
+    (" order: [p0] p1 p2 p3 p4 p5 p6 p7 p8 ..." " order: ... p7 p8 p9 p10 p11 [p12] ..." " order: p0 p1 p2 p3 <p4> p5 p6 p7 p8 ..." " order: ... p14 p15 p16 p17 p18 [p19]")
+
+### a title wider than the screen leaves out rows and ticks first, then octave and step, then bpm
+
+```tracker
+(def st (edit-make (file-parse "(song \"tune\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") "t.xon" ()))
+(def title (fn (_ w) (def s (Screen make 6 w)) (spec-draw! st s) (Str8 trim-right (Screen row-text s 0))))
+(write (list (title 90) (title 70) (title 52) (title 40) (title 30)))
+```
+---
+    (" x-tracker  t.xon   \"tune\"   bpm 90  rows 4  ticks 6   octave 4  step 1   (no sound)" " x-tracker  t.xon   \"tune\"   bpm 90   octave 4  step 1   (no sound)" " x-tracker  t.xon   \"tune\"   bpm 90   (no sound)" " x-tracker  t.xon   \"tune\"   (no sound)" " x-tracker  t.xon   (no sound)")
+
+### a list too wide for the screen, with nothing to pick in it, pages as the help does
+
+```tracker
+(def names (List map (fn (_ n) (Str8 append "pat" (Str8 str n))) (List range 0 12)))
+(def st (edit-make (file-parse (Str8 append "(song \"t\" (instrument a (wave sine))"
+  (Str8 join "" (List map (fn (_ n) (Str8 append " (pattern " n " (a \"C4\"))")) names))
+  " (order pat0))")) () ()))
+(def screen (Screen make 8 60))
+(spec-keys! st (list ":patterns" 'enter))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 8)))
+(spec-keys! st (list 'end))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 7)))
+```
+---
+```output
+Patterns   :pattern NAME edits one   :copy-pattern NEW, :ren
+  pat0           1 rows  a   played 1x
+  pat1           1 rows  a   (not in the order)
+  pat2           1 rows  a   (not in the order)
+  pat3           1 rows  a   (not in the order)
+ n p: the next topic, the one before   arrows PgUp PgDn: scr
+Patterns   :pattern NAME edits one   :copy-pattern NEW, :ren
+  pat8           1 rows  a   (not in the order)
+  pat9           1 rows  a   (not in the order)
+  pat10          1 rows  a   (not in the order)
+  pat11          1 rows  a   (not in the order)
+```
+
+### a list of songs too wide for the screen starts from the column of the one picked
+
+```tracker
+(def songs (Str8 join "\n" (List map (fn (_ n) (Str8 append "(song \"song" (Str8 str n) "\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))")) (List range 0 30))))
+(def st (edit-make (file-parse songs) () ()))
+(def screen (Screen make 7 100))
+(spec-keys! st (list ":song" 'enter 'end))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 6)))
+(spec-keys! st (list 'home))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 6)))
+(write (Style has? (Screen style-at screen 3 2) 'reverse))
+```
+---
+```output
+Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one   (9 to the left)
+    song9        song12       song15       song18       song21       song24       song27
+    song10       song13       song16       song19       song22       song25       song28
+    song11       song14       song17       song20       song23       song26       song29
+Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one   (9 to the right)
+  > song0        song3        song6        song9        song12       song15       song18
+    song1        song4        song7        song10       song13       song16       song19
+    song2        song5        song8        song11       song14       song17       song20
+#t
+```
+
 ## editing the rest of a song
 
 ### a block is marked, copied, pasted, cut and transposed; channels move
