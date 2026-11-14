@@ -152,7 +152,7 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 
 ## the editor's keys
 
-### M and S mute and solo the cursor's channel, H and O its instrument; :unmute hears all
+### M and S mute and solo the cursor's channel, H and A its instrument; :unmute hears all
 
 ```tracker
 (def doc (file-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (instrument b (wave sine))\n  (pattern p (a \"C4 . E4 .\") (b \"C3 . . .\"))\n  (order p))"))
@@ -165,7 +165,7 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 (def m2 (said (list 'right "S")))
 (def m3 (said (list ":mute")))
 (def m3 (said (list 'enter)))
-(def m4 (said (list "H" "O")))
+(def m4 (said (list "H" "A")))
 (def m5 (said (list ":unmute" 'enter)))
 (def m6 (said (list ":mute" 'enter)))
 (def m7 (said (list ":solo c" 'enter)))
@@ -174,13 +174,13 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 ---
     ("Channel 0 muted." #t "Channel 1 soloed." "Muted: channel 0.  Soloed: channel 1." "Instrument b soloed." "Every channel and instrument heard." "Nothing is muted or soloed." "No instrument c.")
 
-### P plays from the cursor's row; L marks a row and L again loops to the cursor
+### G plays from the cursor's row; L marks a row and L again loops to the cursor
 
 ```tracker
 (def doc (file-parse (song-text spec-tune)))
 (def st (edit-make doc () (player-open (spec-front) ())))
 (def screen (Screen make 8 120))
-(spec-keys! st (list 'down 'down "P"))
+(spec-keys! st (list 'down 'down "G"))
 (edit-tick! st)
 (def from (list (edit-message st) (player-mode (edit-player st)) (edit-place st)))
 (spec-keys! st (list 'up "L"))
@@ -202,11 +202,11 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 (def doc (file-parse (song-text spec-tune)))
 (def st (edit-make doc () (player-open (spec-front) ())))
 (def screen (Screen make 8 140))
-(spec-keys! st (list ")" ")" "(" "+" "_" "_" "0" "9" "9"))
+(spec-keys! st (list "'" "'" ";" "+" "_" "_" "0" "9" "9"))
 (def said (edit-message st))
-(spec-keys! st (list "(" "(" "("))
+(spec-keys! st (list ";" ";" ";"))
 (def floor (edit-message st))
-(spec-keys! st (list ")" ")" ":volume 75" 'enter))
+(spec-keys! st (list "'" "'" ":volume 75" 'enter))
 (spec-draw! st screen)
 (write (list said floor (Str8 includes? "  tension 20  pace 90%  volume 75%" (Screen row-text screen 0))))
 ```

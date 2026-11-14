@@ -31,8 +31,11 @@
 (import tracker/song song-new song-name song-rename song-patterns song-pattern song-order song-prop
   song-instruments song-instrument-text song-waves song-set-pattern song-set-order song-set-prop song-set-instrument
   pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row pattern-delete-row
-  pattern-add-channel pattern-drop-channel song-cell-problem)
-(import tracker/file file-songs file-song! file-add-song file-changed? file-write! file-waves file-wave file-set-wave)
+  pattern-add-channel pattern-drop-channel song-cell-problem song-effects song-set-effect song-drop-effect
+  song-copy-instrument song-rename-instrument song-drop-instrument song-instrument-uses song-rename-pattern
+  song-drop-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste pattern-map-block
+  cell-transpose cell-gain)
+(import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave file-set-wave)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
@@ -65,8 +68,11 @@
 (def %stale 22)     ; whether the song heard is behind the song edited
 (def %borrowed 23)  ; the (wave ...) forms the player was given from other files (-w)
 (def %config 24)    ; the settings (tracker/config)
-(def %mark 25)      ; the row L marked as a loop's first, or nil
-(def %slots 26)
+(def %order-at 25)  ; the place picked in the order while O edits it, or nil
+(def %mark 26)      ; (ROW . CHANNEL) where the block marked with V starts, or nil
+(def %clip 27)      ; the cells copied, a list of columns, or nil
+(def %loop-at 28)   ; the row L marked as a loop's first, or nil
+(def %slots 29)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -124,6 +130,7 @@
     (%put! st %pattern (first fp))
     (%put! st %at (rest fp))
     (%put! st %row 0) (%put! st %chan 0) (%put! st %top 0) (%put! st %left 0)
+    (%put! st %mark ()) (%put! st %order-at ())
     st))
 
 ; An editor of DOC, read from PATH, heard through PLAYER (nil for none),
@@ -301,7 +308,7 @@
   (fn (_ st a b)
     (def from (%min a b))
     (def to (%min (%max a b) (- (%rows st) 1)))
-    (%put! st %mark ())
+    (%put! st %loop-at ())
     (%start! st (lit pattern) from (pair from to) #f
       (Str8 append "Looping rows " (Str8 str from) " to " (Str8 str to) ": p plays the whole pattern."))))
 
@@ -309,10 +316,10 @@
 ; the rows from it to the cursor's looped.
 (def %loop-key!
   (fn (_ st)
-    (if (null? (%get st %mark))
-      (do (%put! st %mark (%get st %row))
+    (if (null? (%get st %loop-at))
+      (do (%put! st %loop-at (%get st %row))
           (edit-message! st (Str8 append "Loop from row " (Str8 str (%get st %row)) ": L on its last row plays it, Escape forgets.")))
-      (%loop! st (%get st %mark) (%get st %row)))))
+      (%loop! st (%get st %loop-at) (%get st %row)))))
 
 ; Tension (WHAT tension), pace or volume moved by BY, kept from LEAST
 ; to MOST, and heard at once.
@@ -598,6 +605,10 @@
       ((str=? cmd "drop")
         (if (< (List length (%channels st)) 2) (edit-message! st "A pattern keeps one channel.")
           (%set-channels! st (pattern-drop-channel (%channels st) (%get st %chan)))))
+      ((if (str=? cmd "instrument") (= (List length args) 1) #f)
+        (%put! st %input (pair (lit instrument)
+                           ((fn (_ t) (if (null? t) (Str8 append "(instrument " (first args) " (wave sine) (env (0 0) (5 70) (250 35)) (release 150) (gain 50))") (%one-line t)))
+                            (song-instrument-text s (first args))))))
       ((str=? cmd "instrument")
         ((fn (_ e) (unless (null? e) (edit-message! st e)))
          (guard (e (if (Err err? e) (e msg) "not an instrument"))
@@ -620,7 +631,218 @@
       ((str=? cmd "set") (%set-cmd! st args))
       ((str=? cmd "rename")
         (if (null? args) (edit-message! st ":rename NAME") (%change! st (song-rename s (Str8 join " " args)))))
+      ((List includes? cmd (list "effects" "effect" "instruments" "copy-instrument" "rename-instrument" "drop-instrument"
+                                 "patterns" "copy-pattern" "rename-pattern" "drop-pattern" "copy-song" "drop-song"
+                                 "channel-instrument" "transpose" "gain"))
+        (%edit-cmd! st cmd args line))
       (#t (edit-message! st (Str8 append "No command " cmd ": ? lists them."))))))
+
+; --- editing the rest of a song ------------------------------------------------
+
+; A word naming a new thing NAME in WHAT, or why not.
+(def %new-name-problem
+  (fn (_ name taken what)
+    (match ((not (%name? name)) (Str8 append "A " what "'s name is a word."))
+           ((List includes? name taken) (Str8 append "There is a " what " " name " already."))
+           (#t ()))))
+
+; F run, its error the message: F answers nil or a message of its own.
+(def %try!
+  (fn (_ st what f)
+    ((fn (_ e) (unless (null? e) (edit-message! st e)))
+     (guard (e (if (Err err? e) (e msg) what)) (f)))))
+
+(def %effect-lines
+  (fn (_ st)
+    (def fx (song-effects (edit-song st)))
+    (pair "Effects over the mix, in order   :effect (NAME N ...) adds one   :effect K edits the Kth   :effect drop K"
+      (if (null? fx) (list "  none")
+        (List map (fn (_ k) (Str8 append "  " (Str8 pad-left 2 #\space (Str8 str (+ k 1))) "  " (%one-line (List ref k fx)) " "))
+          (List range 0 (List length fx)))))))
+
+(def %instrument-lines
+  (fn (_ st)
+    (def s (edit-song st))
+    (pair "Instruments   :instrument NAME edits one   :copy-instrument, :rename-instrument, :drop-instrument"
+      (List flat-map
+        (fn (_ n)
+          (list (Str8 append "  " (%one-line (song-instrument-text s n)) " ")
+                (Str8 append "      in: " ((fn (_ ps) (if (null? ps) "no pattern" (Str8 join " " ps))) (song-instrument-uses s n)) " ")))
+        (song-instruments s)))))
+
+(def %pattern-lines
+  (fn (_ st)
+    (def s (edit-song st))
+    (def order (song-order s))
+    (pair "Patterns   :pattern NAME edits one   :copy-pattern NEW, :rename-pattern NEW, :drop-pattern [NAME]   O edits the order"
+      (List map
+        (fn (_ p)
+          (Str8 append "  " (%pad 12 (first p)) (Str8 pad-left 4 #\space (Str8 str (pattern-rows (rest p)))) " rows  "
+            (Str8 join " " (List map first (rest p)))
+            ((fn (_ n) (if (= n 0) "   (not in the order)" (Str8 append "   played " (Str8 str n) "x"))) (List length (List filter (fn (_ o) (str=? o (first p))) order)))
+            " "))
+        (song-patterns s)))))
+
+; :effect (FORM) adds an effect, :effect K edits the Kth on the command
+; line, :effect K (FORM) puts it in, :effect drop K drops it.
+(def %effect-cmd!
+  (fn (_ st args line)
+    (def s (edit-song st))
+    (def n (List length (song-effects s)))
+    (def k (if (null? args) () (%num (first args))))
+    (def form-text ((fn (_ at) (if (null? at) "" (Str8 sub at (- (Str8 length line) at) line))) (Str8 index-of "(" line)))
+    (match
+      ((null? args) (edit-message! st ":effect (NAME N ...)   :effect K   :effect drop K   :effects lists them"))
+      ((Str8 starts? "(" (first args)) (%try! st "not an effect" (fn (_) (%change! st (song-set-effect s n form-text)) ())))
+      ((if (str=? (first args) "drop") (not (null? (rest args))) #f)
+        ((fn (_ j) (if (if (null? j) #t (if (< j 1) #t (< n j))) (edit-message! st (Str8 append "No effect " (List ref 1 args) "."))
+                     (%change! st (song-drop-effect s (- j 1)))))
+         (%num (List ref 1 args))))
+      ((if (null? k) #t (if (< k 1) #t (< n k))) (edit-message! st (Str8 append "No effect " (first args) ": :effects lists them.")))
+      ((null? (rest args)) (%put! st %input (pair (pair (lit effect) (- k 1)) (%one-line (List ref (- k 1) (song-effects s))))))
+      (#t (%try! st "not an effect" (fn (_) (%change! st (song-set-effect s (- k 1) form-text)) ()))))))
+
+; The rows and channels the block covers, (R0 R1 C0 C1), from the mark
+; to the cursor; the cursor's cell alone when nothing is marked.
+(def %block
+  (fn (_ st)
+    (def m (%get st %mark))
+    (def r (%get st %row)) (def c (%get st %chan))
+    (if (null? m) (list r r c c)
+      ((fn (_ mr mc) (list (%min mr r) (%max mr r) (%min mc c) (%max mc c)))
+       (%min (first m) (- (%rows st) 1)) (%min (rest m) (- (List length (%channels st)) 1))))))
+
+; Each cell of the block made F of it; the mark kept, so a second
+; change can follow.
+(def %map-block!
+  (fn (_ st f)
+    (def b (%block st))
+    (%set-channels! st (pattern-map-block (%channels st) (List ref 2 b) (List ref 3 b) (first b) (List ref 1 b) f))))
+
+(def %copy-block!
+  (fn (_ st)
+    (def b (%block st))
+    (%put! st %clip (pattern-block (%channels st) (List ref 2 b) (List ref 3 b) (first b) (List ref 1 b)))
+    (edit-message! st (Str8 append "Copied " (Str8 str (+ 1 (- (List ref 1 b) (first b)))) " rows of "
+                        (Str8 str (+ 1 (- (List ref 3 b) (List ref 2 b)))) " channels: P pastes them."))))
+
+(def %edit-cmd!
+  (fn (_ st cmd args line)
+    (def s (edit-song st))
+    (def pat (%get st %pattern))
+    (def one (if (null? args) () (first args)))
+    (match
+      ((str=? cmd "effects") (%put! st %help (%effect-lines st)))
+      ((str=? cmd "effect") (%effect-cmd! st args line))
+      ((str=? cmd "instruments") (%put! st %help (%instrument-lines st)))
+      ((str=? cmd "patterns") (%put! st %help (%pattern-lines st)))
+      ((str=? cmd "copy-instrument")
+        (match ((not (= (List length args) 2)) (edit-message! st ":copy-instrument NAME NEW"))
+               ((null? (song-instrument-text s one)) (edit-message! st (Str8 append "No instrument " one ".")))
+               ((not (null? (%new-name-problem (List ref 1 args) (song-instruments s) "instrument")))
+                 (edit-message! st (%new-name-problem (List ref 1 args) (song-instruments s) "instrument")))
+               (#t (%change! st (song-copy-instrument s one (List ref 1 args))))))
+      ((str=? cmd "rename-instrument")
+        (match ((not (= (List length args) 2)) (edit-message! st ":rename-instrument NAME NEW"))
+               ((null? (song-instrument-text s one)) (edit-message! st (Str8 append "No instrument " one ".")))
+               ((not (null? (%new-name-problem (List ref 1 args) (song-instruments s) "instrument")))
+                 (edit-message! st (%new-name-problem (List ref 1 args) (song-instruments s) "instrument")))
+               (#t (%change! st (song-rename-instrument s one (List ref 1 args))))))
+      ((str=? cmd "drop-instrument")
+        (match ((not (= (List length args) 1)) (edit-message! st ":drop-instrument NAME"))
+               ((null? (song-instrument-text s one)) (edit-message! st (Str8 append "No instrument " one ".")))
+               ((not (null? (song-instrument-uses s one)))
+                 (edit-message! st (Str8 append one " plays in " (Str8 join " " (song-instrument-uses s one)) ": drop its channels first.")))
+               (#t (%change! st (song-drop-instrument s one)))))
+      ((str=? cmd "channel-instrument")
+        (match ((not (= (List length args) 1)) (edit-message! st ":channel-instrument NAME"))
+               ((null? pat) (edit-message! st "No pattern."))
+               ((null? (song-instrument-text s one)) (edit-message! st (Str8 append "No instrument " one ".")))
+               (#t (%set-channels! st (pattern-set-instrument (%channels st) (%get st %chan) one)))))
+      ((str=? cmd "copy-pattern")
+        (match ((not (= (List length args) 1)) (edit-message! st ":copy-pattern NEW"))
+               ((null? pat) (edit-message! st "No pattern."))
+               ((not (null? (%new-name-problem one (List map first (song-patterns s)) "pattern")))
+                 (edit-message! st (%new-name-problem one (List map first (song-patterns s)) "pattern")))
+               (#t (do (%change! st (song-set-pattern s one (%channels st)))
+                       (%goto-pattern! st one)
+                       (edit-message! st (Str8 append "Copied to " one "."))))))
+      ((str=? cmd "rename-pattern")
+        (match ((not (= (List length args) 1)) (edit-message! st ":rename-pattern NEW"))
+               ((null? pat) (edit-message! st "No pattern."))
+               ((not (null? (%new-name-problem one (List map first (song-patterns s)) "pattern")))
+                 (edit-message! st (%new-name-problem one (List map first (song-patterns s)) "pattern")))
+               (#t (do (%change! st (song-rename-pattern s pat one)) (%put! st %pattern one)))))
+      ((str=? cmd "drop-pattern")
+        ((fn (_ name)
+           (match ((null? name) (edit-message! st "No pattern."))
+                  ((null? (song-pattern s name)) (edit-message! st (Str8 append "No pattern " name ".")))
+                  ((< (List length (song-patterns s)) 2) (edit-message! st "A song keeps one pattern."))
+                  (#t (do (%change! st (song-drop-pattern s name))
+                          (%clamp! st)
+                          (edit-message! st (Str8 append "Dropped " name "."))))))
+         (if (null? one) pat one)))
+      ((str=? cmd "copy-song")
+        (if (null? args) (edit-message! st ":copy-song NAME")
+          ((fn (_ name)
+             (if (List any? (fn (_ s2) (str=? (song-name s2) name)) (file-songs (%get st %doc)))
+               (edit-message! st (Str8 append "There is a song " name " already."))
+               (do (%put! st %undo (pair (%here st) (%get st %undo)))
+                   (%put! st %doc (file-add-song (%get st %doc) (song-rename s name)))
+                   (%go-song! st (- (List length (file-songs (%get st %doc))) 1))
+                   (edit-message! st (Str8 append "Copied to " name ".")))))
+           (Str8 join " " args))))
+      ((str=? cmd "drop-song")
+        (if (< (List length (file-songs (%get st %doc))) 2) (edit-message! st "A file keeps one song.")
+          ((fn (_ name)
+             (%put! st %undo (pair (%here st) (%get st %undo)))
+             (%put! st %doc (file-drop-song (%get st %doc) (%get st %song)))
+             (%go-song! st (%max 0 (- (%get st %song) 1)))
+             (edit-message! st (Str8 append "Dropped " name ": U brings it back.")))
+           (song-name s))))
+      ((str=? cmd "transpose")
+        ((fn (_ n) (%unless-bad! st (null? n) ":transpose N, semitones up or down"
+                     (fn (_) (%map-block! st (fn (_ c) (cell-transpose c n))))))
+         (if (null? one) () (%num one))))
+      ((str=? cmd "gain")
+        ((fn (_ n) (%unless-bad! st (if (null? n) #t (if (< n 0) #t (< 400 n))) ":gain PCT, from 0 to 400"
+                     (fn (_) (%map-block! st (fn (_ c) (cell-gain c n))))))
+         (if (null? one) () (%num one))))
+      (#t ()))))
+
+; MSG the message when BAD, else F run.
+(def %unless-bad! (fn (_ st bad msg f) (if bad (edit-message! st msg) (f))))
+
+; --- the order, edited in place ----------------------------------------------
+
+; A key while O edits the order: left and right pick a place, up and
+; down change its pattern, i puts a copy after it, d drops it, [ ] move
+; it, Enter edits its pattern, Escape or O stops.
+(def %order-key!
+  (fn (_ st key)
+    (def s (edit-song st))
+    (def order (song-order s))
+    (def n (List length order))
+    (def at (%min (%get st %order-at) (%max 0 (- n 1))))
+    (def names (List map first (song-patterns s)))
+    (def put-order! (fn (_ o k) (do (%change! st (song-set-order s o)) (%put! st %order-at k))))
+    (def stop! (fn (_) (do (%put! st %order-at ()) (edit-message! st ""))))
+    (match
+      ((if (eq? key (lit escape)) #t (%is? key "O")) (stop!))
+      ((eq? key (lit left)) (%put! st %order-at (%max 0 (- at 1))))
+      ((eq? key (lit right)) (%put! st %order-at (%min (%max 0 (- n 1)) (+ at 1))))
+      ((if (%is? key "i") #t (eq? key (lit insert)))
+        (put-order! (if (= n 0) (List take 1 names) (List insert (+ at 1) (List ref at order) order)) (if (= n 0) 0 (+ at 1))))
+      ((= n 0) ())
+      ((if (%is? key "d") #t (if (eq? key (lit delete)) #t (eq? key (lit backspace))))
+        (put-order! (List remove at 1 order) (%max 0 (%min at (- n 2)))))
+      ((if (eq? key (lit up)) #t (eq? key (lit down)))
+        ((fn (_ i) (put-order! (List update at (List ref (int% (+ i (+ (List length names) (if (eq? key (lit up)) -1 1))) (List length names)) names) order) at))
+         (%max 0 (List index-of (List ref at order) names))))
+      ((%is? key "[") (when (< 0 at) (put-order! (List update (- at 1) (List ref at order) (List update at (List ref (- at 1) order) order)) (- at 1))))
+      ((%is? key "]") (when (< at (- n 1)) (put-order! (List update (+ at 1) (List ref at order) (List update at (List ref (+ at 1) order) order)) (+ at 1))))
+      ((eq? key (lit enter)) (do (stop!) (%goto-at! st at)))
+      (#t ()))))
 
 ; --- keys --------------------------------------------------------------------
 
@@ -638,6 +860,8 @@
     (match
       ((eq? kind (lit command)) (%command! st text))
       ((eq? kind (lit cell)) (%put-cell! st (Str8 trim text)))
+      ((pair? kind)
+        (%try! st "not an effect" (fn (_) (%change! st (song-set-effect (edit-song st) (rest kind) (Str8 trim text))) ())))
       (#t ((fn (_ e) (unless (null? e) (edit-message! st e)))
            (guard (e (if (Err err? e) (e msg) "not an instrument"))
              (do (%change! st (song-set-instrument (edit-song st) text)) ())))))))
@@ -669,6 +893,10 @@
       ((not (null? (%get st %input))) (%input-key! st key))
       ((not (null? (%get st %pick))) (%pick-key! st key))
       ((%get st %help) (%put! st %help #f))
+      ((not (null? (%get st %order-at))) (%order-key! st key))
+      ((%is? key "O")
+        (do (%put! st %order-at (if (null? (%get st %at)) 0 (%get st %at)))
+            (edit-message! st "Order: left right pick, up down its pattern, i copy, d drop, [ ] move, Enter edit, Escape done")))
       ((eq? key (lit interrupt)) (%quit! st #f))
       ((%is? key ":") (%put! st %input (pair (lit command) "")))
       ((%is? key "?") (%put! st %help %help-lines))
@@ -685,20 +913,20 @@
       ((%is? key ">") (%put! st %octave (%min 8 (+ (%get st %octave) 1))))
       ((%is? key "{") (%put! st %step (%max 0 (- (%get st %step) 1))))
       ((%is? key "}") (%put! st %step (%min 64 (+ (%get st %step) 1))))
-      ((%is? key "(") (%nudge! st "Tension" -10 0 100))
-      ((%is? key ")") (%nudge! st "Tension" 10 0 100))
+      ((%is? key ";") (%nudge! st "Tension" -10 0 100))
+      ((%is? key "'") (%nudge! st "Tension" 10 0 100))
       ((%is? key "_") (%nudge! st "Pace" -10 10 400))
       ((%is? key "+") (%nudge! st "Pace" 10 10 400))
       ((%is? key "9") (%nudge! st "Volume" -10 0 100))
       ((%is? key "0") (%nudge! st "Volume" 10 0 100))
-      ((if (eq? key (lit escape)) (not (null? (%get st %mark))) #f) (do (%put! st %mark ()) (edit-message! st "")))
+      ((if (eq? key (lit escape)) (not (null? (%get st %loop-at))) #f) (do (%put! st %loop-at ()) (edit-message! st "")))
       ((null? (%get st %pattern)) (edit-message! st "The song has no pattern: :pattern NAME makes one."))
-      ((%is? key "P") (%play-here! st))
+      ((%is? key "G") (%play-here! st))
       ((%is? key "L") (%loop-key! st))
       ((%is? key "M") (%hush! st (lit channel) (%get st %chan) #f))
       ((%is? key "S") (%hush! st (lit channel) (%get st %chan) #t))
       ((%is? key "H") (%hush! st (lit instrument) (first (List ref (%get st %chan) (%channels st))) #f))
-      ((%is? key "O") (%hush! st (lit instrument) (first (List ref (%get st %chan) (%channels st))) #t))
+      ((%is? key "A") (%hush! st (lit instrument) (first (List ref (%get st %chan) (%channels st))) #t))
       ((eq? key (lit up)) (%move! st -1))
       ((eq? key (lit down)) (%move! st 1))
       ((eq? key (lit page-up)) (%put! st %row (%max 0 (- (%get st %row) 16))))
@@ -712,6 +940,25 @@
       ((%is? key "E")
         (%put! st %input (pair (lit instrument)
                            (%one-line (song-instrument-text (edit-song st) (first (List ref (%get st %chan) (%channels st))))))))
+      ((%is? key "V")
+        (if (null? (%get st %mark))
+          (do (%put! st %mark (pair (%get st %row) (%get st %chan)))
+              (edit-message! st "Marking: move to the block's other corner; Y copy, X cut, P paste, Delete clear, :transpose N, :gain PCT"))
+          (do (%put! st %mark ()) (edit-message! st ""))))
+      ((eq? key (lit escape)) (%put! st %mark ()))
+      ((%is? key "Y") (do (%copy-block! st) (%put! st %mark ())))
+      ((%is? key "X") (do (%copy-block! st) (%map-block! st (fn (_ c) ".")) (%put! st %mark ())))
+      ((%is? key "P")
+        (if (null? (%get st %clip)) (edit-message! st "Nothing copied: V marks a block, Y copies it.")
+          (%set-channels! st (pattern-paste (%channels st) (%get st %chan) (%get st %row) (%get st %clip)))))
+      ((%is? key "(")
+        (when (< 0 (%get st %chan))
+          (do (%set-channels! st (pattern-move-channel (%channels st) (%get st %chan) -1)) (%put! st %chan (- (%get st %chan) 1)))))
+      ((%is? key ")")
+        (when (< (%get st %chan) (- (List length (%channels st)) 1))
+          (do (%set-channels! st (pattern-move-channel (%channels st) (%get st %chan) 1)) (%put! st %chan (+ (%get st %chan) 1)))))
+      ((if (null? (%get st %mark)) #f (if (%is? key ".") #t (if (eq? key (lit backspace)) #t (eq? key (lit delete)))))
+        (do (%map-block! st (fn (_ c) ".")) (%put! st %mark ())))
       ((%is? key "I") (%set-channels! st (pattern-insert-row (%channels st) (%get st %row))))
       ((%is? key "D") (%set-channels! st (pattern-delete-row (%channels st) (%get st %row))))
       ((if (%is? key ".") #t (if (eq? key (lit backspace)) #t (eq? key (lit delete)))) (%put-cell! st "."))
@@ -747,10 +994,12 @@
         "  E   edit the channel's instrument     I D   insert, delete a row"
         "  [ ]   the pattern before, after in the order"
         "  Space   play the song from here     p   play the pattern"
-        "  P   play from the cursor's row      L   loop rows: L on the first, L on the last"
-        "  M S   mute, solo the channel        H O   mute, solo its instrument"
-        "  ( )   tension     _ +   pace     9 0   volume"
+        "  G   play from the cursor's row      L   loop rows: L on the first, L on the last"
+        "  M S   mute, solo the channel        H A   mute, solo its instrument"
+        "  ; '   tension     _ +   pace     9 0   volume"
         "  F   follow the playing, or stop following"
+        "  O   edit the order in place     ( )   move the channel left, right"
+        "  V   mark a block    Y X P   copy, cut, paste    Delete   clear it"
         "  U R   undo, redo     ?   this     ctrl-c   quit"
         "Commands"
         "  :w [FILE]  :q  :q!  :wq            :song [NAME]  :rename NAME"
@@ -760,6 +1009,11 @@
         "  :waves  list them   :waves keep   copy the borrowed in   :wave NAME AMP ..."
         "  :mute [INSTRUMENT]  :solo [INSTRUMENT]  :unmute  :loop [FROM TO]  :volume N"
         "  :render FILE   the song played once, to a WAV file"
+        "  :effects  :effect (NAME N ...)  :effect K  :effect drop K"
+        "  :instruments  :instrument NAME  :copy-, :rename-, :drop-instrument"
+        "  :patterns  :copy-pattern NEW  :rename-pattern NEW  :drop-pattern [NAME]"
+        "  :copy-song NAME  :drop-song  :channel-instrument NAME"
+        "  :transpose N  :gain PCT   the block, or the cell"
         "  :set  list the settings   :set NAME VALUE ...  change one: octave step follow"
         "        backup undo, colour NAME ATTRIBUTES FG BG, key ACTION KEY ..."
         "Effects (after /):  a arpeggio  v vibrato  s slide  p portamento"
@@ -851,7 +1105,9 @@
           (List map (fn (_ i)
                       (def name (List ref i order))
                       (def mark (if (if playing-song (%same? i heard) #f) (Str8 append ">" name) name))
-                      (if (%same? i (%get st %at)) (Str8 append "[" mark "]") mark))
+                      (match ((%same? i (%get st %order-at)) (Str8 append "<" mark ">"))
+                             ((if (null? (%get st %order-at)) (%same? i (%get st %at)) #f) (Str8 append "[" mark "]"))
+                             (#t mark)))
             (List range 0 (List length order)))))
       (if (if (null? (%get st %at)) (not (null? (%get st %pattern))) #f)
         (Str8 append "   editing " (%get st %pattern) ", not in the order") ""))))
@@ -915,6 +1171,10 @@
     (def cursor (%style st (lit cursor)))
     (def playing (%style st (lit playing)))
     (def on-beat (%style st (lit beat)))
+    (def marked (%style st (lit block)))
+    ; The block marked, its rows and its channels as shown, or nil.
+    (def blk (if (null? (%get st %mark)) () ((fn (_ b) (list (first b) (List ref 1 b) (int- (List ref 2 b) left) (int- (List ref 3 b) left))) (%block st))))
+    (def in-blk? (fn (_ r k) (if (null? blk) #f (if (int< r (first blk)) #f (if (int< (List ref 1 blk) r) #f (if (int< k (List ref 2 blk)) #f (not (int< (List ref 3 blk) k))))))))
     ((fn (self cs k)
        (unless (null? cs)
          (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) (%heading-style st (int+ left k) (first (first cs))))
@@ -928,7 +1188,7 @@
           ((fn (_ cells)
              (def cell (if (null? cells) "." (first cells)))
              (%put-text! screen cols (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
-               (if (if (int= r cur-row) (int= k cur-chan) #f) cursor (%cell-style cell empty off effect)))
+               (match ((if (int= r cur-row) (int= k cur-chan) #f) cursor) ((in-blk? r k) marked) (#t (%cell-style cell empty off effect))))
              (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
            (first cs)))))
     (def rev (fn (self xs acc) (if (null? xs) acc (self (rest xs) (pair (first xs) acc)))))

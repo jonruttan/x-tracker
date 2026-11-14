@@ -77,7 +77,7 @@ tracker/config: the user's file, read as data, and :set in the editor.
              (config-set! cfg '(colour nope ()) #f)))
 ```
 ---
-    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect cursor playing")
+    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect cursor playing block")
 
 ## :set
 
@@ -120,15 +120,15 @@ tracker/config: the user's file, read as data, and :set in the editor.
 ```
 ---
 ```output
-  octave 5                         key step-down "{"                key pace-down "_"
-  step 1                           key step-up "}"                  key pace-up "+"
-  follow on                        key up up                        key volume-down "9"
-  backup on                        key down down                    key volume-up "0"
-  undo 200                         key left left
-  sound on                         key right right
-  waves                            key page-up page-up
-  colour title (reverse) () ()     key page-down page-down
-  colour empty (dim) () ()         key top home
+  octave 5                         key octave-up ">"                key play-here "G"
+  step 1                           key step-down "{"                key loop "L"
+  follow on                        key step-up "}"                  key mute-channel "M"
+  backup on                        key up up                        key solo-channel "S"
+  undo 200                         key down down                    key mute-instrument "H"
+  sound on                         key left left                    key solo-instrument "A"
+  waves                            key right right                  key tension-down ";"
+  colour title (reverse) () ()     key page-up page-up              key tension-up "'"
+  colour empty (dim) () ()         key page-down page-down          key pace-down "_"
 #t
 ```
 

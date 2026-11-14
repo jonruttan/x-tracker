@@ -10,8 +10,11 @@
 (import tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
   song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
-  pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem)
-(import tracker/file file-parse file-text file-songs file-song! file-add-song file-changed? file-written
+  pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem
+  song-effects song-set-effect song-drop-effect song-copy-instrument song-rename-instrument song-drop-instrument
+  song-instrument-uses song-rename-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste
+  pattern-map-block song-note-name cell-transpose cell-gain)
+(import tracker/file file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
   file-waves file-wave file-set-wave file-read file-write!)
 (import tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
   player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
