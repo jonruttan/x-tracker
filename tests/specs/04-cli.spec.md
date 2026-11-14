@@ -14,6 +14,7 @@ terminal or the audio.
 ---
 ```output
 lantern  0:12  3 patterns  order intro tune turn tune turn
+lighthouse  0:22  6 patterns  order intro verse turn verse fill bridge verse turn outro
 0
 ```
 

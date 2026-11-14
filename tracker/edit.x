@@ -27,7 +27,6 @@
 
 (import x/type/vector)
 (import x/tui/screen)
-(import x/tui/style)
 (import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-new song-name song-rename song-patterns song-pattern song-order song-prop
   song-instruments song-instrument-text song-waves song-set-pattern song-set-order song-set-prop song-set-instrument
@@ -39,6 +38,8 @@
 (import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave file-set-wave)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave?)
+(import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
+  config-backup!)
 
 (def %doc 0)
 (def %path 1)
@@ -64,10 +65,11 @@
 (def %pick 21)      ; the song highlighted while :song lists them, or nil
 (def %stale 22)     ; whether the song heard is behind the song edited
 (def %borrowed 23)  ; the (wave ...) forms the player was given from other files (-w)
-(def %order-at 24)  ; the place picked in the order while O edits it, or nil
-(def %mark 25)      ; (ROW . CHANNEL) where the block marked with V starts, or nil
-(def %clip 26)      ; the cells copied, a list of columns, or nil
-(def %slots 27)
+(def %config 24)    ; the settings (tracker/config)
+(def %order-at 25)  ; the place picked in the order while O edits it, or nil
+(def %mark 26)      ; (ROW . CHANNEL) where the block marked with V starts, or nil
+(def %clip 27)      ; the cells copied, a list of columns, or nil
+(def %slots 28)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -128,21 +130,24 @@
     (%put! st %mark ()) (%put! st %order-at ())
     st))
 
-; An editor of DOC, read from PATH, heard through PLAYER (nil for none).
+; An editor of DOC, read from PATH, heard through PLAYER (nil for none),
+; with the settings CONFIG (tracker/config) when given, else the defaults.
 ; A document with no song is given one.
 (def edit-make
-  (fn (_ doc path player)
+  (fn (_ doc path player . config)
     (def st (Vector make %slots ()))
+    (def cfg (if (null? config) (config-default) (first config)))
+    (%put! st %config cfg)
     (%put! st %doc (if (null? (file-songs doc)) (file-add-song doc (song-new "untitled")) doc))
     (%put! st %path path)
-    (%put! st %octave 4)
-    (%put! st %step 1)
+    (%put! st %octave (config-get cfg (lit octave)))
+    (%put! st %step (config-get cfg (lit step)))
     (%put! st %msg "")
     (%put! st %player player)
     (%put! st %quit #f)
     (%put! st %help #f)
     (%put! st %warned #f)
-    (%put! st %follow #t)
+    (%put! st %follow (config-get cfg (lit follow)))
     (%put! st %stale #f)
     (%put! st %borrowed
       (if (null? player) ()
@@ -184,7 +189,7 @@
 ; The document made DOC: the old one kept to undo to.
 (def %doc-change!
   (fn (_ st doc)
-    (%put! st %undo (pair (%here st) (List take 200 (%get st %undo))))
+    (%put! st %undo (pair (%here st) (List take (- (config-get (%get st %config) (lit undo)) 1) (%get st %undo))))
     (%put! st %redo ())
     (%put! st %doc doc)
     (%put! st %warned #f)
@@ -334,7 +339,8 @@
                   (if (null? e) (do (%put! st %path to) (edit-message! st (Str8 append "Written: " to)) #t)
                     (do (edit-message! st e) #f)))
                 (guard (e (if (Err err? e) (e msg) "the file cannot be written"))
-                  (do (%put! st %doc (file-write! (%get st %doc) to)) ())))))))
+                  (do (config-backup! (%get st %config) to)
+                      (%put! st %doc (file-write! (%get st %doc) to)) ())))))))
 
 (def %quit!
   (fn (_ st force)
@@ -412,6 +418,24 @@
       (#t (do (%doc-change! st (file-set-wave (%get st %doc) (first args) amps))
               (edit-message! st (Str8 append "Wave " (first args) ": " (Str8 join " " (rest args)) ".")))))))
 
+; :set lists the settings; :set NAME VALUE ... changes one for the
+; session.  The octave, the step and following are the editor's own as
+; well, changed by keys too.
+(def %set-cmd!
+  (fn (_ st args)
+    (def cfg (%get st %config))
+    (config-put! cfg (lit octave) (%get st %octave))
+    (config-put! cfg (lit step) (%get st %step))
+    (config-put! cfg (lit follow) (%get st %follow))
+    (if (null? args) (%put! st %help (config-lines cfg))
+      ((fn (_ why)
+         (if (not (null? why)) (edit-message! st why)
+           (do (%put! st %octave (config-get cfg (lit octave)))
+               (%put! st %step (config-get cfg (lit step)))
+               (%put! st %follow (config-get cfg (lit follow)))
+               (edit-message! st (Str8 append "Set: " (Str8 join " " args))))))
+       (config-set-text! cfg (Str8 join " " args))))))
+
 (def %command!
   (fn (_ st line)
     (def words (List filter (fn (_ w) (not (str=? w ""))) (Str8 split " " line)))
@@ -484,6 +508,7 @@
                ((if (= (List length args) 1) (str=? (first args) "keep") #f) (%keep-waves! st))
                (#t (edit-message! st ":waves  or  :waves keep"))))
       ((str=? cmd "wave") (%wave-cmd! st args))
+      ((str=? cmd "set") (%set-cmd! st args))
       ((str=? cmd "rename")
         (if (null? args) (edit-message! st ":rename NAME") (%change! st (song-rename s (Str8 join " " args)))))
       ((List includes? cmd (list "effects" "effect" "instruments" "copy-instrument" "rename-instrument" "drop-instrument"
@@ -738,8 +763,11 @@
 (def %one-line
   (fn (_ text) (Str8 join " " (List filter (fn (_ w) (not (str=? w ""))) (Str8 split " " (Str8 replace "\n" " " text))))))
 
+; A key pressed: taken as the key of the action it is bound to, but in a
+; line being typed (tracker/config).
 (def edit-key!
-  (fn (_ st key)
+  (fn (_ st typed)
+    (def key (if (null? (%get st %input)) (config-key (%get st %config) typed) typed))
     (match
       ((null? key) ())
       ((not (null? (%get st %input))) (%input-key! st key))
@@ -807,15 +835,9 @@
 
 ; --- drawing -----------------------------------------------------------------
 
-(def %bar (Style make (list (lit reverse)) () ()))
-(def %dim (Style make (list (lit dim)) () ()))
-(def %bold (Style make (list (lit bold)) () ()))
-(def %beat (Style make () 3 ()))
-(def %off (Style make () 1 ()))
-(def %fx (Style make () 6 ()))
-(def %cursor (Style make (list (lit reverse)) () ()))
-(def %playing (Style make (list (lit bold)) 2 ()))
-(def %block-style (Style make () 0 6))
+; The style the setting colour NAME gives (tracker/config): looked up
+; once a drawing, not once a cell.
+(def %style (fn (_ st name) (config-style (%get st %config) name)))
 
 ; S padded with blanks or cut to W bytes.  A cell is ASCII by its syntax,
 ; and a screen of them is drawn for every row heard, so this is the byte
@@ -854,6 +876,8 @@
         "  :patterns  :copy-pattern NEW  :rename-pattern NEW  :drop-pattern [NAME]"
         "  :copy-song NAME  :drop-song  :channel-instrument NAME"
         "  :transpose N  :gain PCT   the block, or the cell"
+        "  :set  list the settings   :set NAME VALUE ...  change one: octave step follow"
+        "        backup undo, colour NAME ATTRIBUTES FG BG, key ACTION KEY ..."
         "Effects (after /):  a arpeggio  v vibrato  s slide  p portamento"
         "  t tremolo  f fade  l low-pass  c cut  d delay  r retrigger"
         ""
@@ -895,16 +919,18 @@
 ; is wide for.  A line not starting with a blank is a heading, in bold;
 ; the line HI of the rest, when it is not nil, is highlighted.
 (def %draw-panel!
-  (fn (_ screen lines top high hi)
+  (fn (_ st screen lines top high hi)
     (def h (%max 1 (- high 1)))
     (def body (rest lines))
     (def cols (Screen cols screen))
     (def w (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 body)))
-    (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 %bold) 0)))
+    (def heading (%style st (lit heading)))
+    (def cursor (%style st (lit cursor)))
+    (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 heading) 0)))
     (Screen put screen top 0 (first lines) (style (first lines)))
     (List fold
       (fn (_ i l)
-        (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
+        (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) cursor (style l)))
         (+ i 1))
       0 body)))
 
@@ -947,11 +973,11 @@
   (fn (self s i) (if (int< i (str-byte-len s)) (if (int= (str-byte-ref s i) 47) #t (self s (int+ i 1))) #f)))
 
 (def %cell-style
-  (fn (_ cell)
+  (fn (_ cell empty off effect)
     (def b (if (int< 0 (str-byte-len cell)) (str-byte-ref cell 0) 0))
-    (match ((if (int= b 46) (int= 1 (str-byte-len cell)) #f) %dim)
-           ((int= b 45) %off)
-           ((%slash? cell 0) %fx)
+    (match ((if (int= b 46) (int= 1 (str-byte-len cell)) #f) empty)
+           ((int= b 45) off)
+           ((%slash? cell 0) effect)
            (#t 0))))
 
 ; The row being heard, in the pattern edited, or nil.
@@ -984,12 +1010,19 @@
     (def first-row (%get st %top))
     (def cur-row (%get st %row))
     (def cur-chan (int- (%get st %chan) left))
+    (def empty (%style st (lit empty)))
+    (def off (%style st (lit off)))
+    (def effect (%style st (lit effect)))
+    (def cursor (%style st (lit cursor)))
+    (def playing (%style st (lit playing)))
+    (def on-beat (%style st (lit beat)))
+    (def marked (%style st (lit block)))
     ; The block marked, its rows and its channels as shown, or nil.
     (def blk (if (null? (%get st %mark)) () ((fn (_ b) (list (first b) (List ref 1 b) (int- (List ref 2 b) left) (int- (List ref 3 b) left))) (%block st))))
     (def in-blk? (fn (_ r k) (if (null? blk) #f (if (int< r (first blk)) #f (if (int< (List ref 1 blk) r) #f (if (int< k (List ref 2 blk)) #f (not (int< (List ref 3 blk) k))))))))
     ((fn (self cs k)
        (unless (null? cs)
-         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
+         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) (%style st (lit heading)))
              (self (rest cs) (int+ k 1)))))
      shown-chs 0)
     ; Each channel's cells from the first row shown, walked a row at a
@@ -1000,7 +1033,7 @@
           ((fn (_ cells)
              (def cell (if (null? cells) "." (first cells)))
              (%put-text! screen cols (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
-               (match ((if (int= r cur-row) (int= k cur-chan) #f) %cursor) ((in-blk? r k) %block-style) (#t (%cell-style cell))))
+               (match ((if (int= r cur-row) (int= k cur-chan) #f) cursor) ((in-blk? r k) marked) (#t (%cell-style cell empty off effect))))
              (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
            (first cs)))))
     (def rev (fn (self xs acc) (if (null? xs) acc (self (rest xs) (pair (first xs) acc)))))
@@ -1008,8 +1041,8 @@
        (def r (int+ first-row y))
        (when (if (int< y shown) (int< r rows) #f)
          (do (%put-text! screen cols (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
-               (if (%same? r heard) %playing (if (int= 0 (int% r beat)) %beat %dim)))
-             (when (%same? r heard) (%put-text! screen cols (int+ (int+ top 1) y) 3 ">" %playing))
+               (if (%same? r heard) playing (if (int= 0 (int% r beat)) on-beat empty)))
+             (when (%same? r heard) (%put-text! screen cols (int+ (int+ top 1) y) 3 ">" playing))
              (self (int+ y 1) (rev (put-row! y r cs 0 ()) ())))))
      0 (List map (fn (_ ch) (List drop first-row (rest ch))) shown-chs))))
 
@@ -1018,11 +1051,11 @@
     (Screen clear screen)
     (def rows (Screen rows screen))
     (def cols (Screen cols screen))
-    (Screen fill screen 0 0 cols %bar)
-    (Screen put screen 0 0 (%title st) %bar)
+    (Screen fill screen 0 0 cols (%style st (lit title)))
+    (Screen put screen 0 0 (%title st) (%style st (lit title)))
     (Screen put screen 1 0 (%order-line st) 0)
     (match
-      ((%get st %help) (%draw-panel! screen (%get st %help) 2 (- rows 3) (%get st %pick)))
+      ((%get st %help) (%draw-panel! st screen (%get st %help) 2 (- rows 3) (%get st %pick)))
       ((null? (%get st %pattern)) (Screen put screen 3 1 "The song has no pattern: :pattern NAME makes one." 0))
       (#t (%draw-grid! st screen 3 (- rows 2))))
     (def input (%get st %input))
@@ -1030,7 +1063,7 @@
       ((null? input)
         (Screen put screen (- rows 1) 0
           (if (str=? (%get st %msg) "") " ? keys   Space play   p pattern   : command" (Str8 append " " (%get st %msg)))
-          (if (str=? (%get st %msg) "") %dim 0)))
+          (if (str=? (%get st %msg) "") (%style st (lit empty)) 0)))
       (#t ((fn (_ prompt)
              (Screen put screen (- rows 1) 0 (Str8 append prompt (rest input)) 0)
              (Screen cursor screen (- rows 1) (%min (- cols 1) (+ (Str8 length prompt) (Str8 length (rest input))))))

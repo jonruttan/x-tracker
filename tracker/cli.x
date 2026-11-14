@@ -28,12 +28,13 @@
 (import tracker/file file-read file-songs file-waves)
 (import tracker/player player-open)
 (import tracker/app app-edit app-play)
+(import tracker/config config-load config-get config-problems)
 
 (def tracker-version "0.1.0")
 
 (def tracker-options
   (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE"
-    "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs."
+    "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs.\nSettings are read from $X_TRACKER_CONFIG, else ~/.config/x/tracker.xon; :set in the editor lists them."
     (list (Opts arg "-s" "--song" "NAME" "The song to edit or play (the file's first)")
           (Opts arg "-w" "--waves" "FILE" "Read the (wave ...) forms of FILE too; again for another")
           (Opts flag "-l" "--loop" "Play the song over and over, until q")
@@ -72,9 +73,18 @@
     (if (null? name) (if (null? (file-songs doc)) () 0)
       (List find-index (fn (_ s) (str=? (song-name s) name)) (file-songs doc)))))
 
+; The waves of DOC, then of each -w file, then of each the settings name.
 (def %cl-waves
-  (fn (_ doc opts)
-    (List append (file-waves doc) (List flat-map (fn (_ f) (file-waves (file-read f))) (Opts values opts "-w")))))
+  (fn (_ doc opts cfg)
+    (List append (file-waves doc)
+      (List flat-map (fn (_ f) (file-waves (file-read f))) (List append (Opts values opts "-w") (config-get cfg (lit waves)))))))
+
+; The settings, each problem the file has written to standard error.
+(def %cl-config
+  (fn (_)
+    (def cfg (config-load))
+    (List for-each (fn (_ p) (%cl-say 2 (Str8 append "x-tracker: " p "\n"))) (config-problems cfg))
+    cfg))
 
 (def %cl-run
   (fn (_ opts)
@@ -93,13 +103,17 @@
             (match
               ((str=? word "play")
                 (if (null? i) (do (%cl-say 2 (Str8 append "x-tracker: no song " (if (null? (Opts value opts "-s")) "in the file" (Opts value opts "-s")) "\n")) 1)
-                  (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves doc opts)) (Opts on? opts "-l"))))
+                  (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves doc opts (%cl-config))) (Opts on? opts "-l"))))
               (#t
-                ((fn (_ sound)
-                   (app-edit doc path (first sound) (rest sound)))
-                 (if (Opts on? opts "-n") (pair () "")
-                   (guard (e (pair () (Str8 append "No sound: " (%cl-err-text e))))
-                     (pair (player-open Sdl (%cl-waves doc opts)) "")))))))))))
+                (do (def cfg (%cl-config))
+                    ((fn (_ sound)
+                       (app-edit doc path (first sound)
+                         (if (if (str=? (rest sound) "") (not (null? (config-problems cfg))) #f)
+                           (first (config-problems cfg)) (rest sound))
+                         cfg))
+                     (if (if (Opts on? opts "-n") #t (not (config-get cfg (lit sound)))) (pair () "")
+                       (guard (e (pair () (Str8 append "No sound: " (%cl-err-text e))))
+                         (pair (player-open Sdl (%cl-waves doc opts cfg)) ""))))))))))))
 
 ; The terminal back on fd 0.  The launcher pipes the program to the
 ; engine on fd 0 and parks the terminal on fd 3, as x/repl/loop.x
