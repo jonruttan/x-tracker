@@ -35,7 +35,9 @@
   pattern-add-channel pattern-drop-channel song-cell-problem)
 (import tracker/file file-songs file-song! file-add-song file-changed? file-write! file-waves file-wave file-set-wave)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
-  player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave?)
+  player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open
+  player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
+  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
 
 (def %doc 0)
 (def %path 1)
@@ -61,7 +63,8 @@
 (def %pick 21)      ; the song highlighted while :song lists them, or nil
 (def %stale 22)     ; whether the song heard is behind the song edited
 (def %borrowed 23)  ; the (wave ...) forms the player was given from other files (-w)
-(def %slots 24)
+(def %mark 24)     ; the row L marked as a loop's first, or nil
+(def %slots 25)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -257,18 +260,80 @@
 
 ; --- playing -----------------------------------------------------------------
 
-(def %play!
-  (fn (_ st mode)
+(def %no-sound "No sound: the audio could not be opened.")
+
+; The song (MODE song) or the pattern edited (pattern) played from ROW,
+; the pattern looping RANGE, (FROM . TO) or nil for all its rows; when
+; TOGGLE, the same mode playing is stopped instead.  The message is
+; DONE, or why it cannot be played.
+(def %start!
+  (fn (_ st mode row range toggle done)
     (def p (%get st %player))
     (match
-      ((null? p) (edit-message! st "No sound: the audio could not be opened."))
-      ((if (player-playing? p) (eq? (player-mode p) mode) #f) (do (player-stop! p) (%put! st %heard ()) (edit-message! st "")))
+      ((null? p) (edit-message! st %no-sound))
+      ((if toggle (if (player-playing? p) (eq? (player-mode p) mode) #f) #f)
+        (do (player-stop! p) (%put! st %heard ()) (edit-message! st "")))
       ((null? (%get st %pattern)) (edit-message! st "The song has no pattern to play."))
       ((if (eq? mode (lit song)) (null? (song-order (edit-song st))) #f) (edit-message! st "The song has no order: :order NAME ..."))
-      (#t ((fn (_ e) (edit-message! st (if (null? e) "" e)))
+      (#t ((fn (_ e) (edit-message! st (if (null? e) done e)))
            (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
              (do (%put! st %stale #f)
-                 (player-start! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern)) ())))))))
+                 (player-loop! p range)
+                 (player-start-at! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern) row)
+                 ())))))))
+
+(def %play! (fn (_ st mode) (%start! st mode 0 () #t "")))
+
+; The song played from the cursor's row: the pattern alone when it is
+; not in the order.
+(def %play-here!
+  (fn (_ st)
+    (%start! st (if (null? (%get st %at)) (lit pattern) (lit song)) (%get st %row) () #f
+      (Str8 append "Playing from row " (Str8 str (%get st %row)) "."))))
+
+; Rows A to B of the pattern edited, either way round, played over and over.
+(def %loop!
+  (fn (_ st a b)
+    (def from (%min a b))
+    (def to (%min (%max a b) (- (%rows st) 1)))
+    (%put! st %mark ())
+    (%start! st (lit pattern) from (pair from to) #f
+      (Str8 append "Looping rows " (Str8 str from) " to " (Str8 str to) ": p plays the whole pattern."))))
+
+; L: the cursor's row marked as a loop's first, or with a row marked,
+; the rows from it to the cursor's looped.
+(def %loop-key!
+  (fn (_ st)
+    (if (null? (%get st %mark))
+      (do (%put! st %mark (%get st %row))
+          (edit-message! st (Str8 append "Loop from row " (Str8 str (%get st %row)) ": L on its last row plays it, Escape forgets.")))
+      (%loop! st (%get st %mark) (%get st %row)))))
+
+; Tension (WHAT tension), pace or volume moved by BY, kept from LEAST
+; to MOST, and heard at once.
+(def %nudge!
+  (fn (_ st what by least most)
+    (def p (%get st %player))
+    (if (null? p) (edit-message! st %no-sound)
+      (do (def now (match ((str=? what "Tension") (player-tension p)) ((str=? what "Pace") (player-pace p)) (#t (player-volume p))))
+          (def n (%max least (%min most (+ now by))))
+          (match ((str=? what "Tension") (player-tension! p n)) ((str=? what "Pace") (player-pace! p n)) (#t (player-volume! p n)))
+          (edit-message! st (Str8 append what " " (Str8 str n) (if (str=? what "Tension") "" "%") "."))))))
+
+; Channel X (KIND channel) or instrument X muted, or soloed when SOLO,
+; or heard again when it was.
+(def %hush!
+  (fn (_ st kind x solo)
+    (def p (%get st %player))
+    (def what (if (eq? kind (lit channel)) (Str8 append "Channel " (Str8 str x)) (Str8 append "Instrument " x)))
+    (if (null? p) (edit-message! st %no-sound)
+      ((fn (_ e)
+         (edit-message! st
+           (match ((not (null? e)) e)
+                  (solo (Str8 append what (if (player-soloed? p kind x) " soloed." " no longer soloed.")))
+                  (#t (Str8 append what (if (player-muted? p kind x) " muted." " heard again."))))))
+       (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
+         (do (if solo (player-solo! p kind x) (player-mute! p kind x)) ()))))))
 
 ; The player's stream topped up, nothing else: what a caller does just
 ; before work that keeps it from coming round for a while.  A song the
@@ -293,6 +358,42 @@
           (%put! st %heard heard)
           (when (if moved (if (%get st %follow) (not (null? heard)) #f) #f) (%follow! st p heard))
           moved))))
+
+; What is muted and soloed: the pattern's channels and the song's
+; instruments.
+(def %hush-text
+  (fn (_ st)
+    (def p (%get st %player))
+    (def chans (List range 0 (List length (%channels st))))
+    (def insts (song-instruments (edit-song st)))
+    (def part
+      (fn (_ word ask)
+        (def cs (List filter (fn (_ i) (ask p (lit channel) i)) chans))
+        (def ins (List filter (fn (_ i) (ask p (lit instrument) i)) insts))
+        (if (if (null? cs) (null? ins) #f) ""
+          (Str8 append word ": " (Str8 join " " (List append (List map (fn (_ i) (Str8 append "channel " (Str8 str i))) cs) ins)) ".  "))))
+    (if (null? p) %no-sound
+      ((fn (_ text) (if (str=? text "") "Nothing is muted or soloed." (Str8 trim text)))
+       (Str8 append (part "Muted" player-muted?) (part "Soloed" player-soloed?))))))
+
+; M:SS for FRAMES at the mixer's rate.
+(def %frames-text
+  (fn (_ frames)
+    (def secs (int/ frames 44100))
+    (Str8 append (Str8 str (int/ secs 60)) ":" (Str8 pad-left 2 #\0 (Str8 str (int% secs 60))))))
+
+; The song played once through to a WAV file at PATH, as it would be
+; heard: what the player mutes, its tension, pace and volume.  The song
+; playing is stopped first: rendering keeps the loop from feeding it.
+(def %render!
+  (fn (_ st path)
+    (def p (%get st %player))
+    (unless (null? p) (when (player-playing? p) (do (player-stop! p) (%put! st %heard ()))))
+    (edit-message! st
+      (guard (e (if (Err err? e) (e msg) "the song cannot be rendered"))
+        (Str8 append "Rendered " path ": "
+          (%frames-text (player-render! (if (null? p) (player-open () (file-waves (%get st %doc))) p) (edit-song st) path))
+          ".")))))
 
 ; --- the order ---------------------------------------------------------------
 
@@ -429,6 +530,25 @@
         (%number-cmd! st args 0 100 (fn (_ n) (unless (null? (%get st %player)) (player-tension! (%get st %player) n)))))
       ((str=? cmd "pace")
         (%number-cmd! st args 10 400 (fn (_ n) (unless (null? (%get st %player)) (player-pace! (%get st %player) n)))))
+      ((str=? cmd "volume")
+        (%number-cmd! st args 0 100 (fn (_ n) (if (null? (%get st %player)) (edit-message! st %no-sound) (player-volume! (%get st %player) n)))))
+      ((List includes? cmd (list "mute" "solo"))
+        (match ((null? args) (edit-message! st (%hush-text st)))
+               ((not (List includes? (first args) (song-instruments s))) (edit-message! st (Str8 append "No instrument " (first args) ".")))
+               (#t (%hush! st (lit instrument) (first args) (str=? cmd "solo")))))
+      ((str=? cmd "unmute")
+        (if (null? (%get st %player)) (edit-message! st %no-sound)
+          (do (player-unmute! (%get st %player)) (edit-message! st "Every channel and instrument heard."))))
+      ((str=? cmd "loop")
+        (match ((null? args) (if (null? (%get st %player)) (edit-message! st %no-sound) (%start! st (lit pattern) 0 () #f "Looping the whole pattern.")))
+               ((not (= (List length args) 2)) (edit-message! st ":loop FROM TO   rows of the pattern, played over and over"))
+               ((if (null? (%num (first args))) #t (if (null? (%num (List ref 1 args))) #t (< (%min (%num (first args)) (%num (List ref 1 args))) 0)))
+                 (edit-message! st "Rows are numbers from 0."))
+               ((null? (%get st %pattern)) (edit-message! st "No pattern."))
+               (#t (%loop! st (%num (first args)) (%num (List ref 1 args))))))
+      ((str=? cmd "render")
+        (if (null? args) (edit-message! st ":render FILE   the song played once, to a WAV file")
+          (%render! st (Str8 join " " args))))
       ((str=? cmd "order")
         ((fn (_ missing)
            (if (null? missing) (%change! st (song-set-order s args))
@@ -537,7 +657,20 @@
       ((%is? key ">") (%put! st %octave (%min 8 (+ (%get st %octave) 1))))
       ((%is? key "{") (%put! st %step (%max 0 (- (%get st %step) 1))))
       ((%is? key "}") (%put! st %step (%min 64 (+ (%get st %step) 1))))
+      ((%is? key "(") (%nudge! st "Tension" -10 0 100))
+      ((%is? key ")") (%nudge! st "Tension" 10 0 100))
+      ((%is? key "_") (%nudge! st "Pace" -10 10 400))
+      ((%is? key "+") (%nudge! st "Pace" 10 10 400))
+      ((%is? key "9") (%nudge! st "Volume" -10 0 100))
+      ((%is? key "0") (%nudge! st "Volume" 10 0 100))
+      ((if (eq? key (lit escape)) (not (null? (%get st %mark))) #f) (do (%put! st %mark ()) (edit-message! st "")))
       ((null? (%get st %pattern)) (edit-message! st "The song has no pattern: :pattern NAME makes one."))
+      ((%is? key "P") (%play-here! st))
+      ((%is? key "L") (%loop-key! st))
+      ((%is? key "M") (%hush! st (lit channel) (%get st %chan) #f))
+      ((%is? key "S") (%hush! st (lit channel) (%get st %chan) #t))
+      ((%is? key "H") (%hush! st (lit instrument) (first (List ref (%get st %chan) (%channels st))) #f))
+      ((%is? key "O") (%hush! st (lit instrument) (first (List ref (%get st %chan) (%channels st))) #t))
       ((eq? key (lit up)) (%move! st -1))
       ((eq? key (lit down)) (%move! st 1))
       ((eq? key (lit page-up)) (%put! st %row (%max 0 (- (%get st %row) 16))))
@@ -591,6 +724,9 @@
         "  E   edit the channel's instrument     I D   insert, delete a row"
         "  [ ]   the pattern before, after in the order"
         "  Space   play the song from here     p   play the pattern"
+        "  P   play from the cursor's row      L   loop rows: L on the first, L on the last"
+        "  M S   mute, solo the channel        H O   mute, solo its instrument"
+        "  ( )   tension     _ +   pace     9 0   volume"
         "  F   follow the playing, or stop following"
         "  U R   undo, redo     ?   this     ctrl-c   quit"
         "Commands"
@@ -599,6 +735,8 @@
         "  :pattern NAME  :order NAME ...  :channel INSTRUMENT  :drop"
         "  :instrument NAME PROP ...  :octave N  :step N  :tension N  :pace N"
         "  :waves  list them   :waves keep   copy the borrowed in   :wave NAME AMP ..."
+        "  :mute [INSTRUMENT]  :solo [INSTRUMENT]  :unmute  :loop [FROM TO]  :volume N"
+        "  :render FILE   the song played once, to a WAV file"
         "Effects (after /):  a arpeggio  v vibrato  s slide  p portamento"
         "  t tremolo  f fade  l low-pass  c cut  d delay  r retrigger"
         ""
@@ -666,7 +804,13 @@
       (match ((null? p) "   (no sound)")
              ((not (player-playing? p)) "")
              ((eq? (player-mode p) (lit song)) "   > song")
-             (#t "   > pattern")))))
+             ((null? (player-loop p)) "   > pattern")
+             (#t (Str8 append "   > rows " (Str8 str (first (player-loop p))) "-" (Str8 str (rest (player-loop p))))))
+      (if (null? p) ""
+        (Str8 append
+          (if (= 0 (player-tension p)) "" (Str8 append "  tension " (Str8 str (player-tension p))))
+          (if (= 100 (player-pace p)) "" (Str8 append "  pace " (Str8 str (player-pace p)) "%"))
+          (if (= 100 (player-volume p)) "" (Str8 append "  volume " (Str8 str (player-volume p)) "%")))))))
 
 ; The order, the place edited marked [NAME], the place heard >NAME.
 (def %order-line
@@ -696,6 +840,16 @@
            ((int= b 45) %off)
            ((%slash? cell 0) %fx)
            (#t 0))))
+
+; Channel I's heading, of instrument INST: dim when it is not heard,
+; green when it or its instrument is soloed.
+(def %heading-style
+  (fn (_ st i inst)
+    (def p (%get st %player))
+    (match ((null? p) %bold)
+           ((not (player-hears? p i inst)) %dim)
+           ((if (player-soloed? p (lit channel) i) #t (player-soloed? p (lit instrument) inst)) %playing)
+           (#t %bold))))
 
 ; The row being heard, in the pattern edited, or nil.
 (def %heard-row
@@ -729,7 +883,7 @@
     (def cur-chan (int- (%get st %chan) left))
     ((fn (self cs k)
        (unless (null? cs)
-         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
+         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) (%heading-style st (int+ left k) (first (first cs))))
              (self (rest cs) (int+ k 1)))))
      shown-chs 0)
     ; Each channel's cells from the first row shown, walked a row at a

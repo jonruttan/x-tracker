@@ -15,7 +15,8 @@
   file-waves file-wave file-set-wave file-read file-write!)
 (import tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
   player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
-  player-waves player-waves! player-wave?)
+  player-waves player-waves! player-wave? player-start-at! player-tension player-pace player-volume player-volume!
+  player-hears? player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
 (import tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
   edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
 (import tracker/app app-edit app-play)
