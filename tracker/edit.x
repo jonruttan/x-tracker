@@ -30,12 +30,12 @@
 (import x/tui/style)
 (import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-new song-name song-rename song-patterns song-pattern song-order song-prop
-  song-instruments song-instrument-text song-set-pattern song-set-order song-set-prop song-set-instrument
+  song-instruments song-instrument-text song-waves song-set-pattern song-set-order song-set-prop song-set-instrument
   pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row pattern-delete-row
   pattern-add-channel pattern-drop-channel song-cell-problem)
-(import tracker/file file-songs file-song! file-add-song file-changed? file-write!)
+(import tracker/file file-songs file-song! file-add-song file-changed? file-write! file-waves file-wave file-set-wave)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
-  player-pump! player-place player-tension! player-pace!)
+  player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave?)
 
 (def %doc 0)
 (def %path 1)
@@ -60,7 +60,8 @@
 (def %follow 20)    ; whether the pattern and row heard are followed while playing
 (def %pick 21)      ; the song highlighted while :song lists them, or nil
 (def %stale 22)     ; whether the song heard is behind the song edited
-(def %slots 23)
+(def %borrowed 23)  ; the (wave ...) forms the player was given from other files (-w)
+(def %slots 24)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -136,6 +137,9 @@
     (%put! st %warned #f)
     (%put! st %follow #t)
     (%put! st %stale #f)
+    (%put! st %borrowed
+      (if (null? player) ()
+        (List filter (fn (_ w) (null? (file-wave doc (symbol->str (List ref 1 w))))) (player-waves player))))
     (%go-song! st 0)))
 
 ; --- changes -----------------------------------------------------------------
@@ -160,15 +164,30 @@
 ; Where the editor is, to undo to: (DOC SONG PATTERN).
 (def %here (fn (_ st) (list (%get st %doc) (%get st %song) (%get st %pattern))))
 
-; The song made S: the old document kept to undo to.
-(def %change!
-  (fn (_ st s)
+; The mixer given the document's waves, and the borrowed ones it does
+; not have, as they were: after a change or an undo of one.
+(def %sync-waves!
+  (fn (_ st)
+    (def doc (%get st %doc))
+    (unless (null? (%get st %player))
+      (player-waves! (%get st %player)
+        (List append (List filter (fn (_ w) (null? (file-wave doc (symbol->str (List ref 1 w))))) (%get st %borrowed))
+          (file-waves doc))))))
+
+; The document made DOC: the old one kept to undo to.
+(def %doc-change!
+  (fn (_ st doc)
     (%put! st %undo (pair (%here st) (List take 200 (%get st %undo))))
     (%put! st %redo ())
-    (%put! st %doc (file-song! (%get st %doc) (%get st %song) s))
+    (%put! st %doc doc)
     (%put! st %warned #f)
+    (%sync-waves! st)
     (%heard-change! st)
     (%clamp! st)))
+
+; The song made S.
+(def %change!
+  (fn (_ st s) (%doc-change! st (file-song! (%get st %doc) (%get st %song) s))))
 
 (def %set-channels!
   (fn (_ st chs) (%change! st (song-set-pattern (edit-song st) (%get st %pattern) chs))))
@@ -185,6 +204,7 @@
           (%put! st %pattern (List ref 2 back))
           (%put! st from (rest (%get st from)))
           (edit-message! st "")
+          (%sync-waves! st)
           (%heard-change! st)
           (%clamp! st)))))
 
@@ -325,6 +345,66 @@
 
 (def %name? (fn (_ w) (not (if (Str8 includes? "\"" w) #t (if (Str8 includes? "(" w) #t (Str8 includes? ")" w))))))
 
+; --- waves -------------------------------------------------------------------
+
+(def %wave-name (fn (_ w) (symbol->str (List ref 1 w))))
+(def %amps-text (fn (_ w) (Str8 join " " (List map (fn (_ a) (Str8 str a)) (rest (rest w))))))
+
+; The waves the document's songs name, each once, then the file's own
+; that no song names.
+(def %wave-names
+  (fn (_ st)
+    (def doc (%get st %doc))
+    (def used
+      (List fold (fn (_ acc s) (List fold (fn (_ a n) (if (List includes? n a) a (List append a (list n)))) acc (song-waves s)))
+        () (file-songs doc)))
+    (List append used (List filter (fn (_ n) (not (List includes? n used))) (List map %wave-name (file-waves doc))))))
+
+; The borrowed wave named NAME, from a file read with -w, or nil.
+(def %borrowed-wave (fn (_ st name) (List find (fn (_ w) (str=? (%wave-name w) name)) (%get st %borrowed))))
+
+; Where the wave named NAME comes from, and its harmonics.
+(def %wave-source
+  (fn (_ st name)
+    (def mine (file-wave (%get st %doc) name))
+    (def theirs (%borrowed-wave st name))
+    (match ((not (null? mine)) (Str8 append "in the file      " (%amps-text mine)))
+           ((not (null? theirs)) (Str8 append "borrowed (-w)    " (%amps-text theirs)))
+           ((List includes? name (list "sine" "noise")) "the mixer's own")
+           ((player-wave? name) "given to the mixer")
+           (#t "missing: :wave NAME AMP ... makes it"))))
+
+(def %wave-lines
+  (fn (_ st)
+    (pair "Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowed ones in"
+      (List map (fn (_ n) (Str8 append "  " (%pad 12 n) (%wave-source st n) " ")) (%wave-names st)))))
+
+; The waves the songs name and borrow, copied into the document, so the
+; file no longer needs the one they were borrowed from.
+(def %keep-waves!
+  (fn (_ st)
+    (def doc (%get st %doc))
+    (def kept
+      (List filter (fn (_ w) (not (null? w)))
+        (List map (fn (_ n) (if (null? (file-wave doc n)) (%borrowed-wave st n) ())) (%wave-names st))))
+    (if (null? kept) (edit-message! st "No wave is borrowed: the file has every wave its songs name but the mixer's own.")
+      (do (%doc-change! st (List fold (fn (_ d w) (file-set-wave d (%wave-name w) (rest (rest w)))) doc kept))
+          (edit-message! st (Str8 append "Kept in the file: " (Str8 join " " (List map %wave-name kept)) "."))))))
+
+; :wave NAME shows the wave; :wave NAME AMP ... makes or changes it.
+(def %wave-cmd!
+  (fn (_ st args)
+    (def amps (if (null? args) () (List map %num (rest args))))
+    (match
+      ((null? args) (edit-message! st ":wave NAME AMP ...   :waves lists them"))
+      ((null? (rest args)) (edit-message! st (Str8 append (first args) ": " (%wave-source st (first args)))))
+      ((not (%name? (first args))) (edit-message! st "A wave's name is a word."))
+      ((List includes? (first args) (list "sine" "noise")) (edit-message! st (Str8 append (first args) " is the mixer's own.")))
+      ((if (List any? (fn (_ a) (if (null? a) #t (< a 0))) amps) #t (List all? (fn (_ a) (= a 0)) amps))
+        (edit-message! st "A wave's harmonics are whole numbers from 0, not all 0: (wave hollow 6 0 2 0 1)."))
+      (#t (do (%doc-change! st (file-set-wave (%get st %doc) (first args) amps))
+              (edit-message! st (Str8 append "Wave " (first args) ": " (Str8 join " " (rest args)) ".")))))))
+
 (def %command!
   (fn (_ st line)
     (def words (List filter (fn (_ w) (not (str=? w ""))) (Str8 split " " line)))
@@ -388,6 +468,11 @@
                    (edit-message! st (Str8 append "New song " name ".")))
                (%go-song! st i)))
            (Str8 join " " args) (List find-index (fn (_ s2) (str=? (song-name s2) (Str8 join " " args))) (file-songs (%get st %doc))))))
+      ((str=? cmd "waves")
+        (match ((null? args) (%put! st %help (%wave-lines st)))
+               ((if (= (List length args) 1) (str=? (first args) "keep") #f) (%keep-waves! st))
+               (#t (edit-message! st ":waves  or  :waves keep"))))
+      ((str=? cmd "wave") (%wave-cmd! st args))
       ((str=? cmd "rename")
         (if (null? args) (edit-message! st ":rename NAME") (%change! st (song-rename s (Str8 join " " args)))))
       (#t (edit-message! st (Str8 append "No command " cmd ": ? lists them."))))))
@@ -513,6 +598,7 @@
         "  :bpm N  :rows N  :ticks N  :tension-bpm N  :len N"
         "  :pattern NAME  :order NAME ...  :channel INSTRUMENT  :drop"
         "  :instrument NAME PROP ...  :octave N  :step N  :tension N  :pace N"
+        "  :waves  list them   :waves keep   copy the borrowed in   :wave NAME AMP ..."
         "Effects (after /):  a arpeggio  v vibrato  s slide  p portamento"
         "  t tremolo  f fade  l low-pass  c cut  d delay  r retrigger"
         ""
@@ -540,21 +626,30 @@
       ((eq? key (lit enter)) ((fn (_ i) (close!) (%go-song! st i) (edit-message! st "")) (%get st %pick)))
       (#t (close!)))))
 
+; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
+; past its right edge.  x/tui/screen's put keeps to the rows but not to
+; the columns: one past the edge is written past the row's end, and past
+; the last row's, into whatever the heap holds there.
+(def %put-text!
+  (fn (_ screen cols row col text style)
+    (when (int< col cols) (Screen put screen row col text style))))
+
 ; LINES put on SCREEN from row TOP, HIGH rows: the first a heading on a
 ; row of its own, the rest beneath it, a column of HIGH less one, the
-; columns side by side as wide as the widest line.  A line not starting
-; with a blank is a heading, in bold; the line HI of the rest, when it
-; is not nil, is highlighted.
+; columns side by side as wide as the widest line, as many as the screen
+; is wide for.  A line not starting with a blank is a heading, in bold;
+; the line HI of the rest, when it is not nil, is highlighted.
 (def %draw-panel!
   (fn (_ screen lines top high hi)
     (def h (%max 1 (- high 1)))
     (def body (rest lines))
+    (def cols (Screen cols screen))
     (def w (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 body)))
     (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 %bold) 0)))
     (Screen put screen top 0 (first lines) (style (first lines)))
     (List fold
       (fn (_ i l)
-        (Screen put screen (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
+        (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (int/ i h)) l (if (%same? i hi) %cursor (style l)))
         (+ i 1))
       0 body)))
 
@@ -634,7 +729,7 @@
     (def cur-chan (int- (%get st %chan) left))
     ((fn (self cs k)
        (unless (null? cs)
-         (do (Screen put screen top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
+         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) %bold)
              (self (rest cs) (int+ k 1)))))
      shown-chs 0)
     ; Each channel's cells from the first row shown, walked a row at a
@@ -644,7 +739,7 @@
         (if (null? cs) acc
           ((fn (_ cells)
              (def cell (if (null? cells) "." (first cells)))
-             (Screen put screen (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
+             (%put-text! screen cols (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
                (if (if (int= r cur-row) (int= k cur-chan) #f) %cursor (%cell-style cell)))
              (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
            (first cs)))))
@@ -652,9 +747,9 @@
     ((fn (self y cs)
        (def r (int+ first-row y))
        (when (if (int< y shown) (int< r rows) #f)
-         (do (Screen put screen (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
+         (do (%put-text! screen cols (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
                (if (%same? r heard) %playing (if (int= 0 (int% r beat)) %beat %dim)))
-             (when (%same? r heard) (Screen put screen (int+ (int+ top 1) y) 3 ">" %playing))
+             (when (%same? r heard) (%put-text! screen cols (int+ (int+ top 1) y) 3 ">" %playing))
              (self (int+ y 1) (rev (put-row! y r cs 0 ()) ())))))
      0 (List map (fn (_ ch) (List drop first-row (rest ch))) shown-chs))))
 

@@ -31,6 +31,12 @@ To edit x-roguelike's delve music, whose waves are kept in another file:
 
     x -l tracker -- -w data/delve/sounds.xon data/delve/music.xon
 
+A file can hold its own waves, so it needs no other: `:waves keep`
+copies each wave its songs borrow from a `-w` file into it, as
+`(wave NAME AMP ...)` forms before its first song, and `:w` writes
+them.  A wave's numbers are the strengths of its harmonics, the
+fundamental first: `(wave hollow 6 0 2 0 1)`.
+
 ## The editor
 
 A pattern fills the screen, a row a line and a channel a column headed
@@ -73,6 +79,11 @@ and heard as they are typed.  The other keys:
     :instrument NAME PROP ...         make or change an instrument
     :octave N  :step N
     :tension N  :pace N               how the song is heard: 0-100, 10-400
+    :waves                            list the waves the songs name, and
+                                      where each comes from
+    :waves keep                       copy the waves borrowed from -w files
+                                      into this file
+    :wave NAME [AMP ...]              show a wave, or make or change it
 
 A change is heard from the next pattern while the song plays.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):

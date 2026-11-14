@@ -149,6 +149,21 @@
 (def song-instrument-text
   (fn (_ s name) ((fn (_ i) (if (null? i) () (List ref 2 i))) (%sg-text-item s "instrument" name))))
 
+; The names of the waves S's instruments name with (wave NAME), each
+; once, in the order they are first named.
+(def song-waves
+  (fn (_ s)
+    (def wave? (fn (_ prop) (if (pair? prop) (if (eq? (first prop) (lit wave)) (if (pair? (rest prop)) (symbol? (List ref 1 prop)) #f) #f) #f)))
+    (List fold
+      (fn (_ acc i)
+        (List fold
+          (fn (_ acc prop)
+            (if (wave? prop)
+              ((fn (_ n) (if (List includes? n acc) acc (List append acc (list n)))) (symbol->str (List ref 1 prop)))
+              acc))
+          acc (rest (rest (List ref 3 i)))))
+      () (List filter (fn (_ i) (str=? (List ref 4 i) "instrument")) (%sg-of s (lit text))))))
+
 ; --- changes ---------------------------------------------------------------
 
 ; S with the item FIND finds put as ITEM, or ITEM put in after the last
@@ -323,6 +338,6 @@
            (#t ()))))
 
 (provide tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
-  song-order song-prop song-instruments song-instrument-text song-set-pattern song-drop-pattern song-set-order
+  song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
   pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem)

@@ -74,6 +74,26 @@
     (%pl-put! p 13 (Mixer make %pl-rate %pl-block))
     p))
 
+; The (wave NAME AMP ...) forms the mixer was given.
+(def player-waves (fn (_ p) (%pl-get p 8)))
+
+; The (wave NAME AMP ...) forms WAVES given to the mixer, each in place
+; of a wave of its name; one the mixer already has as it is, is not
+; made again.  A song playing hears them from its next pattern.
+(def player-waves!
+  (fn (_ p waves)
+    (def had (%pl-get p 8))
+    (def fresh (List filter (fn (_ w) (not (List any? (fn (_ h) (equal? h w)) had))) waves))
+    (List for-each (fn (_ w) (Mixer wave! (List ref 1 w) (rest (rest w)))) fresh)
+    (%pl-put! p 8
+      (List append (List filter (fn (_ h) (not (List any? (fn (_ w) (eq? (List ref 1 w) (List ref 1 h))) fresh))) had) fresh))
+    p))
+
+; Whether the mixer has a wave named NAME, a string: one it was given or
+; one of its own (sine, noise).
+(def player-wave?
+  (fn (_ name) (not (null? (guard (e ()) (Mixer wave (str->sym name)))))))
+
 (def player-playing? (fn (_ p) (%pl-get p 9)))
 (def player-mode (fn (_ p) (%pl-get p 4)))
 
@@ -320,4 +340,5 @@
     ()))
 
 (provide tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
-  player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close)
+  player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
+  player-waves player-waves! player-wave?)

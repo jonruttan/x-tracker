@@ -70,22 +70,49 @@
       (if (str=? gap "") () (list (list (lit gap) gap)))
       (list (list (lit song) "" song #t) (list (lit gap) "\n")))))
 
-; Whether any song of DOC has been changed.
-(def file-changed?
-  (fn (_ doc) (List any? (fn (_ p) (if (eq? (first p) (lit song)) (List ref 3 p) #f)) doc)))
+; Whether piece P has been changed: a song changed, or a form made.
+(def %fl-changed?
+  (fn (_ p) (if (< (List length p) 4) #f (eq? (List ref 3 p) #t))))
 
-; DOC with every song as written.
+; Whether any song or form of DOC has been changed.
+(def file-changed?
+  (fn (_ doc) (List any? %fl-changed? doc)))
+
+; DOC with every song and form as written.
 (def file-written
   (fn (_ doc)
-    (List map (fn (_ p) (if (if (eq? (first p) (lit song)) (List ref 3 p) #f)
-                          (list (lit song) (song-text (List ref 2 p)) (List ref 2 p) #f) p))
+    (List map (fn (_ p) (match ((not (%fl-changed? p)) p)
+                               ((eq? (first p) (lit song)) (list (lit song) (song-text (List ref 2 p)) (List ref 2 p) #f))
+                               (#t (List take 3 p))))
       doc)))
+
+(def %fl-wave? (fn (_ p) (if (eq? (first p) (lit form)) (str=? (List ref 2 p) "wave") #f)))
 
 ; The (wave NAME AMP ...) forms of DOC.
 (def file-waves
   (fn (_ doc)
-    (List map (fn (_ p) (first (Xon parse (List ref 1 p))))
-      (List filter (fn (_ p) (if (eq? (first p) (lit form)) (str=? (List ref 2 p) "wave") #f)) doc))))
+    (List map (fn (_ p) (first (Xon parse (List ref 1 p)))) (List filter %fl-wave? doc))))
+
+; The (wave NAME AMP ...) form of DOC named NAME, a string, or nil.
+(def file-wave
+  (fn (_ doc name) (List find (fn (_ w) (str=? (symbol->str (List ref 1 w)) name)) (file-waves doc))))
+
+; DOC with the wave NAME made of the harmonics AMPS, numbers: in place of
+; its form when it has one, or else on a line after its last wave, or
+; else before its first song.
+(def file-set-wave
+  (fn (_ doc name amps)
+    (def piece (list (lit form) (Str8 append "(wave " name (Str8 join "" (List map (fn (_ a) (Str8 append " " (Str8 str a))) amps)) ")") "wave" #t))
+    (def named? (fn (_ p) (if (%fl-wave? p) (str=? (symbol->str (List ref 1 (first (Xon parse (List ref 1 p))))) name) #f)))
+    (def last-wave (List fold (fn (_ at i) (if (%fl-wave? (List ref i doc)) i at)) () (List range 0 (List length doc))))
+    (def first-song (List find-index (fn (_ p) (eq? (first p) (lit song))) doc))
+    (match
+      ((List any? named? doc) (List map (fn (_ p) (if (named? p) piece p)) doc))
+      ((not (null? last-wave))
+        (List append (List take (+ last-wave 1) doc) (list (list (lit gap) "\n") piece) (List drop (+ last-wave 1) doc)))
+      ((not (null? first-song))
+        (List append (List take first-song doc) (list piece (list (lit gap) "\n\n")) (List drop first-song doc)))
+      (#t (List append doc (list piece (list (lit gap) "\n")))))))
 
 ; The document in the file at PATH, read whole as an editor does; an
 ; empty one when there is no file.
@@ -100,4 +127,4 @@
     (file-written doc)))
 
 (provide tracker/file file-parse file-text file-songs file-song! file-add-song file-changed? file-written
-  file-waves file-read file-write!)
+  file-waves file-wave file-set-wave file-read file-write!)

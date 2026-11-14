@@ -96,6 +96,37 @@ spec-play!.  Nothing here opens an audio device.
 
 ## the editor playing
 
+### a borrowed wave is kept in the file, and a wave made is heard; undo puts the mixer back
+
+```tracker
+(def wdoc (file-parse "(wave spec-own 3 1)\n\n(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave spec-lent))\n  (instrument b (wave spec-own))\n  (instrument c (wave sine))\n  (pattern p (a \"C4\") (b \"C4\") (c \"C4\"))\n  (order p))\n"))
+(def pl (player-open (spec-front) (List append (file-waves wdoc) (list '(wave spec-lent 5 0 1) '(wave spec-spare 1 1)))))
+(def st (edit-make wdoc () pl))
+(def screen (Screen make 8 100))
+(def lent (fn (_) (List find (fn (_ w) (eq? (List ref 1 w) 'spec-lent)) (player-waves pl))))
+(spec-keys! st (list ":waves" 'enter))
+(spec-draw! st screen)
+(spec-lines (spec-rows screen (List range 2 6)))
+(spec-keys! st (list 'escape ":waves keep" 'enter))
+(def kept (list (edit-message st) (file-wave (edit-doc st) "spec-lent") (file-changed? (edit-doc st))))
+(spec-keys! st (list ":wave spec-lent 1 0 0 1" 'enter))
+(def made (list (edit-message st) (file-wave (edit-doc st) "spec-lent") (lent)))
+(spec-keys! st (list "U" "U"))
+(def undone (list (file-wave (edit-doc st) "spec-lent") (lent)))
+(spec-keys! st (list ":wave sine 1" 'enter))
+(def own (edit-message st))
+(spec-keys! st (list ":wave spec-x 0 0" 'enter))
+(write (list kept made undone own (edit-message st)))
+```
+---
+```output
+Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowed ones in
+  spec-lent   borrowed (-w)    5 0 1
+  spec-own    in the file      3 1
+  sine        the mixer's own
+(("Kept in the file: spec-lent." ('wave 'spec-lent 5 0 1) #t) ("Wave spec-lent: 1 0 0 1." ('wave 'spec-lent 1 0 0 1) ('wave 'spec-lent 1 0 0 1)) (() ('wave 'spec-lent 5 0 1)) "sine is the mixer's own." "A wave's harmonics are whole numbers from 0, not all 0: (wave hollow 6 0 2 0 1).")
+```
+
 ### the editor follows the pattern and row heard, until F stops it
 
 ```tracker
