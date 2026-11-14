@@ -1,0 +1,41 @@
+; demo.xon -- a song to start from: `x -l tracker -- data/demo.xon`.
+;
+; A file of songs is any number of (song ...) forms, as x/audio/tracker
+; reads them, and the (wave NAME AMP ...) forms their instruments name:
+; each a wave made of harmonics, the fundamental's amplitude first.
+
+(wave organ 6 0 3 0 2 0 1)
+(wave reedy 6 4 3 2 1 1)
+(wave soft 8 3 1)
+
+; D minor, a walking bass under a reed's tune; the bells come in as the
+; tension rises (:tension 80 in the editor).
+(song "lantern" (bpm 96) (rows 4) (ticks 6) (tension-bpm 30)
+  (reverb 90 70 22)
+  (instrument bass (wave soft) (cut 30) (env (0 0) (8 80) (220 50) (600 30)) (release 120) (gain 55))
+  (instrument reed (wave reedy) (cut 45) (env (0 0) (20 60) (400 45)) (release 220) (gain 34) (pan 20))
+  (instrument chord (wave organ) (cut 20) (env (0 0) (300 26) (2000 22)) (release 900) (gain 22)
+    (voice (detune -6) (pan -50)) (voice (detune 6) (pan 50)))
+  (instrument kick (wave sine) (note "C2") (env (0 0) (2 95) (120 0)) (bend (0 600) (40 0)) (release 30) (gain 60))
+  (instrument hat (wave noise) (hz 1) (cut 80) (env (0 0) (1 30) (40 0)) (release 20) (gain 18) (pan -30))
+  (instrument bell (layer tension) (wave organ) (env (0 0) (4 40) (900 0)) (release 600) (gain 20) (pan -20))
+  (pattern intro
+    (bass  "D2 .  .  .  A2 .  .  .  D2 .  .  .  A2 .  C3 .")
+    (chord "D4 .  .  .  .  .  .  .  F4 .  .  .  .  .  .  .")
+    (kick  "C2 .  .  .  .  .  .  .  C2 .  .  .  .  .  .  .")
+    (hat   ".  .  C4 .  .  .  C4 .  .  .  C4 .  .  .  C4 C4"))
+  (pattern tune
+    (bass  "D2 .  F2 .  A2 .  F2 .  Bb1 . D2 .  F2 .  A2 .")
+    (reed  "A4 .  .  F4 G4 .  A4 .  Bb4 . .  A4 G4/v20,6 . . .")
+    (chord "D4 .  .  .  .  .  .  .  Bb3 . .  .  .  .  .  .")
+    (kick  "C2 .  .  .  C2 .  .  .  C2 .  .  .  C2 .  .  .")
+    (hat   ".  .  C4 .  .  .  C4 .  .  .  C4 .  .  .  C4 C4")
+    (bell  "D5 .  .  .  .  .  .  .  F5 .  .  .  .  .  .  ."))
+  (pattern turn
+    (bass  "C2 .  E2 .  G2 .  E2 .  A1 .  C#2 . E2 . A2 .")
+    (reed  "G4 .  .  E4 F4 .  G4 .  A4/s-100 . . . E4 . C#4 .")
+    (chord "C4 .  .  .  .  .  .  .  A3 .  .  .  .  .  .  .")
+    (kick  "C2 .  .  .  C2 .  .  .  C2 .  .  .  C2 .  C2 .")
+    (hat   ".  .  C4 .  .  .  C4 .  .  .  C4 .  C4 C4 C4 C4")
+    (bell  "C5 .  .  .  .  .  .  .  E5 .  .  .  .  .  .  ."))
+  (order intro tune turn tune turn))
