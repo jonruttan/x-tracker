@@ -115,8 +115,10 @@ spec-play!.  Nothing here opens an audio device.
 (def undone (list (file-wave (edit-doc st) "spec-lent") (lent)))
 (spec-keys! st (list ":wave sine 1" 'enter))
 (def own (edit-message st))
+(spec-keys! st (list ":wave square 1" 'enter))
+(def own2 (edit-message st))
 (spec-keys! st (list ":wave spec-x 0 0" 'enter))
-(write (list kept made undone own (edit-message st)))
+(write (list kept made undone own own2 (edit-message st)))
 ```
 ---
 ```output
@@ -124,7 +126,7 @@ Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowe
   spec-lent   borrowed (-w)    5 0 1
   spec-own    in the file      3 1
   sine        the mixer's own
-(("Kept in the file: spec-lent." ('wave 'spec-lent 5 0 1) #t) ("Wave spec-lent: 1 0 0 1." ('wave 'spec-lent 1 0 0 1) ('wave 'spec-lent 1 0 0 1)) (() ('wave 'spec-lent 5 0 1)) "sine is the mixer's own." "A wave's harmonics are whole numbers from 0, not all 0: (wave hollow 6 0 2 0 1).")
+(("Kept in the file: spec-lent." ('wave 'spec-lent 5 0 1) #t) ("Wave spec-lent: 1 0 0 1." ('wave 'spec-lent 1 0 0 1) ('wave 'spec-lent 1 0 0 1)) (() ('wave 'spec-lent 5 0 1)) "sine is the mixer's own." "square is the mixer's own." "A wave's harmonics are whole numbers from 0, not all 0: (wave hollow 6 0 2 0 1).")
 ```
 
 ### the editor follows the pattern and row heard, until F stops it
