@@ -101,11 +101,12 @@
                (edit-tick! st)))))))
 
 ; Edit DOC, read from PATH, on the terminal, heard through PLAYER (nil
-; for none); MSG shown first.  Answers the exit status.
+; for none), with the settings CONFIG when given (tracker/config); MSG
+; shown first.  Answers the exit status.
 (def app-edit
-  (fn (_ doc path player msg)
+  (fn (_ doc path player msg . config)
     (def size (Term window 0))
-    (def st (edit-make doc path player))
+    (def st (if (null? config) (edit-make doc path player) (edit-make doc path player (first config))))
     (edit-message! st msg)
     (def screen (Screen make (rest size) (first size)))
     (def token (Term raw! 0))

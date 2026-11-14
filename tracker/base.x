@@ -16,6 +16,8 @@
 (import tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
   player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave?)
+(import tracker/config config-default config-file config-read config-load config-set! config-set-text! config-get
+  config-put! config-problems config-style config-key config-lines config-backup!)
 (import tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
   edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
 (import tracker/app app-edit app-play)
