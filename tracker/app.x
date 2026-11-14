@@ -11,7 +11,8 @@
 ; the loop comes round every 20 ms to keep its stream fed and to show the
 ; row being heard; while none does, every quarter second to keep the
 ; screen the terminal's size.  x collects its heap only when asked: after
-; each key, and every so many rounds while a song plays.
+; each key and each redraw, which make the most garbage, so that each
+; collect has little to sweep; and every so many rounds between.
 
 (module tracker/app)
 
@@ -91,10 +92,13 @@
                  (self st screen reader 0))))
          (Term key reader)))
       (#t (do (edit-settle! st)
-              (when (edit-tick! st) (%ap-show! st screen))
-              (%ap-resize! st screen)
-              (if (< rounds %ap-collect-rounds) (self st screen reader (+ rounds 1))
-                (do (%ap-collect! st) (self st screen reader 0))))))))
+              ((fn (_ drew)
+                 (when drew (%ap-show! st screen))
+                 (%ap-resize! st screen)
+                 (if (if drew #t (not (< rounds %ap-collect-rounds)))
+                   (do (%ap-collect! st) (self st screen reader 0))
+                   (self st screen reader (+ rounds 1))))
+               (edit-tick! st)))))))
 
 ; Edit DOC, read from PATH, on the terminal, heard through PLAYER (nil
 ; for none); MSG shown first.  Answers the exit status.
