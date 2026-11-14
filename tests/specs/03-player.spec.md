@@ -34,6 +34,24 @@ spec-play!.  Nothing here opens an audio device.
 ---
     (1 #f 0)
 
+### at a pattern's end its last row is heard, not the next pattern's first
+
+```tracker
+(def pl (player-open (spec-front) ()))
+(player-start! pl spec-tune 'song 0 ())
+(player-pump! pl)
+(spec-play! 38000)
+(def ending (player-place pl))
+(spec-play! 8000)
+(def begun (player-place pl))
+(player-start! pl spec-tune 'pattern 0 "q")
+(player-pump! pl)
+(spec-play! 38000)
+(write (list ending begun (player-place pl)))
+```
+---
+    ((0 . 3) (1 . 0) (0 . 3))
+
 ### a pattern played alone keeps to it, and a song the tracker cannot read is refused
 
 ```tracker
