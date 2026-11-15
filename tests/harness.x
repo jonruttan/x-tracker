@@ -74,3 +74,41 @@
   (fn (_ n)
     (List for-each (fn (_ i) (Vector set! i (if (< (Vector ref i spec-streams) n) 0 (- (Vector ref i spec-streams) n)) spec-streams))
       (List range 0 4))))
+
+; A Standard MIDI File's bytes, (BUF 0 LEN): FORMAT, DIVISION ticks a
+; beat, and TRACKS, each a list of events (DELTA BYTE ...), an end of
+; track put after the last.
+(import x/codec/bytes)
+(import x/core/doors int/ int% char->int)
+(def spec-vlq
+  (fn (_ n) ((fn (self n acc) (if (= n 0) acc (self (int/ n 128) (pair (+ 128 (int% n 128)) acc)))) (int/ n 128) (list (int% n 128)))))
+(def spec-u32 (fn (_ n) (list (int% (int/ n 16777216) 256) (int% (int/ n 65536) 256) (int% (int/ n 256) 256) (int% n 256))))
+(def spec-midi
+  (fn (_ format division tracks)
+    (def chunk
+      (fn (_ tr)
+        (def body (List flat-map (fn (_ e) (List append (spec-vlq (first e)) (rest e))) (List append tr (list (list 0 255 47 0)))))
+        (List append (list 77 84 114 107) (spec-u32 (List length body)) body)))
+    (Bytes of-list
+      (List append (list 77 84 104 100 0 0 0 6 0 format 0 (List length tracks) (int/ division 256) (int% division 256))
+        (List flat-map chunk tracks)))))
+
+; REGION's bytes written to the file PATH.
+(def spec-write-bytes!
+  (fn (_ path region)
+    (def fd (File open path (list (lit wronly) (lit creat) (lit trunc)) 420))
+    (File write fd (first region) (List ref 2 region))
+    (File close fd)
+    path))
+
+; A PSID file's bytes, (BUF 0 LEN): MAGIC "PSID" or "RSID", its code
+; CODE (a list of bytes) loaded at LOAD, started at INIT and called each
+; frame at PLAY (0 for its interrupt's handler).
+(def spec-sid
+  (fn (_ magic load init play code)
+    (def u16 (fn (_ n) (list (int/ n 256) (int% n 256))))
+    (Bytes of-list
+      (List append (List map (fn (_ k) (char->int (Str8 ref k magic))) (List range 0 4))
+        (list 0 2 0 124) (u16 load) (u16 init) (u16 play) (list 0 1 0 1 0 0 0 0)
+        (List repeat 96 0) (list 0 0 0 0 0 0)
+        code))))

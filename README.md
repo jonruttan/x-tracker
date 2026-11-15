@@ -8,12 +8,16 @@ terminal and heard through SDL's audio.
     x -l tracker -- [OPTIONS] play FILE
     x -l tracker -- list FILE
     x -l tracker -- [OPTIONS] render FILE -o OUT.wav
+    x -l tracker -- [OPTIONS] import FILE -o OUT.xon
     x -l tracker -- help [WORD]
 
-      -s, --song NAME    the song to edit or play (the file's first)
+      -s, --song NAME    the song to edit or play (the file's first); the name import gives
       -w, --waves FILE   read the (wave ...) forms of FILE too; again for another
       -l, --loop         play the song over and over, until q
-      -o, --output FILE  the WAV file render writes
+      -o, --output FILE  the WAV file render writes, the song file import adds to
+      -r, --rows N       rows a beat import places a MIDI file's notes on (4)
+      -u, --tune N       the tune of a SID file import plays (its first)
+      -t, --time SECS    seconds of a SID tune import plays (60)
       -n, --no-sound     edit without opening the audio
       -V, --version      print the version and exit
       -h, --help         print the help and exit; after a word, that word's
@@ -155,6 +159,45 @@ is C4 at 60 percent with a vibrato.
 Written back, a file keeps everything the editor did not change as it
 was, comments and layout; a song that was changed is written from the
 song, its patterns a row a line with the cells lined up.
+
+## Importing
+
+    x -l tracker -- import tune.mid -o songs.xon
+    x -l tracker -- import -u 2 -t 90 tune.sid -o songs.xon
+
+`import` reads a file another program made into a song, and adds it to
+the song file `-o` names (made if there is none) after its songs, named
+for the file or `-s NAME`; a file with a song of that name already is
+refused.  The file is known by its first bytes, not its name.
+
+A MIDI file (`.mid`, a Standard MIDI File of format 0 or 1) is read
+note by note.  Its rows are of real time: the song's bpm is the file's
+first tempo, `-r N` its rows a beat (4), and each note is put on the row
+nearest where it is heard, so a file whose tempo changes keeps its
+timing in a song of one tempo.  Each channel and program is an
+instrument named for its General MIDI family (`piano`, `organ`,
+`strings`, ...), with as many channels as its notes need at once;
+channel 10 is drums, an instrument a kind (`kick`, `snare`, `hat`, ...).
+A note's velocity is its gain, a channel's first volume and pan its
+instrument's, and a note held under the sustain pedal sounds until the
+pedal is let go.
+
+A SID file (`.sid`, a C64 tune in PSID or RSID) is a program, so it is
+run: a 6502 in x-lang starts the tune (`-u N`, or the one it starts
+with) and calls it each frame for `-t SECS` (60), and each frame the
+SID's three voices are taken down: frequency, waveform, pulse width,
+envelope, gate and filter.  A row is as many frames as the notes are
+apart, and a tick a frame, so a note started or let go inside a row is
+delayed (`/d`) or cut (`/c`), a pitch stepping by semitones from frame
+to frame is an arpeggio (`/a`), and one moving from row to row a slide
+(`/s`).  Each voice and sound (waveform, envelope, pulse width, filter)
+is an instrument, `pulse1`, `saw2` and so on.  Only the CPU and the SID
+are there, no screen and no ROM, so a tune that waits on the screen may
+not play.
+
+Both cut the song into patterns, each written once and named again in
+the order where it comes back; a note held over a pattern's end is
+struck again at the next.
 
 ## Help
 
