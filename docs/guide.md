@@ -74,7 +74,8 @@ Then the pattern: a row a line, numbered from 0, and a channel a
 column, headed by the instrument that plays it.  The rows on the beat
 are drawn in a colour of their own.  The cursor is the cell drawn
 reversed.  The last line shows the keys to start with, a command being
-typed, or a message.  `?` shows every key and command; any key closes
+typed (its end, after `...`, when it is longer than the screen), or a
+message.  `?` shows every key and command; any key closes
 it.  A list too wide for the screen, such as `:patterns` in a song of
 many, pages the way `?` does.
 

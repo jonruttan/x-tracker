@@ -274,6 +274,22 @@ Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one
 ---
     (" order: [p0] p1 p2 p3 p4 p5 p6 p7 p8 ..." " order: ... p7 p8 p9 p10 p11 [p12] ..." " order: p0 p1 p2 p3 <p4> p5 p6 p7 p8 ..." " order: ... p14 p15 p16 p17 p18 [p19]")
 
+### a command line longer than the screen shows its end, where the cursor is
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") () ()))
+(def screen (Screen make 6 40))
+(def last-row (fn (_) (spec-draw! st screen) (Str8 trim-right (Screen row-text screen 5))))
+(spec-keys! st (list ":instrument kick (wave sine)"))
+(def short (last-row))
+(spec-keys! st (list " (note \"C2\") (env (0 0) (2 95) (140 0)) (bend (0 700) (45 0)) (release 30) (gain 60)"))
+(def long (last-row))
+(spec-keys! st (list 'backspace 'backspace))
+(write (list short long (last-row)))
+```
+---
+    (":instrument kick (wave sine)" ":...700) (45 0)) (release 30) (gain 60)" ":...0 700) (45 0)) (release 30) (gain 6")
+
 ### a title wider than the screen leaves out rows and ticks first, then octave and step, then bpm
 
 ```tracker
