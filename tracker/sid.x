@@ -460,6 +460,11 @@
             (%sd-at-least 2 (int/ (int* 2 (int- (first at) (List ref (int- (List length at) 1) at))) (int- (List length at) 1)))))))
 (def %sd-dist (fn (_ a b) (if (int< a b) (int- b a) (int- a b))))
 
+; Whether SWING (of %sd-swing, or nil) wobbles: less than a semitone
+; either way of its centre, more than a little, and by no step of one.
+(def %sd-wobbles?
+  (fn (_ swing) (if (null? swing) #f (if (int< (List ref 1 swing) 200) (if (int< 10 (List ref 1 swing)) (not (List ref 3 swing)) #f) #f))))
+
 ; Voice V's pulse width in frame FR, a percentage.
 (def %v-width
   (fn (_ fr v)
@@ -514,7 +519,7 @@
     (def pitch (fn (_ f) (%cents (%v-freq (Vector ref f frames) v))))
     ; Per row: whether a note sounds, the frame its tail ends in once let
     ; go, its base in cents, its pitch with its slides, the arpeggio
-    ; playing, whether the last row slid, and the note's vibrato.
+    ; playing, whether the last row slid, and its vibrato's period or #f.
     ((fn (self r on stop0 base at arp slid vib0)
        (when (int< r rows)
          (do (when (int= 0 (int% r 8)) (Heap collect))
@@ -536,12 +541,14 @@
              (def ps (List filter (fn (_ p) (not (null? p))) (List map pitch heard)))
              (def swing (if (null? ps) () (%sd-swing ps)))
              (def was-vib (if struck #f vib0))
-             (def wobbles (if (null? swing) #f (if (int< (List ref 1 swing) 200) (if (int< 10 (List ref 1 swing)) (not (List ref 3 swing)) #f) #f)))
+             (def wobbles (%sd-wobbles? swing))
              (def vib (if wobbles (if was-vib #t (int< 1 (List ref 2 swing))) #f))
+             ; The vibrato's period, kept to end it with: a vibrato of no depth.
+             (def vib-per (if vib (if was-vib was-vib (List ref 4 swing)) #f))
              (def vib-fx (match ((if vib (not was-vib) #f)
                                  (Str8 append "/v" (Str8 str (int/ (List ref 1 swing) 2)) ","
                                    (Str8 str (List ref 4 swing))))
-                                ((if was-vib (not vib) #f) "/v")
+                                ((if was-vib (not vib) #f) (Str8 append "/v0," (Str8 str was-vib)))
                                 (#t "")))
              (def p-note (if struck (if vib (first swing) (pitch rise)) ()))
              (def fade (if (null? fall) "" (if (if (int< fall stop) (int< (List ref 1 tail) 100) #f) (Str8 append "/f" (Str8 str (List ref 1 tail))) "")))
@@ -566,7 +573,9 @@
                              ()))
              (def f2 (int+ start (int/ (int* (int+ r 2) span) units)))
              (def next-ps (List filter (fn (_ p) (not (null? p))) (List map pitch (List filter (fn (_ k) (if (int< k n) (if (null? stop) #t (int< k stop)) #f)) (List range f1 f2)))))
-             (def next-p (if (null? next-ps) () (first (%sd-swing next-ps))))
+             ; The pitch slid to: the next row's centre where it wobbles, else its start.
+             (def next-swing (if (null? next-ps) () (%sd-swing next-ps)))
+             (def next-p (if (null? next-ps) () (if (%sd-wobbles? next-swing) (first next-swing) (first next-ps))))
              (def slide (if (if now-on (if (null? arpeggio) (if (null? next-p) #f (not (%rise? frames f1 v))) #f) #f)
                           ((fn (_ d) (if (int< (if (int< d 0) (int- 0 d) d) 10) 0 d)) (int- next-p now-at))
                           0))
@@ -582,7 +591,7 @@
                (Vector set! r (if (not struck) (pair () (Str8 append head fx))
                                 (pair (inst-of (%sd-props (Vector ref rise frames) v) (%v-width (Vector ref rise frames) v)) (Str8 append head fx)))
                  cells))
-             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib #f)))))
+             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f)))))
      0 #f () 0 0 () #f #f)
     (list cells (List map (fn (_ k) (text (List ref k (Vector ref 0 props)) (List ref k (Vector ref 1 props))))
                       (List range 0 (List length (Vector ref 0 props)))))))
