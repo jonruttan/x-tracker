@@ -184,7 +184,7 @@ pedal is let go.
 
 A SID file (`.sid`, a C64 tune in PSID or RSID) is a program, so it is
 run: a 6502 in x-lang starts the tune (`-u N`, or the one it starts
-with) and calls it each frame for `-t SECS` (60), and each frame the
+with) and calls it each frame for as long as the tune is, and each frame the
 SID's three voices are taken down: frequency, waveform, pulse width,
 envelope, gate and filter.  A row is as many frames as the notes are
 apart (where a driver runs a frame late now and then, their time apart
@@ -199,6 +199,15 @@ sound (waveform, envelope, filter) is an instrument, `pulse1`, `saw2`
 and so on, a pulse's width its notes' mean.  Only the CPU and the SID
 are there, no screen and no ROM, so a tune that waits on the screen may
 not play.
+
+A tune's length is the one the High Voltage SID Collection gives it in
+`DOCUMENTS/Songlengths.md5`, found by the file's MD5: in a directory
+above the file, as for one in HVSC's `C64Music`, or under
+`$HVSC_BASE`, the `C64Music` directory.  `-t SECS` plays it that long
+instead, and a tune HVSC has no length for plays 60 seconds.  The import
+says on stderr how far it has played and how far each voice is.
+
+    HVSC_BASE=~/C64Music x -l tracker -- import tune.sid -o songs.xon
 
 Both cut the song into patterns, each written once and named again in
 the order where it comes back; a note held over a pattern's end is

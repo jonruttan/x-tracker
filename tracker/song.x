@@ -29,6 +29,7 @@
 
 (import x/codec/xon)
 (import x/audio/mixer)
+(import x/sys/gc)
 (import x/core/doors str->sym int/ int%)
 (import tracker/node node-read node-form? node-text node-parts node-head node-value)
 
@@ -465,7 +466,8 @@
 
 ; The song as .xon text, one (song ...) form.  An item stays on the line
 ; before it as it was read, but a pattern, a row a line, and what follows
-; one start lines of their own.
+; one start lines of their own.  A long song is many patterns, so the
+; heap is collected before each.
 (def song-text
   (fn (_ s)
     (def items (song-items s))
@@ -474,6 +476,7 @@
         (List map
           (fn (_ k)
             (def i (List ref k items))
+            (when (eq? (first i) (lit pattern)) (Heap collect))
             (def after-pattern (if (< 0 k) (eq? (first (List ref (- k 1) items)) (lit pattern)) #f))
             (Str8 append (if (if (List ref 1 i) (not (if after-pattern #t (eq? (first i) (lit pattern)))) #f) " " "\n  ")
               (match ((eq? (first i) (lit text)) (List ref 2 i))

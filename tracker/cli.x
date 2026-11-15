@@ -48,7 +48,7 @@
           (Opts arg "-o" "--output" "FILE" "The WAV file render writes, the song file import adds to")
           (Opts arg "-r" "--rows" "N" "Rows a beat import places a MIDI file's notes on, 1-64 (4)")
           (Opts arg "-u" "--tune" "N" "The tune of a SID file import plays (the one it starts with)")
-          (Opts arg "-t" "--time" "SECS" "Seconds of a SID tune import plays, 1-3600 (60)")
+          (Opts arg "-t" "--time" "SECS" "Seconds of a SID tune import plays, 1-3600 (HVSC's length, or 60)")
           (Opts flag "-n" "--no-sound" "Edit without opening the audio")
           (Opts flag "-V" "--version" "Print the version and exit")
           (Opts flag "-h" "--help" "Print this help and exit"))
@@ -123,17 +123,20 @@
     (def out (Opts value opts "-o"))
     (def rows (%cl-number (Opts value opts "-r") 1 64 4))
     (def tune (%cl-number (Opts value opts "-u") 1 256 0))
-    (def secs (%cl-number (Opts value opts "-t") 1 3600 60))
+    ; Without -t a SID tune plays as long as HVSC says it is.
+    (def timed (not (null? (Opts value opts "-t"))))
+    (def secs (%cl-number (Opts value opts "-t") 1 3600 ()))
     (match
       ((null? out) (do (%cl-say 2 "x-tracker: import needs -o OUT.xon, the song file to add to\n") 2))
       ((null? rows) (do (%cl-say 2 "x-tracker: -r takes rows a beat, 1-64\n") 2))
       ((null? tune) (do (%cl-say 2 "x-tracker: -u takes a tune, 1-256\n") 2))
-      ((null? secs) (do (%cl-say 2 "x-tracker: -t takes seconds, 1-3600\n") 2))
+      ((if timed (null? secs) #f) (do (%cl-say 2 "x-tracker: -t takes seconds, 1-3600\n") 2))
       (#t ((fn (_ s)
              (%cl-say 1 (Str8 append "Imported " (song-name s) " to " out ": " (%cl-length s) "  "
                           (Str8 str (List length (song-patterns s))) " patterns  " (Str8 str (List length (song-order s))) " in the order\n"))
              0)
-           (import-file! path out (Opts value opts "-s") rows tune secs))))))
+           (import-file! path out (Opts value opts "-s") rows tune secs
+             (fn (_ line) (%cl-say 2 (Str8 append "x-tracker: " line "\n")))))))))
 
 (def %cl-run
   (fn (_ opts)

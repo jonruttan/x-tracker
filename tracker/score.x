@@ -12,11 +12,13 @@
 ; named again in the order wherever it comes back.  A note held over a
 ; pattern's end, which the tracker ends there, is started again at the
 ; next pattern's first row.  A channel with nothing in a pattern is left
-; out of it.
+; out of it.  A long piece is thousands of rows, so the heap is
+; collected a pattern at a time.
 
 (module tracker/score)
 
 (import x/type/vector)
+(import x/sys/gc)
 (import x/core/doors int/ int%)
 (import tracker/song song-parse song-set-pattern song-rename)
 
@@ -32,6 +34,7 @@
     (def total (Vector length cells))
     ((fn (self r cur)
        (when (< r total)
+         (when (= 0 (int% r 256)) (Heap collect))
          ((fn (_ c)
             (match ((Str8 starts? "-" c) (self (+ r 1) ()))
                    ((not (Str8 starts? "." c)) (self (+ r 1) (%sc-strike c)))
@@ -53,6 +56,7 @@
     (def slices
       (List map
         (fn (_ p)
+          (Heap collect)
           (def from (* p prows))
           (def to (%sc-min total (+ from prows)))
           (def chs (List map (fn (_ col) (pair (first col) (List map (fn (_ r) (if (< r (Vector length (List ref 2 col))) (Vector ref r (List ref 2 col)) "."))
@@ -61,9 +65,10 @@
           (def heard (List filter (fn (_ ch) (List any? (fn (_ c) (not (str=? c "."))) (rest ch))) chs))
           (if (null? heard) (list (first chs)) heard))
         (List range 0 (int/ (+ total (- prows 1)) prows))))
-    (def keyed (List map (fn (_ chs) (pair (Str8 join "|" (List map (fn (_ ch) (Str8 join " " ch)) chs)) chs)) slices))
+    (Heap collect)
+    (def keyed (List map (fn (_ chs) (Heap collect) (pair (Str8 join "|" (List map (fn (_ ch) (Str8 join " " ch)) chs)) chs)) slices))
     (def patterns
-      (List fold (fn (_ acc kc) (if (List any? (fn (_ p) (str=? (List ref 1 p) (first kc))) acc) acc
+      (List fold (fn (_ acc kc) (Heap collect) (if (List any? (fn (_ p) (str=? (List ref 1 p) (first kc))) acc) acc
                                   (List append acc (list (list (Str8 append "p" (Str8 str (+ 1 (List length acc)))) (first kc) (rest kc))))))
         () keyed))
     (def order (List map (fn (_ kc) (first (List find (fn (_ p) (str=? (List ref 1 p) (first kc))) patterns))) keyed))
@@ -73,6 +78,6 @@
           (Str8 join "" (List map (fn (_ i) (Str8 append "  " i "\n")) instruments))
           "  (pattern " (first (first patterns)) " (" (first (first columns)) " \".\"))\n"
           "  (order " (Str8 join " " order) "))")))
-    (song-rename (List fold (fn (_ s p) (song-set-pattern s (first p) (List ref 2 p))) skeleton patterns) name)))
+    (song-rename (List fold (fn (_ s p) (Heap collect) (song-set-pattern s (first p) (List ref 2 p))) skeleton patterns) name)))
 
 (provide tracker/score score-song)
