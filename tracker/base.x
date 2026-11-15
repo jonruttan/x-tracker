@@ -29,5 +29,5 @@
 (import tracker/score score-song)
 (import tracker/midi midi-song)
 (import tracker/sid sid-song sid-run)
-(import tracker/import import-bytes import-song import-name import-file!)
+(import tracker/import import-bytes import-song import-name import-sid-seconds import-file!)
 (import tracker/cli tracker-version tracker-options tracker-main)

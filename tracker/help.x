@@ -196,7 +196,7 @@
               "  -s NAME the song (the file's first), -w FILE waves to read")
         (list "import" "x -l tracker -- import FILE -o OUT.xon" "a MIDI (.mid) or SID (.sid) file read into a song, added to OUT.xon"
               "  -s NAME the song's name (the file's); MIDI: -r N rows a beat (4);"
-              "  SID: -u N the tune (its first), -t SECS how long it is played (60)")
+              "  SID: -u N the tune (its first), -t SECS how long it is played (HVSC's length, or 60)")
         (list "help" "x -l tracker -- help [WORD]" "this help: the topics, a topic, or every entry named WORD")))
 
 ; --- the topics ----------------------------------------------------------------

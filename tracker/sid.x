@@ -38,7 +38,7 @@
 
 (import x/type/vector)
 (import x/sys/gc)
-(import x/core/doors int+ int- int* int/ int% int& int| int<< int>> int< int= obj-ref obj-set! str-byte-ref char->int)
+(import x/core/doors int+ int- int* int/ int% int& int| int<< int>> int< int= obj-ref obj-set! ptr-ref ptr-set! str->ptr str-make str-byte-ref char->int)
 (import tracker/song song-note-name)
 (import tracker/score score-song)
 
@@ -50,12 +50,17 @@
 ; by (Z when it is 0), 7 one N is (its bit 7), 8 V, 9 D, 10 I, 11 the
 ; voices whose gate was written off this frame (a bit each), 12 the CIA
 ; timer's latch, 13 the raster line read, 14 the noise read at $D41B.
-; Memory is a vector of 65536 bytes.
+; Memory is a buffer of 65536 bytes, M its address, held by whoever made
+; it: a vector of them is walked by every collect, and a process that
+; collects thousands of times with one live grows to a gigabyte.
 
 (def %r (fn (_ c k) (obj-ref c (int+ k 1))))
 (def %w! (fn (_ c k v) (obj-set! c (int+ k 1) v) v))
-(def %peek (fn (_ m a) (obj-ref m (int+ a 1))))
-(def %poke! (fn (_ m a v) (obj-set! m (int+ a 1) v)))
+(def %peek (fn (_ m a) (int& (ptr-ref m a 1) 255)))
+(def %poke! (fn (_ m a v) (ptr-set! m a v 1)))
+(def %mem-set (prim-ref (lit mem) (lit set)))
+; A buffer of 65536 zeros: str-make's bytes are spaces.
+(def %memory (fn (_) ((fn (_ b) (%mem-set (str->ptr b) 0 65536) b) (str-make 65536))))
 (def %xor (fn (_ a b) (int- (int| a b) (int& a b))))
 
 (def %io-rd
@@ -313,15 +318,20 @@
 (def %sd-byte (fn (_ buf i) (char->int (str-byte-ref buf i))))
 (def %sd-u16 (fn (_ buf i) (+ (* 256 (%sd-byte buf i)) (%sd-byte buf (+ i 1)))))
 
-; The SID's registers after a frame: a vector of the 25 from $D400 and
-; the voices whose gate was written off during it.
-(def %snapshot (fn (_ c m n) (Vector from-list (List append (List map (fn (_ k) (%peek m (int+ 0xD400 k))) (List range 0 25)) (list (%r c 11) n)))))
+; A frame: the SID's 25 registers from $D400 after it, and the voices
+; whose gate was written off during it, put at FR.
+(def %frame-size 26)
+(def %snapshot!
+  (fn (_ c m fr)
+    ((fn (self k) (when (int< k 25) (do (ptr-set! fr k (%peek m (int+ 0xD400 k)) 1) (self (int+ k 1))))) 0)
+    (ptr-set! fr 25 (%r c 11) 1)))
 
 ; The frames of the tune in REGION, TUNE of its tunes (0 for the one it
-; starts with), SECONDS long: (FRAME-US FRAMES), FRAMES a list of
-; snapshots.
+; starts with), SECONDS long: (FRAME-US BUFFER N), BUFFER the N frames'
+; bytes.  SAY, when not nil, is given a line of how far it has played
+; every ten seconds of the tune.
 (def %sd-play
-  (fn (_ region tune seconds)
+  (fn (_ region tune seconds say)
     (def buf (first region))
     (def at (List ref 1 region))
     (def len (List ref 2 region))
@@ -343,7 +353,8 @@
     (def speed (+ (* 65536 (%sd-u16 buf (+ at 18))) (%sd-u16 buf (+ at 20))))
     (def cia (if rsid #f (not (= 0 (int& (int>> speed (- (if (< 32 which) 32 which) 1)) 1)))))
     (def ntsc (if (< 0x7B offset) (= (int& (int>> (%sd-u16 buf (+ at 0x76)) 2) 3) 2) #f))
-    (def m (Vector make 65536 0))
+    (def mem (%memory))
+    (def m (str->ptr mem))
     (List for-each (fn (_ k) (when (< (+ load k) 65536) (%poke! m (+ load k) (%sd-byte buf (+ from k)))))
       (List range 0 (- (+ at len) from)))
     (List for-each (fn (_ base) (when (= 0 (%peek m base)) (List for-each (fn (_ k) (%poke! m (+ base k) (List ref k (list 104 168 104 170 104 64)))) (List range 0 6))))
@@ -359,13 +370,24 @@
                          (cia 16667)
                          (ntsc 16667)
                          (#t 20000)))
-    (def frames (int/ (* seconds 1000000) frame-us))
-    (list frame-us
-      (List map (fn (_ f)
-                  (when (= 0 (int% f 4)) (Heap collect))
-                  (%w! c 11 0)
-                  (%snapshot c m (if (= play 0) (%irq! c m handler kernal 200000) (%call! c m play 0 200000))))
-        (List range 0 frames)))))
+    (def n (int/ (* seconds 1000000) frame-us))
+    (def every (int/ 10000000 frame-us))
+    (def out (str-make (int* (%sd-at-least 1 n) %frame-size)))
+    (def at0 (str->ptr out))
+    ((fn (self f)
+       (when (int< f n)
+         (do (when (int= 0 (int% f 4)) (Heap collect))
+             (when (if (null? say) #f (if (int< 0 f) (int= 0 (int% f every)) #f))
+               (say (Str8 append "played " (%sd-clock (int/ (int* f frame-us) 1000000)) " of " (%sd-clock seconds))))
+             (%w! c 11 0)
+             (if (= play 0) (%irq! c m handler kernal 200000) (%call! c m play 0 200000))
+             (%snapshot! c m (%fr at0 f))
+             (self (int+ f 1)))))
+     0)
+    (list frame-us out n)))
+
+; SECONDS as M:SS.
+(def %sd-clock (fn (_ s) (Str8 append (Str8 str (int/ s 60)) ":" (if (int< (int% s 60) 10) "0" "") (Str8 str (int% s 60)))))
 
 (def %sd-at-least (fn (_ n x) (if (< x n) n x)))
 
@@ -393,27 +415,52 @@
 
 ; --- frames to rows --------------------------------------------------------------
 
-(def %v-gate (fn (_ fr v) (int& (Vector ref (int+ (int* v 7) 4) fr) 1)))
-(def %v-ctrl (fn (_ fr v) (Vector ref (int+ (int* v 7) 4) fr)))
-(def %v-freq (fn (_ fr v) (int| (Vector ref (int* v 7) fr) (int<< (Vector ref (int+ (int* v 7) 1) fr) 8))))
+; FRAMES is the address of the frames' bytes, %frame-size a frame; FR
+; the address of one, and register K of it.
+(def %fr (fn (_ frames f) (int+ frames (int* f %frame-size))))
+(def %fb (fn (_ fr k) (int& (ptr-ref fr k 1) 255)))
+
+(def %v-gate (fn (_ fr v) (int& (%fb fr (int+ (int* v 7) 4)) 1)))
+(def %v-ctrl (fn (_ fr v) (%fb fr (int+ (int* v 7) 4))))
+(def %v-freq (fn (_ fr v) (int| (%fb fr (int* v 7)) (int<< (%fb fr (int+ (int* v 7) 1)) 8))))
 (def %v-wave
   (fn (_ ctrl)
     (match ((int< 0 (int& ctrl 128)) "noise") ((int< 0 (int& ctrl 64)) "pulse") ((int< 0 (int& ctrl 32)) "saw")
            ((int< 0 (int& ctrl 16)) "triangle") (#t ()))))
 
-; Whether voice V starts a note in frame F of FRAMES (a vector), its gate
-; on and either off the frame before or written off in between.
+; Whether voice V starts a note in frame F of FRAMES, its gate on and
+; either off the frame before or written off in between.
 (def %rise?
   (fn (_ frames f v)
-    (def fr (Vector ref f frames))
+    (def fr (%fr frames f))
     (if (int= (%v-gate fr v) 0) #f
       (if (null? (%v-wave (%v-ctrl fr v))) #f
         (if (int< 0 (int& (%v-ctrl fr v) 8)) #f
           (if (int= f 0) #t
-            (if (int= (%v-gate (Vector ref (int- f 1) frames) v) 0) #t
-              (not (int= 0 (int& (Vector ref 25 fr) (int<< 1 v)))))))))))
+            (if (int= (%v-gate (%fr frames (int- f 1)) v) 0) #t
+              (not (int= 0 (int& (%fb fr 25) (int<< 1 v)))))))))))
 
 (def %gcd (fn (self a b) (if (int= b 0) a (self b (int% a b)))))
+
+; The frames of the N FRAMES voice V starts a note in, in order.  A test
+; leaves a few hundred objects behind, so the heap is collected every
+; 1024 frames: a ten-minute tune is 32250 of them a voice.
+(def %sd-rises
+  (fn (_ frames n v)
+    ((fn (self f acc)
+       (if (int< f n)
+         (do (when (int= 0 (int% f 1024)) (Heap collect))
+             (self (int+ f 1) (if (%rise? frames f v) (pair f acc) acc)))
+         (List reverse acc)))
+     0 ())))
+
+; The time between each of RS, frames in order, and the next.
+(def %sd-gaps
+  (fn (_ rs)
+    ((fn (self xs acc)
+       (if (null? (rest xs)) (List reverse acc)
+         (self (rest xs) (pair (int- (first (rest xs)) (first xs)) acc))))
+     rs ())))
 
 ; The envelope's times: attack, and decay or release, in ms.
 (def %attack-ms (list 2 8 16 24 38 56 68 80 100 250 500 800 1000 3000 5000 8000))
@@ -429,9 +476,9 @@
 ; level is spent, at the voice's next note, or where it has no wave.
 (def %sd-tail
   (fn (_ frames n fall v us)
-    (def rel (fn (_ k) (List ref (int& (Vector ref (int+ (int* v 7) 6) (Vector ref k frames)) 15) %decay-ms)))
+    (def rel (fn (_ k) (List ref (int& (%fb (%fr frames k) (int+ (int* v 7) 6)) 15) %decay-ms)))
     ((fn (self k level)
-       (if (if (int< k n) (if (%v-heard? (Vector ref k frames) v) (not (%rise? frames k v)) #f) #f)
+       (if (if (int< k n) (if (%v-heard? (%fr frames k) v) (not (%rise? frames k v)) #f) #f)
          ((fn (_ next) (if (int< 0 next) (self (int+ k 1) next) (list k (int/ level 1000))))
           (int- level (int/ (int* 100 us) (rel k))))
          (list k (int/ level 1000))))
@@ -479,7 +526,7 @@
 ; Voice V's pulse width in frame FR, a percentage.
 (def %v-width
   (fn (_ fr v)
-    (%sd-at-least 1 (int/ (int* (int| (Vector ref (int+ (int* v 7) 2) fr) (int<< (int& (Vector ref (int+ (int* v 7) 3) fr) 15) 8)) 100) 4096))))
+    (%sd-at-least 1 (int/ (int* (int| (%fb fr (int+ (int* v 7) 2)) (int<< (int& (%fb fr (int+ (int* v 7) 3)) 15) 8)) 100) 4096))))
 
 ; An instrument's props from voice V in frame FR, but for a pulse's
 ; width, which is its notes' mean.  Its release is the SID's quickest: a
@@ -487,13 +534,13 @@
 (def %sd-props
   (fn (_ fr v)
     (def ctrl (%v-ctrl fr v))
-    (def ad (Vector ref (int+ (int* v 7) 5) fr))
-    (def sr (Vector ref (int+ (int* v 7) 6) fr))
+    (def ad (%fb fr (int+ (int* v 7) 5)))
+    (def sr (%fb fr (int+ (int* v 7) 6)))
     (def wave (%v-wave ctrl))
     (def a (List ref (int>> ad 4) %attack-ms))
     (def d (List ref (int& ad 15) %decay-ms))
-    (def lowpass (if (int< 0 (int& (Vector ref 23 fr) (int<< 1 v))) (int< 0 (int& (Vector ref 24 fr) 16)) #f))
-    (def cutoff (int| (int& (Vector ref 21 fr) 7) (int<< (Vector ref 22 fr) 3)))
+    (def lowpass (if (int< 0 (int& (%fb fr 23) (int<< 1 v))) (int< 0 (int& (%fb fr 24) 16)) #f))
+    (def cutoff (int| (int& (%fb fr 21) 7) (int<< (%fb fr 22) 3)))
     (Str8 append "(wave " (if (str=? wave "noise") "noise" wave) ")"
       " (env (0 0) (" (Str8 str a) " 100) (" (Str8 str (int+ a d)) " " (Str8 str (int/ (int* (int>> sr 4) 100) 15)) "))"
       " (release " (Str8 str (first %decay-ms)) ")"
@@ -503,10 +550,13 @@
 ; SPAN / UNITS, RISEN the frame each row's note starts in or nil,
 ; INSTRUMENTS the props of each note's in the order first heard, each
 ; cell's note named by its index among them as (INDEX . CELL).  A note
-; is held through its tail and faded over it.
+; is held through its tail and faded over it.  SAY, when not nil, is
+; given a line of how far it has come every thirty seconds of the tune.
 (def %voice-rows
-  (fn (_ frames n start span units rows v us risen)
+  (fn (_ frames n start span units rows v us risen say)
     (def cells (Vector make rows "."))
+    (def every (%sd-at-least 1 (int/ (int* 30000000 units) (int* span us))))
+    (Heap collect)
     ; The props of each instrument, and the widths of its notes, latest first.
     (def props (Vector make 2 ()))
     (def inst-of
@@ -527,15 +577,21 @@
           (Str8 append pulse " (width (0 " (Str8 str (int/ (List fold (fn (_ a w) (int+ a w)) 0 ws) (List length ws))) "))"
                        (Str8 sub 12 (int- (str-byte-len p) 12) p))
           p)))
-    ; Each frame's pitch, found once: -1 until it is.
-    (def pitches (Vector make n -1))
-    (def pitch (fn (_ f) ((fn (_ p) (if (if (null? p) #f (int= p -1)) ((fn (_ c) (Vector set! f c pitches) c) (%cents (%v-freq (Vector ref f frames) v))) p))
-                          (Vector ref f pitches))))
+    ; Each frame's pitch, found once, two bytes a frame: 0 until it is, 1
+    ; for none, else its cents and 2.  A buffer, as a vector of a slot a
+    ; frame is filled a slot at a time, leaving a heap of garbage.
+    (def memo (str-make (int* 2 (%sd-at-least 1 n))))
+    (def mp (str->ptr memo))
+    (%mem-set mp 0 (int* 2 (%sd-at-least 1 n)))
+    (def pitch (fn (_ f) ((fn (_ p) (match ((int= p 0) ((fn (_ c) (ptr-set! mp (int* 2 f) (if (null? c) 1 (int+ c 2)) 2) c) (%cents (%v-freq (%fr frames f) v))))
+                                           ((int= p 1) ())
+                                           (#t (int- p 2))))
+                          (int& (ptr-ref mp (int* 2 f) 2) 65535))))
     ; Per row: whether a note sounds, the frame its tail ends in once let
     ; go, its base in cents, its pitch with its slides, the arpeggio
     ; playing, whether the last row slid, its vibrato's period or #f, the
     ; frame it started in, and whether it is noise.
-    (def noise? (fn (_ k) (equal? (%v-wave (%v-ctrl (Vector ref k frames) v)) "noise")))
+    (def noise? (fn (_ k) (equal? (%v-wave (%v-ctrl (%fr frames k) v)) "noise")))
     ; The frames from A to B of the note started in NR, noise or not as
     ; NOISY: up to its next note, and to STP when it is known.
     (def note-frames
@@ -549,21 +605,24 @@
     ((fn (self r on stop0 base at arp slid vib0 nrise0 nnoise0)
        (when (int< r rows)
          (do (when (int= 0 (int% r 8)) (Heap collect))
+             (when (if (null? say) #f (if (int< 0 r) (int= 0 (int% r every)) #f))
+               (say (Str8 append "voice " (Str8 str (int+ v 1)) " of 3: " (%sd-clock (int/ (int* (int/ (int* r span) units) us) 1000000)) " of " (%sd-clock (int/ (int* n us) 1000000)))))
              (def f (int+ start (int/ (int* r span) units)))
              (def f1 (int+ start (int/ (int* (int+ r 1) span) units)))
+             (def f2 (int+ start (int/ (int* (int+ r 2) span) units)))
              (def fs (List filter (fn (_ k) (if (int< k n) (not (int< k 0)) #f)) (List range f f1)))
              ; A note's pitch and sound are its first frame's with a frequency and
              ; a tone: a driver may open the gate before it sets one, or strike a
              ; drum with a frame of noise.  A note of noise alone is noise, and one
-             ; with no frequency is not struck.
+             ; with no frequency by the end of the next row is not struck.
              (def rise0 (Vector ref r risen))
-             (def seen (if (null? rise0) () (List filter (fn (_ k) (not (null? (pitch k)))) (List range rise0 (if (int< (int+ f1 span) n) (int+ f1 span) n)))))
+             (def seen (if (null? rise0) () (List filter (fn (_ k) (not (null? (pitch k)))) (List range rise0 (if (int< f2 n) f2 n)))))
              (def tone ((fn (_ t) (if (null? t) (if (null? seen) () (first seen)) t)) (List find (fn (_ k) (not (noise? k))) seen)))
              (def rise (if (null? tone) () rise0))
              (def struck (not (null? rise)))
              (def held (if struck #t on))
              (def from (List filter (fn (_ k) (if struck (not (int< k rise)) #t)) fs))
-             (def fall (if (if held (if struck #t (null? stop0)) #f) (List find (fn (_ k) (int= 0 (%v-gate (Vector ref k frames) v))) from) ()))
+             (def fall (if (if held (if struck #t (null? stop0)) #f) (List find (fn (_ k) (int= 0 (%v-gate (%fr frames k) v))) from) ()))
              (def tail (if (null? fall) () (%sd-tail frames n fall v us)))
              (def stop (if (null? fall) (if struck () stop0) (first tail)))
              (def end (if (null? stop) () (if (int< stop f1) stop ())))
@@ -624,7 +683,6 @@
              (def arpeggio (if (if (if vib #f (if (null? swing) #f (List ref 3 swing))) (List any? (fn (_ o) (not (int= o (first offsets)))) offsets) #f)
                              chord
                              ()))
-             (def f2 (int+ start (int/ (int* (int+ r 2) span) units)))
              (def next-ps (List filter (fn (_ p) (not (null? p))) (List map pitch (note-frames f1 f2 stop nrise nnoise))))
              (def next-swing (if (null? next-ps) () (motion (%sd-swing next-ps) f1 f2)))
              (def next-p (if (null? next-ps) () (if (%sd-wobbles? next-swing) (first next-swing) (first next-ps))))
@@ -642,7 +700,7 @@
                  (match ((not now-on) "") ((not (int= slide 0)) (Str8 append "/s" (Str8 str slide))) (was-slid "/s0") (#t ""))))
              (unless (if (str=? head ".") (str=? fx "") #f)
                (Vector set! r (if (not struck) (pair () (Str8 append head fx))
-                                (pair (inst-of (%sd-props (Vector ref tone frames) v) (%v-width (Vector ref tone frames) v)) (Str8 append head fx)))
+                                (pair (inst-of (%sd-props (%fr frames tone) v) (%v-width (%fr frames tone) v)) (Str8 append head fx)))
                  cells))
              (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f) nrise nnoise))))
      0 #f () 0 0 () #f #f 0 #f)
@@ -651,15 +709,18 @@
 
 ; The song a SID file makes: REGION (BUF START LEN) its bytes, NAME the
 ; song's name, TUNE which of its tunes (0 the one it starts with),
-; SECONDS how long it is played.  Raises a label 'value for bytes that are
-; no PSID or RSID file, or a tune with no notes.
+; SECONDS how long it is played, SAY nil or given lines of its progress.
+; Raises a label 'value for bytes that are no PSID or RSID file, or a
+; tune with no notes.
 (def sid-song
-  (fn (_ region name tune seconds)
-    (def played (%sd-play region tune seconds))
+  (fn (_ region name tune seconds say)
+    (def played (%sd-play region tune seconds say))
     (def frame-us (first played))
-    (def frames (Vector from-list (List ref 1 played)))
-    (def n (Vector length frames))
-    (def rises-of (List map (fn (_ v) (List filter (fn (_ f) (%rise? frames f v)) (List range 0 n))) (list 0 1 2)))
+    ; The buffer is held here, its address in FRAMES.
+    (def store (List ref 1 played))
+    (def frames (str->ptr store))
+    (def n (List ref 2 played))
+    (def rises-of (List map (fn (_ v) (%sd-rises frames n v)) (list 0 1 2)))
     (def rises (List flat-map (fn (_ rs) rs) rises-of))
     (when (null? rises) (%sd-fail "the SID tune plays no notes"))
     (def sorted (List sort < rises))
@@ -669,7 +730,8 @@
     ; driver's frames come a frame late now and then, it is the time
     ; between a voice's notes over how many of the shortest it spans.
     (def g (List fold (fn (_ acc f) (%gcd acc (- f f0))) 0 sorted))
-    (def gaps (List flat-map (fn (_ rs) (if (null? rs) () (List map (fn (_ k) (- (List ref (+ k 1) rs) (List ref k rs))) (List range 0 (- (List length rs) 1))))) rises-of))
+    (Heap collect)
+    (def gaps (List flat-map (fn (_ rs) (if (null? rs) () (%sd-gaps rs))) rises-of))
     (def least (if (null? gaps) 0 (List fold (fn (_ a d) (if (< d a) d a)) (first gaps) gaps)))
     (def fit (if (< 1 g) #f (< 1 least)))
     (def span0 (match ((= g 0) 6) ((not fit) g) (#t (List fold (fn (_ a d) (+ a d)) 0 gaps))))
@@ -684,15 +746,17 @@
     (def rows (int/ (+ (* (- n start) units1) (- span 1)) span))
     (def risen (List map (fn (_ rs)
                            (def at (Vector make rows ()))
+                           (Heap collect)
                            (List for-each (fn (_ f) ((fn (_ r) (when (if (< r rows) (null? (Vector ref r at)) #f) (Vector set! r f at))) (row-of (- f start)))) rs)
                            at)
                  rises-of))
+    (Heap collect)
     (def row-ms (int/ (+ (* span frame-us) (* 500 units1)) (* 1000 units1)))
     (def beat (List find (fn (_ k) ((fn (_ b) (if (< 0 b) (if (< b 1000) (= row-ms (int/ 60000 (* b k))) #f) #f)) (int/ 60000 (* k row-ms))))
                 (list 4 3 6 8 2 5 1)))
     (def rpb (if (null? beat) 1 beat))
     (def bpm (%sd-at-least 1 (int/ 60000 (* rpb row-ms))))
-    (def voices (List map (fn (_ v) (%voice-rows frames n start span units1 rows v frame-us (List ref v risen))) (list 0 1 2)))
+    (def voices (List map (fn (_ v) (%voice-rows frames n start span units1 rows v frame-us (List ref v risen) say)) (list 0 1 2)))
     ; Each voice's instruments named for their wave and voice.
     (def named
       (List fold
@@ -714,8 +778,10 @@
           (List map
             (fn (_ e)
               (def out (Vector make rows "."))
+              (Heap collect)
               ((fn (self r mine)
                  (when (< r rows)
+                   (when (= 0 (int% r 256)) (Heap collect))
                    ((fn (_ c)
                       (match ((str? c) (self (+ r 1) mine))
                              ((null? (first c)) (do (when mine (Vector set! r (rest c) out)) (self (+ r 1) mine)))
@@ -735,12 +801,13 @@
 ; the 6502: answers (A X Y MEMORY), MEMORY a vector of its 65536 bytes.
 (def sid-run
   (fn (_ code load addr)
-    (def m (Vector make 65536 0))
+    (def mem (%memory))
+    (def m (str->ptr mem))
     (List for-each (fn (_ k) (%poke! m (+ load k) (List ref k code))) (List range 0 (List length code)))
     (def c (Vector make 15 0))
     (%w! c 3 255) (%w! c 6 1)
     (%call! c m addr 0 100000)
-    (list (%r c 0) (%r c 1) (%r c 2) m)))
+    (list (%r c 0) (%r c 1) (%r c 2) (Vector from-list (List map (fn (_ a) (%peek m a)) (List range 0 65536))))))
 
 
 (provide tracker/sid sid-song sid-run)

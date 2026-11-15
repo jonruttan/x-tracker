@@ -94,7 +94,7 @@ a tune's 6502 code.
 (write (list (fails (Bytes of-list (list 1 2 3)))
              (fails (spec-midi 2 96 (list (list (list 0 144 60 100)))))
              (fails (spec-midi 0 96 (list (list (list 0 192 5)))))
-             (guard (e (e msg)) (import-song (Bytes of-list (list 80 75 3 4 0 0)) "x" 4 0 1))))
+             (guard (e (e msg)) (import-song (Bytes of-list (list 80 75 3 4 0 0)) "x" 4 0 1 ()))))
 ```
 ---
     ("x-tracker: not a MIDI file" "x-tracker: a MIDI file of format 2 is not imported; 0 and 1 are" "x-tracker: the MIDI file has no notes" "x-tracker: not a file import reads: a MIDI file (.mid) or a SID file (.sid)")
@@ -132,7 +132,7 @@ B4 D5 a frame each, then C5 held.
     (List repeat 6 0x67) (List repeat 6 0xED) (list 0x13 0xDA 0x11 0x13 0xDA 0x11) (List repeat 6 0xCE)
     (List repeat 6 0x11) (List repeat 6 0x15) (list 0x1A 0x20 0x27 0x1A 0x20 0x27) (List repeat 6 0x22)
     (list 0x41 0x41 0x41 0x41 0x40 0x40 0x41 0x41 0x41 0x41 0x40 0x40) (List repeat 12 0x41)))
-(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 tune-code) "chip" 0 1)))
+(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 tune-code) "chip" 0 1 ())))
 ```
 ---
 ```output
@@ -165,7 +165,7 @@ over an arpeggio.
     (table (fn (_ k) (int/ (note k) 256)))
     (table (fn (_ k) (if (List includes? k (list 0 13 27)) 0x21 0x20)))
     (table (fn (_ k) (if (if (< 5 k) (< k 13) #f) 0 (if (if (< 19 k) (< k 27) #f) 0 0xA5))))))
-(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 tail-code) "tail" 0 1)))
+(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 tail-code) "tail" 0 1 ())))
 ```
 ---
 ```output
@@ -196,7 +196,7 @@ again, then a second note.
     (List map (fn (_ p) (int% p 256)) pitches)
     (List map (fn (_ p) (int/ p 256)) pitches)
     (table (fn (_ k) (if (= k 38) 0x40 0x41)))))
-(def vib-song (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 vib-code) "vib" 0 1))
+(def vib-song (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 vib-code) "vib" 0 1 ()))
 (def path (rest (File temp "/tmp/x-tracker-spec-")))
 (def frames (player-render! (player-open () ()) vib-song path))
 (File unlink path)
@@ -229,7 +229,7 @@ again, then a second note.
     (table (fn (_ k) (int% (freq k) 256)))
     (table (fn (_ k) (int/ (freq k) 256)))
     (table (fn (_ k) (match ((= k 11) 0x40) ((= k 12) 0x81) (#t 0x41))))))
-(write (song-patterns (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 drum-code) "drum" 0 1)))
+(write (song-patterns (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 drum-code) "drum" 0 1 ())))
 ```
 ---
     (("p1" ("pulse1" "C4/f88" "E4" "./c2" "." ".")))
@@ -242,8 +242,8 @@ again, then a second note.
     (list 0xA9 0x20 0x8D 0x14 0x03 0xA9 0x10 0x8D 0x15 0x03 0xA9 0x0F 0x8D 0x18 0xD4 0x60) (List repeat 16 0)
     (list 0xA5 0xFB 0xD0 0x16 0xA9 0x67 0x8D 0x00 0xD4 0xA9 0x11 0x8D 0x01 0xD4 0xA9 0x09 0x8D 0x05 0xD4
           0xA9 0x11 0x8D 0x04 0xD4 0xE6 0xFB 0x4C 0x31 0xEA)))
-(write (song-patterns (sid-song (spec-sid "RSID" 0x1000 0x1000 0 irq-code) "irq" 0 1)))
-(write (song-instrument-text (sid-song (spec-sid "RSID" 0x1000 0x1000 0 irq-code) "irq" 0 1) "triangle1"))
+(write (song-patterns (sid-song (spec-sid "RSID" 0x1000 0x1000 0 irq-code) "irq" 0 1 ())))
+(write (song-instrument-text (sid-song (spec-sid "RSID" 0x1000 0x1000 0 irq-code) "irq" 0 1 ()) "triangle1"))
 ```
 ---
     (("p1" ("triangle1" "C4" "." "." "." "." "." "." "." ".")))"(instrument triangle1 (wave triangle) (env (0 0) (2 100) (752 0)) (release 6) (gain 35))"
@@ -251,13 +251,37 @@ again, then a second note.
 ### what is no SID file, a tune it does not have, or one of no notes is refused
 
 ```tracker
-(def fails (fn (_ region tune) (guard (e (e msg)) (sid-song region "x" tune 1) "read")))
+(def fails (fn (_ region tune) (guard (e (e msg)) (sid-song region "x" tune 1 ()) "read")))
 (write (list (fails (Bytes of-list (list 80 83 73 68 0 2)) 0)
              (fails (spec-sid "PSID" 0x1000 0x1000 0x1000 (list 0x60)) 2)
              (fails (spec-sid "PSID" 0x1000 0x1000 0x1000 (list 0x60)) 0)))
 ```
 ---
     ("x-tracker: not a SID file" "x-tracker: the SID file's tunes are 1 to 1" "x-tracker: the SID tune plays no notes")
+
+### a tune's length is HVSC's, by its MD5, from a Songlengths.md5 above the file or in $HVSC_BASE
+
+```tracker
+(import x/codec/md5)
+(def top "/tmp/x-tracker-spec-hvsc")
+(List for-each (fn (_ d) (unless (File exists? d) (File mkdir d)))
+  (list top (Str8 append top "/DOCUMENTS") (Str8 append top "/MUSICIANS")))
+(def sid (spec-write-bytes! (Str8 append top "/MUSICIANS/tune.sid") (spec-sid "PSID" 0x1000 0x1000 0x1000 (list 0x60))))
+(def alone (spec-write-bytes! "/tmp/x-tracker-spec-alone.sid" (import-bytes sid)))
+(def db (Str8 append top "/DOCUMENTS/Songlengths.md5"))
+(def region (import-bytes sid))
+(File write-all db (Str8 append "[Database]\r\n; /OTHER.sid\r\n0123456789abcdef0123456789abcdef=9:59\r\n; /MUSICIANS/tune.sid\r\n"
+                     (Md5 hex-n (first region) (List ref 2 region)) "=0:05.500 1:02\r\n"))
+(Sys setenv "HVSC_BASE" "")
+(def above (list (import-sid-seconds sid region 0) (import-sid-seconds sid region 2) (import-sid-seconds sid region 3)))
+(def lone (import-sid-seconds alone region 0))
+(Sys setenv "HVSC_BASE" top)
+(write (list above lone (import-sid-seconds alone region 0)))
+(List for-each (fn (_ p) (File unlink p)) (list db sid alone))
+(List for-each (fn (_ d) (File rmdir d)) (list (Str8 append top "/DOCUMENTS") (Str8 append top "/MUSICIANS") top))
+```
+---
+    ((6 62 ()) () 6)
 
 ## the command line
 
