@@ -12,7 +12,10 @@
 ; row being heard; while none does, every quarter second to keep the
 ; screen the terminal's size.  x collects its heap only when asked: after
 ; each key and each redraw, which make the most garbage, so that each
-; collect has little to sweep; and every so many rounds between.
+; collect has little to sweep; and every so many rounds between.  Once the
+; first screen is drawn, x/tui/screen's cell loops are compiled
+; (x/tool/fn-compile), where the engine has a JIT: about a second, before
+; the first key is read.
 
 (module tracker/app)
 
@@ -21,6 +24,7 @@
 (import x/sys/gc)
 (import x/repl/term)
 (import x/tui/screen)
+(import x/tool/fn-compile compile-module!)
 (import tracker/edit edit-make edit-quit? edit-player edit-message! edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
 (import tracker/song song-name song-order)
@@ -114,6 +118,8 @@
     (def failed
       (guard (e e)
         (do (%ap-show! st screen)
+            (compile-module! (lit x/tui/screen))
+            (%ap-collect! st)
             (%ap-loop st screen (%ap-reader) 0)
             ())))
     (Term emit 1 (Str8 append (%ap-esc "[0m") (%ap-esc "[?25h") (%ap-esc "[?1049l")))
