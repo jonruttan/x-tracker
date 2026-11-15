@@ -18,20 +18,26 @@
 ; waits on the screen or reads the ROM may play wrong or not at all.
 ;
 ; The frames are then rows.  A row is as many frames as the notes'
-; starts have in common (the frames between them), and a tick a frame,
-; so a cell's effects run at the frame's pace: a note started off the
-; row's first frame is delayed (/d), let go partway is cut (/c), a pitch
-; that steps by semitones from frame to frame inside a row is an
-; arpeggio (/a), and one that moves from row to row is a slide (/s).
-; Each voice and sound is an instrument: its waveform (noise, pulse, saw
-; or triangle, the first of them the voice has on), its pulse width at
-; its first note, its attack, decay, sustain and release as an envelope,
-; and the filter's cut-off when the voice goes through a low-pass.
-; The song is cut into patterns of 64 rows (tracker/score).
+; starts have in common, or where a driver runs a frame late now and
+; then, the time between a voice's notes over how many of the shortest
+; it spans, a note a frame early on its row.  A tick is a frame, so a
+; cell's effects run at the frame's pace: a note started off the row's
+; first frame is delayed (/d).  A note is held through its release and
+; faded (/f) to the level the SID's envelope leaves, each frame's release
+; taking its share, and cut (/c) where it ends: its level spent, a quick
+; release written, or the voice's next note.  Inside a row, a pitch
+; wobbling less than a semitone about its centre is a vibrato (/v),
+; stepping by semitones an arpeggio (/a), and moving by smaller steps or
+; from row to row a slide (/s).  Each voice and sound is an instrument:
+; its waveform (noise, pulse, saw or triangle, the first of them the
+; voice has on), its attack, decay and sustain as an envelope, the
+; filter's cut-off when the voice goes through a low-pass, and its notes'
+; mean pulse width.  The song is cut into patterns of 64 rows (tracker/score).
 
 (module tracker/sid)
 
 (import x/type/vector)
+(import x/sys/gc)
 (import x/core/doors int+ int- int* int/ int% int& int| int<< int>> int< int= obj-ref obj-set! str-byte-ref char->int)
 (import tracker/song song-note-name)
 (import tracker/score score-song)
@@ -275,12 +281,16 @@
 (%ops! (list 28 60 92 124 220 252) %abx (fn (_ c m ea) 0))
 
 ; Instructions run from PC until it is 0, a return to no caller, or
-; LIMIT of them: answers how many.
+; LIMIT of them: answers how many.  An instruction leaves a few hundred
+; objects behind, and x collects only when asked, so the heap is
+; collected every 10000 of them.
 (def %run!
   (fn (_ c m limit)
     ((fn (self n)
        (if (if (int= (%r c 4) 0) #t (not (int< n limit))) n
-         (do ((obj-ref %ops (int+ (%fetch c m) 1)) c m) (self (int+ n 1)))))
+         (do (when (if (int= 0 (int% n 10000)) (int< 0 n) #f) (Heap collect))
+             ((obj-ref %ops (int+ (%fetch c m) 1)) c m)
+             (self (int+ n 1)))))
      0)))
 
 ; The routine at ADDR called with A, as JSR calls, returning to 0.
@@ -305,7 +315,7 @@
 
 ; The SID's registers after a frame: a vector of the 25 from $D400 and
 ; the voices whose gate was written off during it.
-(def %snapshot (fn (_ c m) (Vector from-list (List append (List map (fn (_ k) (%peek m (int+ 0xD400 k))) (List range 0 25)) (list (%r c 11))))))
+(def %snapshot (fn (_ c m n) (Vector from-list (List append (List map (fn (_ k) (%peek m (int+ 0xD400 k))) (List range 0 25)) (list (%r c 11) n)))))
 
 ; The frames of the tune in REGION, TUNE of its tunes (0 for the one it
 ; starts with), SECONDS long: (FRAME-US FRAMES), FRAMES a list of
@@ -352,9 +362,9 @@
     (def frames (int/ (* seconds 1000000) frame-us))
     (list frame-us
       (List map (fn (_ f)
+                  (when (= 0 (int% f 4)) (Heap collect))
                   (%w! c 11 0)
-                  (if (= play 0) (%irq! c m handler kernal 200000) (%call! c m play 0 200000))
-                  (%snapshot c m))
+                  (%snapshot c m (if (= play 0) (%irq! c m handler kernal 200000) (%call! c m play 0 200000))))
         (List range 0 frames)))))
 
 (def %sd-at-least (fn (_ n x) (if (< x n) n x)))
@@ -406,7 +416,58 @@
 (def %attack-ms (list 2 8 16 24 38 56 68 80 100 250 500 800 1000 3000 5000 8000))
 (def %decay-ms (list 6 24 48 72 114 168 204 240 300 750 1500 2400 3000 9000 15000 24000))
 
-; An instrument's props from voice V in frame FR.
+; Whether voice V is heard in frame FR: a wave, and no test bit.
+(def %v-heard? (fn (_ fr v) (if (null? (%v-wave (%v-ctrl fr v))) #f (int= 0 (int& (%v-ctrl fr v) 8)))))
+
+; The tail of the note voice V lets go in frame FALL of the N FRAMES, at
+; US a frame: (STOP PCT), STOP the frame it ends in and PCT its level
+; there.  Each frame's release takes its share of the level, as a driver
+; ends a note early by writing a quick release; the tail ends where its
+; level is spent, at the voice's next note, or where it has no wave.
+(def %sd-tail
+  (fn (_ frames n fall v us)
+    (def rel (fn (_ k) (List ref (int& (Vector ref (int+ (int* v 7) 6) (Vector ref k frames)) 15) %decay-ms)))
+    ((fn (self k level)
+       (if (if (int< k n) (if (%v-heard? (Vector ref k frames) v) (not (%rise? frames k v)) #f) #f)
+         ((fn (_ next) (if (int< 0 next) (self (int+ k 1) next) (list k (int/ level 1000))))
+          (int- level (int/ (int* 100 us) (rel k))))
+         (list k (int/ level 1000))))
+     fall 100000)))
+
+; How PS, the pitches of a row's frames in cents, move: (CENTRE SPREAD
+; CROSSINGS STEPPED PERIOD), CENTRE midway between the highest and the
+; lowest, SPREAD between them, CROSSINGS the frames they pass the centre
+; in, STEPPED whether a frame is a semitone or more from the one before,
+; and PERIOD the frames of a swing there and back, from its crossings.
+(def %sd-swing
+  (fn (_ ps)
+    (def hi (List fold (fn (_ a p) (if (int< a p) p a)) (first ps) ps))
+    (def lo (List fold (fn (_ a p) (if (int< p a) p a)) (first ps) ps))
+    (def centre (int/ (int+ hi lo) 2))
+    ; (K SIDE AT ...): the frame, the side of the centre last seen, each crossing's frame.
+    (def crossed
+      (List fold (fn (_ acc p)
+                   (def was (List ref 1 acc))
+                   (def side (match ((int< p centre) -1) ((int< centre p) 1) (#t was)))
+                   (pair (int+ (first acc) 1) (pair side (if (if (int= 0 was) #t (int= side was)) (rest (rest acc)) (pair (first acc) (rest (rest acc)))))))
+        (list 0 0) ps))
+    (def at (rest (rest crossed)))
+    (def stepped
+      (first (List fold (fn (_ acc p) (pair (if (first acc) #t (not (int< (%sd-dist p (rest acc)) 100))) p))
+               (pair #f (first ps)) ps)))
+    (list centre (int- hi lo) (List length at) stepped
+          (if (int< (List length at) 2) ()
+            (%sd-at-least 2 (int/ (int* 2 (int- (first at) (List ref (int- (List length at) 1) at))) (int- (List length at) 1)))))))
+(def %sd-dist (fn (_ a b) (if (int< a b) (int- b a) (int- a b))))
+
+; Voice V's pulse width in frame FR, a percentage.
+(def %v-width
+  (fn (_ fr v)
+    (%sd-at-least 1 (int/ (int* (int| (Vector ref (int+ (int* v 7) 2) fr) (int<< (int& (Vector ref (int+ (int* v 7) 3) fr) 15) 8)) 100) 4096))))
+
+; An instrument's props from voice V in frame FR, but for a pulse's
+; width, which is its notes' mean.  Its release is the SID's quickest: a
+; note's tail is in its cells, a fade to its end.
 (def %sd-props
   (fn (_ fr v)
     (def ctrl (%v-ctrl fr v))
@@ -415,76 +476,116 @@
     (def wave (%v-wave ctrl))
     (def a (List ref (int>> ad 4) %attack-ms))
     (def d (List ref (int& ad 15) %decay-ms))
-    (def pw (int| (Vector ref (int+ (int* v 7) 2) fr) (int<< (int& (Vector ref (int+ (int* v 7) 3) fr) 15) 8)))
     (def lowpass (if (int< 0 (int& (Vector ref 23 fr) (int<< 1 v))) (int< 0 (int& (Vector ref 24 fr) 16)) #f))
     (def cutoff (int| (int& (Vector ref 21 fr) 7) (int<< (Vector ref 22 fr) 3)))
     (Str8 append "(wave " (if (str=? wave "noise") "noise" wave) ")"
-      (if (str=? wave "pulse") (Str8 append " (width (0 " (Str8 str (%sd-at-least 1 (int/ (int* (int& pw 4095) 100) 4096))) "))") "")
       " (env (0 0) (" (Str8 str a) " 100) (" (Str8 str (int+ a d)) " " (Str8 str (int/ (int* (int>> sr 4) 100) 15)) "))"
-      " (release " (Str8 str (List ref (int& sr 15) %decay-ms)) ")"
+      " (release " (Str8 str (first %decay-ms)) ")"
       (if lowpass (Str8 append " (cut " (Str8 str (int+ 5 (int/ (int* cutoff 95) 2047))) ")") ""))))
 
-; The rows of voice V: (CELLS INSTRUMENTS) for frames F0, F0 + PER, ...,
+; The rows of voice V: (CELLS INSTRUMENTS), row R from frame START + R *
+; SPAN / UNITS, RISEN the frame each row's note starts in or nil,
 ; INSTRUMENTS the props of each note's in the order first heard, each
-; cell's note named by its index among them as (INDEX . CELL).
+; cell's note named by its index among them as (INDEX . CELL).  A note
+; is held through its tail and faded over it.
 (def %voice-rows
-  (fn (_ frames n f0 per rows v)
+  (fn (_ frames n start span units rows v us risen)
     (def cells (Vector make rows "."))
-    (def props (Vector make 1 ()))
+    ; The props of each instrument, and the widths of its notes, latest first.
+    (def props (Vector make 2 ()))
     (def inst-of
-      (fn (_ p) ((fn (_ i) (if (null? i) (do (Vector set! 0 (List append (Vector ref 0 props) (list p)) props) (int- (List length (Vector ref 0 props)) 1)) i))
-                 (List index-of p (Vector ref 0 props)))))
+      (fn (_ p w)
+        (def i ((fn (_ i) (if (null? i) (do (Vector set! 0 (List append (Vector ref 0 props) (list p)) props)
+                                           (Vector set! 1 (List append (Vector ref 1 props) (list ())) props)
+                                           (int- (List length (Vector ref 0 props)) 1))
+                              i))
+                (List index-of p (Vector ref 0 props))))
+        (Vector set! 1 (List map (fn (_ k) ((fn (_ ws) (if (int= k i) (pair w ws) ws)) (List ref k (Vector ref 1 props))))
+                         (List range 0 (List length (Vector ref 1 props))))
+          props)
+        i))
+    (def pulse "(wave pulse)")
+    (def text
+      (fn (_ p ws)
+        (if (if (int< 11 (str-byte-len p)) (str=? (Str8 sub 0 12 p) pulse) #f)
+          (Str8 append pulse " (width (0 " (Str8 str (int/ (List fold (fn (_ a w) (int+ a w)) 0 ws) (List length ws))) "))"
+                       (Str8 sub 12 (int- (str-byte-len p) 12) p))
+          p)))
     (def pitch (fn (_ f) (%cents (%v-freq (Vector ref f frames) v))))
-    ; Per row: whether a note sounds, its base in cents, its pitch with its
-    ; slides, the arpeggio playing, and whether the last row slid.
-    ((fn (self r on base at arp slid)
+    ; Per row: whether a note sounds, the frame its tail ends in once let
+    ; go, its base in cents, its pitch with its slides, the arpeggio
+    ; playing, whether the last row slid, and the note's vibrato.
+    ((fn (self r on stop0 base at arp slid vib0)
        (when (int< r rows)
-         (do (def f (int+ f0 (int* r per)))
-             (def fs (List filter (fn (_ k) (int< k n)) (List range f (int+ f per))))
-             (def rise (List find (fn (_ k) (%rise? frames k v)) fs))
-             (def p0 (if (null? rise) () (pitch rise)))
-             (def struck (not (null? p0)))
-             (def sounding (if struck #t (if (null? rise) on #f)))
-             ; The frames the note is heard in: from its start to its gate off.
+         (do (when (int= 0 (int% r 8)) (Heap collect))
+             (def f (int+ start (int/ (int* r span) units)))
+             (def f1 (int+ start (int/ (int* (int+ r 1) span) units)))
+             (def fs (List filter (fn (_ k) (if (int< k n) (not (int< k 0)) #f)) (List range f f1)))
+             (def rise (Vector ref r risen))
+             (def struck (not (null? rise)))
+             (def held (if struck #t on))
              (def from (List filter (fn (_ k) (if struck (not (int< k rise)) #t)) fs))
-             (def fall (if sounding (List find (fn (_ k) (int= 0 (%v-gate (Vector ref k frames) v))) from) ()))
-             (def heard (if (null? fall) from (List filter (fn (_ k) (int< k fall)) from)))
-             (def cut (if (null? fall) "" (Str8 append "/c" (Str8 str (int- fall f)))))
+             (def fall (if (if held (if struck #t (null? stop0)) #f) (List find (fn (_ k) (int= 0 (%v-gate (Vector ref k frames) v))) from) ()))
+             (def tail (if (null? fall) () (%sd-tail frames n fall v us)))
+             (def stop (if (null? fall) (if struck () stop0) (first tail)))
+             (def end (if (null? stop) () (if (int< stop f1) stop ())))
+             (def heard (if (null? end) from (List filter (fn (_ k) (int< k end)) from)))
+             ; The row's motion: a wobble of less than a semitone either way is a
+             ; vibrato, started where it first crosses its centre twice; small
+             ; steps are a slide, and steps of a semitone or more an arpeggio.
+             (def ps (List filter (fn (_ p) (not (null? p))) (List map pitch heard)))
+             (def swing (if (null? ps) () (%sd-swing ps)))
+             (def was-vib (if struck #f vib0))
+             (def wobbles (if (null? swing) #f (if (int< (List ref 1 swing) 200) (if (int< 10 (List ref 1 swing)) (not (List ref 3 swing)) #f) #f)))
+             (def vib (if wobbles (if was-vib #t (int< 1 (List ref 2 swing))) #f))
+             (def vib-fx (match ((if vib (not was-vib) #f)
+                                 (Str8 append "/v" (Str8 str (int/ (List ref 1 swing) 2)) ","
+                                   (Str8 str (List ref 4 swing))))
+                                ((if was-vib (not vib) #f) "/v")
+                                (#t "")))
+             (def p-note (if struck (if vib (first swing) (pitch rise)) ()))
+             (def fade (if (null? fall) "" (if (if (int< fall stop) (int< (List ref 1 tail) 100) #f) (Str8 append "/f" (Str8 str (List ref 1 tail))) "")))
+             (def cut (if (null? end) "" (if (if (not struck) (int= end f) #f) "" (Str8 append "/c" (Str8 str (int- end f))))))
              (def head
                (match (struck
-                        (Str8 append (song-note-name (int/ (int+ p0 50) 100)) (if (int= rise f) "" (Str8 append "/d" (Str8 str (int- rise f)))) cut))
-                      ((null? fall) ".")
-                      ((int= fall f) "-")
-                      (#t (Str8 append "." cut))))
-             (def now-on (if sounding (null? fall) #f))
-             (def now-base (if struck (int* 100 (int/ (int+ p0 50) 100)) base))
+                        (Str8 append (song-note-name (int/ (int+ p-note 50) 100)) (if (int< f rise) (Str8 append "/d" (Str8 str (int- rise f))) "") fade cut))
+                      ((not held) ".")
+                      ((if (null? end) #f (int= end f)) "-")
+                      (#t (Str8 append "." fade cut))))
+             (def now-on (if held (null? end) #f))
+             (def now-base (if struck (int* 100 (int/ (int+ p-note 50) 100)) base))
              (def now-at (if struck now-base at))
              (def was-arp (if struck () arp))
              (def was-slid (if struck #f slid))
+             (def playing (if held (not (null? heard)) #f))
              ; The pitches of the row's frames, in semitones from the note's base.
-             (def steps (if now-on (List map (fn (_ k) ((fn (_ p) (if (null? p) 0 (int/ (int+ (int- p now-base) 1250) 100))) (pitch k))) heard) ()))
+             (def steps (if playing (List map (fn (_ k) ((fn (_ p) (if (null? p) 0 (int/ (int+ (int- p now-base) 1250) 100))) (pitch k))) heard) ()))
              (def offsets (List map (fn (_ s) (int- s 12)) steps))
-             (def arpeggio (if (List any? (fn (_ o) (not (int= o (first offsets)))) offsets)
+             (def arpeggio (if (if (if vib #f (if (null? swing) #f (List ref 3 swing))) (List any? (fn (_ o) (not (int= o (first offsets)))) offsets) #f)
                              (List filter (fn (_ o) (not (int= o 0))) (List fold (fn (_ acc o) (if (List includes? o acc) acc (List append acc (list o)))) () offsets))
                              ()))
-             (def next-p (if (int< (int+ f per) n) (pitch (int+ f per)) ()))
-             (def slide (if (if now-on (if (null? arpeggio) (if (null? next-p) #f (not (int= 0 (%v-gate (Vector ref (int+ f per) frames) v)))) #f) #f)
+             (def f2 (int+ start (int/ (int* (int+ r 2) span) units)))
+             (def next-ps (List filter (fn (_ p) (not (null? p))) (List map pitch (List filter (fn (_ k) (if (int< k n) (if (null? stop) #t (int< k stop)) #f)) (List range f1 f2)))))
+             (def next-p (if (null? next-ps) () (first (%sd-swing next-ps))))
+             (def slide (if (if now-on (if (null? arpeggio) (if (null? next-p) #f (not (%rise? frames f1 v))) #f) #f)
                           ((fn (_ d) (if (int< (if (int< d 0) (int- 0 d) d) 10) 0 d)) (int- next-p now-at))
                           0))
              (def fx
                (Str8 append
-                 (match ((not now-on) "")
+                 vib-fx
+                 (match ((not playing) "")
                         ((not (null? arpeggio)) (if (equal? arpeggio was-arp) "" (Str8 append "/a" (Str8 join "," (List map (fn (_ o) (Str8 str o)) arpeggio)))))
                         ((null? was-arp) "")
                         (#t "/a"))
                  (match ((not now-on) "") ((not (int= slide 0)) (Str8 append "/s" (Str8 str slide))) (was-slid "/s0") (#t ""))))
              (unless (if (str=? head ".") (str=? fx "") #f)
                (Vector set! r (if (not struck) (pair () (Str8 append head fx))
-                                (pair (inst-of (%sd-props (Vector ref rise frames) v)) (Str8 append head fx)))
+                                (pair (inst-of (%sd-props (Vector ref rise frames) v) (%v-width (Vector ref rise frames) v)) (Str8 append head fx)))
                  cells))
-             (self (int+ r 1) now-on now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0))))))
-     0 #f 0 0 () #f)
-    (list cells (Vector ref 0 props))))
+             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib #f)))))
+     0 #f () 0 0 () #f #f)
+    (list cells (List map (fn (_ k) (text (List ref k (Vector ref 0 props)) (List ref k (Vector ref 1 props))))
+                      (List range 0 (List length (Vector ref 0 props)))))))
 
 ; The song a SID file makes: REGION (BUF START LEN) its bytes, NAME the
 ; song's name, TUNE which of its tunes (0 the one it starts with),
@@ -496,21 +597,40 @@
     (def frame-us (first played))
     (def frames (Vector from-list (List ref 1 played)))
     (def n (Vector length frames))
-    (def rises (List flat-map (fn (_ v) (List filter (fn (_ f) (%rise? frames f v)) (List range 0 n))) (list 0 1 2)))
+    (def rises-of (List map (fn (_ v) (List filter (fn (_ f) (%rise? frames f v)) (List range 0 n))) (list 0 1 2)))
+    (def rises (List flat-map (fn (_ rs) rs) rises-of))
     (when (null? rises) (%sd-fail "the SID tune plays no notes"))
     (def sorted (List sort < rises))
     (def f0 (first sorted))
+    ; The row: SPAN frames to UNITS rows.  Where the notes start a whole
+    ; number of frames apart it is what they have in common; where a
+    ; driver's frames come a frame late now and then, it is the time
+    ; between a voice's notes over how many of the shortest it spans.
     (def g (List fold (fn (_ acc f) (%gcd acc (- f f0))) 0 sorted))
-    (def per0 (if (= g 0) 6 g))
-    (def per (List find (fn (_ d) (= 0 (int% per0 d))) (List reverse (List range 1 (+ 1 (if (< per0 16) per0 16))))))
-    (def start (int% f0 per))
-    (def rows (int/ (+ (- n start) (- per 1)) per))
-    (def row-ms (int/ (+ (* per frame-us) 500) 1000))
+    (def gaps (List flat-map (fn (_ rs) (if (null? rs) () (List map (fn (_ k) (- (List ref (+ k 1) rs) (List ref k rs))) (List range 0 (- (List length rs) 1))))) rises-of))
+    (def least (if (null? gaps) 0 (List fold (fn (_ a d) (if (< d a) d a)) (first gaps) gaps)))
+    (def fit (if (< 1 g) #f (< 1 least)))
+    (def span0 (match ((= g 0) 6) ((not fit) g) (#t (List fold (fn (_ a d) (+ a d)) 0 gaps))))
+    (def units0 (if fit (List fold (fn (_ acc d) (+ acc (int/ (+ d (int/ least 2)) least))) 0 gaps) 1))
+    (def units (* units0 (int/ (+ span0 (- (* 16 units0) 1)) (* 16 units0))))
+    (def span (if fit span0 (List find (fn (_ d) (= 0 (int% span0 d))) (List reverse (List range 1 (+ 1 (if (< span0 16) span0 16)))))))
+    (def units1 (if fit units 1))
+    (def per (%sd-at-least 1 (int/ (+ span (int/ units1 2)) units1)))
+    ; A note a frame early is on its row.
+    (def row-of (fn (_ f) (int/ (* (if fit (+ f 1) f) units1) span)))
+    (def start ((fn (_ k) (- f0 (int/ (* k span) units1))) (row-of f0)))
+    (def rows (int/ (+ (* (- n start) units1) (- span 1)) span))
+    (def risen (List map (fn (_ rs)
+                           (def at (Vector make rows ()))
+                           (List for-each (fn (_ f) ((fn (_ r) (when (if (< r rows) (null? (Vector ref r at)) #f) (Vector set! r f at))) (row-of (- f start)))) rs)
+                           at)
+                 rises-of))
+    (def row-ms (int/ (+ (* span frame-us) (* 500 units1)) (* 1000 units1)))
     (def beat (List find (fn (_ k) ((fn (_ b) (if (< 0 b) (if (< b 1000) (= row-ms (int/ 60000 (* b k))) #f) #f)) (int/ 60000 (* k row-ms))))
                 (list 4 3 6 8 2 5 1)))
     (def rpb (if (null? beat) 1 beat))
     (def bpm (%sd-at-least 1 (int/ 60000 (* rpb row-ms))))
-    (def voices (List map (fn (_ v) (%voice-rows frames n start per rows v)) (list 0 1 2)))
+    (def voices (List map (fn (_ v) (%voice-rows frames n start span units1 rows v frame-us (List ref v risen))) (list 0 1 2)))
     ; Each voice's instruments named for their wave and voice.
     (def named
       (List fold
@@ -559,5 +679,6 @@
     (%w! c 3 255) (%w! c 6 1)
     (%call! c m addr 0 100000)
     (list (%r c 0) (%r c 1) (%r c 2) m)))
+
 
 (provide tracker/sid sid-song sid-run)

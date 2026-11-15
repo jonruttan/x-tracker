@@ -138,9 +138,42 @@ B4 D5 a frame each, then C5 held.
 ```output
 (song "chip" (bpm 125) (rows 4) (ticks 6)
   (limit 90 120)
-  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 168) (gain 35))
+  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
   (pattern p1
-    (pulse1 "C4/c4 E4/c4 G4/a4,7 ./a/s500 ./s0 .  .  .  ."))
+    (pulse1 "C4/f76 E4/f76 G4/a4,7 ./a/s500 ./s0 .  .  .  ."))
+  (order p1))
+```
+
+
+### a note's tail is held and faded to the level its release leaves, cut where the driver ends it, its arpeggio heard
+
+Three notes, a frame's gate each, 13 and 14 frames apart as a driver
+that runs a frame late now and then plays them: the first two have their
+release ended by a quick one written six frames on, the third rings out
+over an arpeggio.
+
+```tracker
+(def table (fn (_ f) (List map f (List range 0 40))))
+(def note (fn (_ k) (match ((< k 13) 0x1167) ((< k 27) 0x15ED) ((= 0 (int% (- k 27) 2)) 0x1A13) (#t 0x22CE))))
+(def tail-code
+  (List append
+    (list 0xA9 0x0F 0x8D 0x18 0xD4 0xA9 0x00 0x85 0xFB 0xA9 0x00 0x8D 0x02 0xD4 0xA9 0x08 0x8D 0x03 0xD4
+          0xA9 0x09 0x8D 0x05 0xD4 0xA9 0xA5 0x8D 0x06 0xD4 0x60 0 0)
+    (list 0xA6 0xFB 0xE0 40 0xB0 0x1B 0xBD 0x48 0x10 0x8D 0x00 0xD4 0xBD 0x70 0x10 0x8D 0x01 0xD4
+          0xBD 0x98 0x10 0x8D 0x04 0xD4 0xBD 0xC0 0x10 0x8D 0x06 0xD4 0xE6 0xFB 0x60 0x60 0 0 0 0 0 0)
+    (table (fn (_ k) (int% (note k) 256)))
+    (table (fn (_ k) (int/ (note k) 256)))
+    (table (fn (_ k) (if (List includes? k (list 0 13 27)) 0x21 0x20)))
+    (table (fn (_ k) (if (if (< 5 k) (< k 13) #f) 0 (if (if (< 19 k) (< k 27) #f) 0 0xA5))))))
+(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 tail-code) "tail" 0 1)))
+```
+---
+```output
+(song "tail" (bpm 74) (rows 3) (ticks 14)
+  (limit 90 120)
+  (instrument saw1 (wave saw) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
+  (pattern p1
+    (saw1 "C4/f40/c6 E4/f28/c7 G4/f4/c9/a5 ."))
   (order p1))
 ```
 
