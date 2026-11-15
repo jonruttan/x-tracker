@@ -187,11 +187,16 @@ run: a 6502 in x-lang starts the tune (`-u N`, or the one it starts
 with) and calls it each frame for `-t SECS` (60), and each frame the
 SID's three voices are taken down: frequency, waveform, pulse width,
 envelope, gate and filter.  A row is as many frames as the notes are
-apart, and a tick a frame, so a note started or let go inside a row is
-delayed (`/d`) or cut (`/c`), a pitch stepping by semitones from frame
-to frame is an arpeggio (`/a`), and one moving from row to row a slide
-(`/s`).  Each voice and sound (waveform, envelope, pulse width, filter)
-is an instrument, `pulse1`, `saw2` and so on.  Only the CPU and the SID
+apart (where a driver runs a frame late now and then, their time apart
+on average), and a tick a frame, so a note started inside a row is
+delayed (`/d`).  A note is held through its release and faded (`/f`) to
+the level the SID's envelope leaves, then cut (`/c`) where it ends,
+which is where a driver writes a quick release or the voice's next note
+starts.  A pitch wobbling less than a semitone is a vibrato (`/v`),
+one stepping by semitones from frame to frame an arpeggio (`/a`), and
+one gliding or moving from row to row a slide (`/s`).  Each voice and
+sound (waveform, envelope, filter) is an instrument, `pulse1`, `saw2`
+and so on, a pulse's width its notes' mean.  Only the CPU and the SID
 are there, no screen and no ROM, so a tune that waits on the screen may
 not play.
 
