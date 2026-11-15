@@ -381,12 +381,15 @@
 (def %cents
   (fn (_ f)
     (if (int< f 1) ()
-      ((fn (self s)
-         (if (if (int= s 95) #t (int< f (Vector ref (int+ s 1) %pitches)))
-           ((fn (_ lo hi) (int+ (int* s 100) (if (int< f lo) 0 (int/ (int* 100 (int- f lo)) (int- hi lo)))))
-            (Vector ref s %pitches) (Vector ref (if (int= s 95) 95 (int+ s 1)) %pitches))
-           (self (int+ s 1))))
-       0))))
+      ; S, the highest semitone not above F (C0 below it), by halves of LO to HI.
+      ((fn (_ s)
+         ((fn (_ lo hi) (int+ (int* s 100) (if (if (int< f lo) #t (int= hi lo)) 0 (int/ (int* 100 (int- f lo)) (int- hi lo)))))
+          (Vector ref s %pitches) (Vector ref (if (int= s 95) 95 (int+ s 1)) %pitches)))
+       ((fn (self lo hi)
+          (if (int= lo hi) lo
+            ((fn (_ mid) (if (int< f (Vector ref mid %pitches)) (self lo (int- mid 1)) (self mid hi)))
+             (int/ (int+ (int+ lo hi) 1) 2))))
+        0 95)))))
 
 ; --- frames to rows --------------------------------------------------------------
 
@@ -465,6 +468,14 @@
 (def %sd-wobbles?
   (fn (_ swing) (if (null? swing) #f (if (int< (List ref 1 swing) 200) (if (int< 10 (List ref 1 swing)) (not (List ref 3 swing)) #f) #f))))
 
+; The shortest period OS repeats with, seen at least twice, or nil.
+(def %sd-cycle
+  (fn (_ os)
+    (def len (List length os))
+    (def v (Vector from-list os))
+    (List find (fn (_ p) (List all? (fn (_ i) (int= (Vector ref i v) (Vector ref (int+ i p) v))) (List range 0 (int- len p))))
+      (List range 1 (int+ 1 (int/ len 2))))))
+
 ; Voice V's pulse width in frame FR, a percentage.
 (def %v-width
   (fn (_ fr v)
@@ -516,17 +527,39 @@
           (Str8 append pulse " (width (0 " (Str8 str (int/ (List fold (fn (_ a w) (int+ a w)) 0 ws) (List length ws))) "))"
                        (Str8 sub 12 (int- (str-byte-len p) 12) p))
           p)))
-    (def pitch (fn (_ f) (%cents (%v-freq (Vector ref f frames) v))))
+    ; Each frame's pitch, found once: -1 until it is.
+    (def pitches (Vector make n -1))
+    (def pitch (fn (_ f) ((fn (_ p) (if (if (null? p) #f (int= p -1)) ((fn (_ c) (Vector set! f c pitches) c) (%cents (%v-freq (Vector ref f frames) v))) p))
+                          (Vector ref f pitches))))
     ; Per row: whether a note sounds, the frame its tail ends in once let
     ; go, its base in cents, its pitch with its slides, the arpeggio
-    ; playing, whether the last row slid, and its vibrato's period or #f.
-    ((fn (self r on stop0 base at arp slid vib0)
+    ; playing, whether the last row slid, its vibrato's period or #f, the
+    ; frame it started in, and whether it is noise.
+    (def noise? (fn (_ k) (equal? (%v-wave (%v-ctrl (Vector ref k frames) v)) "noise")))
+    ; The frames from A to B of the note started in NR, noise or not as
+    ; NOISY: up to its next note, and to STP when it is known.
+    (def note-frames
+      (fn (_ a b stp nr noisy)
+        (List filter (fn (_ k) (if (null? stp) #t (int< k stp)))
+          ((fn (self k acc)
+             (if (if (int< k b) (if (int< k n) (if (int< nr k) (not (%rise? frames k v)) #t) #f) #f)
+               (self (int+ k 1) (if (if (int< k 0) #t (if (int< k nr) #t (not (equal? noisy (noise? k))))) acc (pair k acc)))
+               (List reverse acc)))
+           a ()))))
+    ((fn (self r on stop0 base at arp slid vib0 nrise0 nnoise0)
        (when (int< r rows)
          (do (when (int= 0 (int% r 8)) (Heap collect))
              (def f (int+ start (int/ (int* r span) units)))
              (def f1 (int+ start (int/ (int* (int+ r 1) span) units)))
              (def fs (List filter (fn (_ k) (if (int< k n) (not (int< k 0)) #f)) (List range f f1)))
-             (def rise (Vector ref r risen))
+             ; A note's pitch and sound are its first frame's with a frequency and
+             ; a tone: a driver may open the gate before it sets one, or strike a
+             ; drum with a frame of noise.  A note of noise alone is noise, and one
+             ; with no frequency is not struck.
+             (def rise0 (Vector ref r risen))
+             (def seen (if (null? rise0) () (List filter (fn (_ k) (not (null? (pitch k)))) (List range rise0 (if (int< (int+ f1 span) n) (int+ f1 span) n)))))
+             (def tone ((fn (_ t) (if (null? t) (if (null? seen) () (first seen)) t)) (List find (fn (_ k) (not (noise? k))) seen)))
+             (def rise (if (null? tone) () rise0))
              (def struck (not (null? rise)))
              (def held (if struck #t on))
              (def from (List filter (fn (_ k) (if struck (not (int< k rise)) #t)) fs))
@@ -534,23 +567,38 @@
              (def tail (if (null? fall) () (%sd-tail frames n fall v us)))
              (def stop (if (null? fall) (if struck () stop0) (first tail)))
              (def end (if (null? stop) () (if (int< stop f1) stop ())))
-             (def heard (if (null? end) from (List filter (fn (_ k) (int< k end)) from)))
+             (def nrise (if struck rise nrise0))
+             (def nnoise (if struck (noise? tone) nnoise0))
+             ; A tone's pitch is not taken from its frames of noise, a drum's
+             ; strike, whose frequency is no note.
+             (def heard (List filter (fn (_ k) (if nnoise #t (not (noise? k)))) (if (null? end) from (List filter (fn (_ k) (int< k end)) from))))
              ; The row's motion: a wobble of less than a semitone either way is a
-             ; vibrato, started where it first crosses its centre twice; small
-             ; steps are a slide, and steps of a semitone or more an arpeggio.
+             ; vibrato, started where it first crosses its centre twice, found
+             ; over the row and a row either side of the note's; small steps are
+             ; a slide, and steps of a semitone or more an arpeggio.
              (def ps (List filter (fn (_ p) (not (null? p))) (List map pitch heard)))
              (def swing (if (null? ps) () (%sd-swing ps)))
+             (def w (int- f1 f))
+             (def around (fn (_ a b) ((fn (_ qs) (if (null? qs) () (%sd-swing qs)))
+                                      (List filter (fn (_ p) (not (null? p))) (List map pitch (note-frames (int- a w) (int+ b w) stop nrise nnoise))))))
+             ; The row's own motion where it wobbles across its centre twice; else,
+             ; where it has no step of a semitone, that of the wider frames.
+             (def motion (fn (_ sw a b) (match ((null? sw) ())
+                                              ((if (%sd-wobbles? sw) (int< 1 (List ref 2 sw)) #f) sw)
+                                              ((List ref 3 sw) sw)
+                                              (#t (around a b)))))
+             (def wide (if held (motion swing f f1) ()))
              (def was-vib (if struck #f vib0))
-             (def wobbles (%sd-wobbles? swing))
-             (def vib (if wobbles (if was-vib #t (int< 1 (List ref 2 swing))) #f))
+             (def wobbles (%sd-wobbles? wide))
+             (def vib (if wobbles (if was-vib #t (int< 1 (List ref 2 wide))) #f))
              ; The vibrato's period, kept to end it with: a vibrato of no depth.
-             (def vib-per (if vib (if was-vib was-vib (List ref 4 swing)) #f))
+             (def vib-per (if vib (if was-vib was-vib (List ref 4 wide)) #f))
              (def vib-fx (match ((if vib (not was-vib) #f)
-                                 (Str8 append "/v" (Str8 str (int/ (List ref 1 swing) 2)) ","
-                                   (Str8 str (List ref 4 swing))))
+                                 (Str8 append "/v" (Str8 str (int/ (List ref 1 wide) 2)) ","
+                                   (Str8 str (List ref 4 wide))))
                                 ((if was-vib (not vib) #f) (Str8 append "/v0," (Str8 str was-vib)))
                                 (#t "")))
-             (def p-note (if struck (if vib (first swing) (pitch rise)) ()))
+             (def p-note (if struck (if vib (first wide) (pitch tone)) ()))
              (def fade (if (null? fall) "" (if (if (int< fall stop) (int< (List ref 1 tail) 100) #f) (Str8 append "/f" (Str8 str (List ref 1 tail))) "")))
              (def cut (if (null? end) "" (if (if (not struck) (int= end f) #f) "" (Str8 append "/c" (Str8 str (int- end f))))))
              (def head
@@ -568,16 +616,21 @@
              ; The pitches of the row's frames, in semitones from the note's base.
              (def steps (if playing (List map (fn (_ k) ((fn (_ p) (if (null? p) 0 (int/ (int+ (int- p now-base) 1250) 100))) (pitch k))) heard) ()))
              (def offsets (List map (fn (_ s) (int- s 12)) steps))
+             ; An arpeggio repeats, or is a chord of the note and at most two more,
+             ; as a tracker's is; steps that do neither are a slide.
+             (def distinct (fn (_ os) (List filter (fn (_ o) (not (int= o 0))) (List fold (fn (_ acc o) (if (List includes? o acc) acc (List append acc (list o)))) () os))))
+             (def cycle (%sd-cycle offsets))
+             (def chord (if (null? cycle) (if (int< (List length (distinct offsets)) 3) (distinct offsets) ()) (distinct (List take cycle offsets))))
              (def arpeggio (if (if (if vib #f (if (null? swing) #f (List ref 3 swing))) (List any? (fn (_ o) (not (int= o (first offsets)))) offsets) #f)
-                             (List filter (fn (_ o) (not (int= o 0))) (List fold (fn (_ acc o) (if (List includes? o acc) acc (List append acc (list o)))) () offsets))
+                             chord
                              ()))
              (def f2 (int+ start (int/ (int* (int+ r 2) span) units)))
-             (def next-ps (List filter (fn (_ p) (not (null? p))) (List map pitch (List filter (fn (_ k) (if (int< k n) (if (null? stop) #t (int< k stop)) #f)) (List range f1 f2)))))
-             ; The pitch slid to: the next row's centre where it wobbles, else its start.
-             (def next-swing (if (null? next-ps) () (%sd-swing next-ps)))
+             (def next-ps (List filter (fn (_ p) (not (null? p))) (List map pitch (note-frames f1 f2 stop nrise nnoise))))
+             (def next-swing (if (null? next-ps) () (motion (%sd-swing next-ps) f1 f2)))
              (def next-p (if (null? next-ps) () (if (%sd-wobbles? next-swing) (first next-swing) (first next-ps))))
              (def slide (if (if now-on (if (null? arpeggio) (if (null? next-p) #f (not (%rise? frames f1 v))) #f) #f)
-                          ((fn (_ d) (if (int< (if (int< d 0) (int- 0 d) d) 10) 0 d)) (int- next-p now-at))
+                          ; Under a vibrato a move no wider than its swing is the swing.
+                          ((fn (_ d) (if (int< (%sd-dist d 0) (if vib (%sd-at-least 10 (List ref 1 wide)) 10)) 0 d)) (int- next-p now-at))
                           0))
              (def fx
                (Str8 append
@@ -589,10 +642,10 @@
                  (match ((not now-on) "") ((not (int= slide 0)) (Str8 append "/s" (Str8 str slide))) (was-slid "/s0") (#t ""))))
              (unless (if (str=? head ".") (str=? fx "") #f)
                (Vector set! r (if (not struck) (pair () (Str8 append head fx))
-                                (pair (inst-of (%sd-props (Vector ref rise frames) v) (%v-width (Vector ref rise frames) v)) (Str8 append head fx)))
+                                (pair (inst-of (%sd-props (Vector ref tone frames) v) (%v-width (Vector ref tone frames) v)) (Str8 append head fx)))
                  cells))
-             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f)))))
-     0 #f () 0 0 () #f #f)
+             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f) nrise nnoise))))
+     0 #f () 0 0 () #f #f 0 #f)
     (list cells (List map (fn (_ k) (text (List ref k (Vector ref 0 props)) (List ref k (Vector ref 1 props))))
                       (List range 0 (List length (Vector ref 0 props)))))))
 

@@ -209,10 +209,30 @@ again, then a second note.
   (limit 90 120)
   (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
   (pattern p1
-    (pulse1 "C4/v29,6/s-32 ./v0,6/s-369 ./f88/v29,6/s0 G#3"))
+    (pulse1 "C4/v29,6 ./v0,6/s-401 ./f88/v29,6/s0 G#3"))
   (order p1))
 #t
 ```
+
+
+### a note gated before its frequency is set takes its pitch from the next frame, and a drum's frame of noise is no pitch of a tone
+
+```tracker
+(def table (fn (_ f) (List map f (List range 0 24))))
+(def freq (fn (_ k) (match ((= k 0) 0) ((< k 12) 0x1167) ((= k 12) 0xFFFF) (#t 0x15ED))))
+(def drum-code
+  (List append
+    (list 0xA9 0x0F 0x8D 0x18 0xD4 0xA9 0x00 0x85 0xFB 0xA9 0x00 0x8D 0x02 0xD4 0xA9 0x08 0x8D 0x03 0xD4
+          0xA9 0x09 0x8D 0x05 0xD4 0xA9 0xA5 0x8D 0x06 0xD4 0x60 0 0)
+    (list 0xA6 0xFB 0xE0 0x18 0xB0 0x15 0xBD 0x40 0x10 0x8D 0x00 0xD4 0xBD 0x58 0x10 0x8D 0x01 0xD4
+          0xBD 0x70 0x10 0x8D 0x04 0xD4 0xE6 0xFB 0x60 0x60 0 0)
+    (table (fn (_ k) (int% (freq k) 256)))
+    (table (fn (_ k) (int/ (freq k) 256)))
+    (table (fn (_ k) (match ((= k 11) 0x40) ((= k 12) 0x81) (#t 0x41))))))
+(write (song-patterns (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 drum-code) "drum" 0 1)))
+```
+---
+    (("p1" ("pulse1" "C4/f88" "E4" "./c2" "." ".")))
 
 ### a tune with no frame's call has its interrupt's handler called, ended through the KERNAL's
 
