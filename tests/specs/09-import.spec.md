@@ -177,6 +177,43 @@ over an arpeggio.
   (order p1))
 ```
 
+
+### a wobble of less than a semitone is a vibrato, a glide a slide, and the song plays
+
+One note held: a vibrato, a glide down four semitones, the vibrato
+again, then a second note.
+
+```tracker
+(def table (fn (_ f) (List map f (List range 0 40))))
+(def pitches (list 4455 4491 4530 4491 4455 4419 4381 4419 4455 4491 4530 4491 4455 4377 4299 4224 4149 4076 4004 3934
+                   3865 3796 3730 3664 3599 3536 3536 3565 3596 3565 3536 3507 3477 3507 3536 3565 3596 3565 3536 3507))
+(def vib-code
+  (List append
+    (list 0xA9 0x0F 0x8D 0x18 0xD4 0xA9 0x00 0x85 0xFB 0xA9 0x00 0x8D 0x02 0xD4 0xA9 0x08 0x8D 0x03 0xD4
+          0xA9 0x09 0x8D 0x05 0xD4 0xA9 0xA5 0x8D 0x06 0xD4 0x60 0 0)
+    (list 0xA6 0xFB 0xE0 40 0xB0 0x15 0xBD 0x40 0x10 0x8D 0x00 0xD4 0xBD 0x68 0x10 0x8D 0x01 0xD4
+          0xBD 0x90 0x10 0x8D 0x04 0xD4 0xE6 0xFB 0x60 0x60 0 0 0 0)
+    (List map (fn (_ p) (int% p 256)) pitches)
+    (List map (fn (_ p) (int/ p 256)) pitches)
+    (table (fn (_ k) (if (= k 38) 0x40 0x41)))))
+(def vib-song (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 vib-code) "vib" 0 1))
+(def path (rest (File temp "/tmp/x-tracker-spec-")))
+(def frames (player-render! (player-open () ()) vib-song path))
+(File unlink path)
+(spec-lines (song-text vib-song))
+(write (< 0 frames))
+```
+---
+```output
+(song "vib" (bpm 115) (rows 2) (ticks 13)
+  (limit 90 120)
+  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
+  (pattern p1
+    (pulse1 "C4/v29,6/s-32 ./v0,6/s-369 ./f88/v29,6/s0 G#3"))
+  (order p1))
+#t
+```
+
 ### a tune with no frame's call has its interrupt's handler called, ended through the KERNAL's
 
 ```tracker
