@@ -114,6 +114,24 @@ width that moves is a pulse sweep, the classic chip-music shimmer.
   (order a))
 ```
 
+### Ring and sync
+
+`(ring CENTS)` and `(sync CENTS)` couple a voice to a second oscillator,
+a modulator CENTS from the note's pitch, which follows the note but not
+its bend.  A ring turns the wave over for half of each of the
+modulator's cycles: on a `triangle`, a bell-like clang, the SID's ring
+modulator.  A sync starts the wave again each time the modulator's
+cycle ends, so its pitch is the modulator's and its harmonics are the
+wave's own: a bend under a sync sweeps them, the tearing sync lead.
+
+```xon
+(song "sync" (bpm 100) (rows 4)
+  (instrument lead (wave saw) (sync 0) (bend (0 0) (600 1900)) (env (0 0) (5 50) (600 40)) (release 100) (gain 30))
+  (instrument bell (wave triangle) (ring 1900) (env (0 0) (2 60) (900 0)) (release 300) (gain 35))
+  (pattern a (lead "A2 . . . . . . . C3 . . . . . . .") (bell "E5 . . . . . . . A4 . . . . . . ."))
+  (order a))
+```
+
 On other waves a width reshapes their harmonics: at 50 the even ones
 cancel and the odd ones stay, so a saw becomes a square and a triangle
 stays a triangle.  A sine stays a sine at any width, quieter as the
@@ -208,6 +226,11 @@ The props are the voice's sound, and a few that only a song has:
     (hz N)               the same, in hertz
     (bend (MS CENTS) ...) the pitch's path from the note, CENTS at each MS
     (width (MS PCT) ...) a pulse's width at each MS (see Waves)
+    (cutoff (MS HZ) ...) a resonant filter's cut-off at each MS, in hertz
+    (res PCT)            that filter's resonance, 0 to 100
+    (pass MODE ...)      what it lets through: low, band, high; low when not said
+    (ring CENTS)         rung by a modulator CENTS from the note (see Waves)
+    (sync CENTS)         hard-synced to a modulator CENTS from the note
     (at MS)              start this long after the note
     (layer calm)         heard less as the tension rises
     (layer tension)      heard more as the tension rises
@@ -237,6 +260,19 @@ cut where it is, so the same instrument can play short and long notes:
 the wave as it is, `(cut 30)` warm, `(cut 10)` muffled.  It matters
 most on bright waves and on noise, where it is the difference between
 a hiss and a rumble.
+
+`cutoff` is a second filter after it, one that rings: the cut-off in
+hertz, moving over the note like a bend, `res` how sharply it rings
+there, and `pass` which side of it is heard, `low`, `band` or `high`, or
+`low high` for a notch.  A low-pass swept up with a high `res` is the
+classic synthesizer squelch; it is the filter of the C64's SID.
+
+```xon
+(song "squelch" (bpm 110) (rows 4)
+  (instrument acid (wave saw) (cutoff (0 200) (150 2500) (400 300)) (res 80) (env (0 0) (5 60) (400 40)) (release 80) (gain 35))
+  (pattern a (acid "A1 . A2 . A1 . C2 . A1 . E2 . A1 . G1 ."))
+  (order a))
+```
 
 `pan` places the instrument; spread instruments apart to give each its
 room.  `gain` sets its level against the others: a mix is mostly a
@@ -433,6 +469,50 @@ as it sounds is a plucked string or a synthesizer's filter sweep.
   (instrument synth (wave bright) (cut 70) (env (0 0) (5 50) (800 40)) (release 200) (gain 30))
   (pattern a
     (synth "A2/l10 . . . . . . . C3 . . ./l15 . . . -"))
+  (order a))
+```
+
+### w: width
+
+`wP` moves a pulse's width to P percent of its cycle, reached by the
+next `w` or the note's end, from the instrument's own width (50 for a
+pulse that names none).  Two on one cell set it at once and then move
+it: `C4/w10/w50` starts thin and opens over the row.
+
+```xon
+(song "width" (bpm 100) (rows 4) (ticks 6)
+  (instrument chip (wave pulse) (env (0 0) (5 60) (800 40)) (release 100) (gain 35))
+  (pattern a
+    (chip "A3/w10 . . ./w50 C4 . ./w12 . E4/w40 . . . A3/w8 . . ./w50"))
+  (order a))
+```
+
+### o: cut-off
+
+`oH` moves the resonant filter's cut-off to H hertz, reached by the next
+`o` or the note's end, from the instrument's own `cutoff`.  An
+instrument with no `cutoff` has no resonant filter, and `o` does nothing.
+
+```xon
+(song "cut-off" (bpm 110) (rows 4) (ticks 6)
+  (instrument acid (wave saw) (cutoff (0 400)) (res 75) (env (0 0) (5 60) (800 40)) (release 80) (gain 30))
+  (pattern a
+    (acid "A1/o3000 . A2 ./o300 A1/o2000 . C2 ./o500 A1/o4000 . E2 . A1 ./o200 G1 ."))
+  (order a))
+```
+
+### x: ring, y: sync
+
+`xC` rings the note with a modulator C cents from its pitch, and `yC`
+hard-syncs it to one, as an instrument's `(ring C)` and `(sync C)` do,
+the cell's taking the place of the instrument's for that note.  A note
+takes the first of each on its rows.
+
+```xon
+(song "coupled" (bpm 100) (rows 4) (ticks 6)
+  (instrument tri (wave triangle) (env (0 0) (2 60) (500 30)) (release 150) (gain 35))
+  (pattern a
+    (tri "C4 . . . C4/x700 . . . C4/x1900 . . . C4/y-500 . . ."))
   (order a))
 ```
 
