@@ -1,5 +1,7 @@
 # x-tracker
 
+<p align="center"><img src="docs/bitwise-banner.svg" alt="x-tracker, with Bitwise the owl" width="100%"></p>
+
 A music tracker written in [x-lang](https://github.com/jonruttan/x-lang),
 loaded as a lang: songs of patterns and instruments, edited on the
 terminal and heard through SDL's audio.
