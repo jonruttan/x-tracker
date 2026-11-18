@@ -28,11 +28,14 @@
 ; release written, or the voice's next note.  Inside a row, a pitch
 ; wobbling less than a semitone about its centre is a vibrato (/v),
 ; stepping by semitones an arpeggio (/a), and moving by smaller steps or
-; from row to row a slide (/s).  Each voice and sound is an instrument:
-; its waveform (noise, pulse, saw or triangle, the first of them the
-; voice has on), its attack, decay and sustain as an envelope, the
-; filter's cut-off when the voice goes through a low-pass, and its notes'
-; mean pulse width.  The song is cut into patterns of 64 rows (tracker/score).
+; from row to row a slide (/s).  A pulse's width moves in its cells (/w),
+; and so does a filtered voice's cut-off (/o), each from where the note
+; starts it to where each row ends it; a note rung or synced by the
+; voice before it is coupled to that voice's pitch (/x, /y).  Each voice
+; and sound is an instrument: its waveform (noise, pulse, saw or
+; triangle, the first of them the voice has on), its attack, decay and
+; sustain as an envelope, the filter's resonance and modes when the
+; voice goes through it, and its notes' mean pulse width and cut-off.  The song is cut into patterns of 64 rows (tracker/score).
 
 (module tracker/sid)
 
@@ -528,9 +531,19 @@
   (fn (_ fr v)
     (%sd-at-least 1 (int/ (int* (int| (%fb fr (int+ (int* v 7) 2)) (int<< (int& (%fb fr (int+ (int* v 7) 3)) 15) 8)) 100) 4096))))
 
+; Whether voice V goes through the filter in frame FR, and the filter
+; lets something through: a mode of low, band or high.
+(def %v-filtered? (fn (_ fr v) (if (int< 0 (int& (%fb fr 23) (int<< 1 v))) (int< 0 (int& (%fb fr 24) 112)) #f)))
+
+; The filter's cut-off in frame FR in hertz: its 11 bits, straight from
+; 30 Hz to 12 kHz, as the 8580's.
+(def %sd-hz (fn (_ fr) (int+ 30 (int/ (int* (int| (int& (%fb fr 21) 7) (int<< (%fb fr 22) 3)) 11970) 2047))))
+
 ; An instrument's props from voice V in frame FR, but for a pulse's
-; width, which is its notes' mean.  Its release is the SID's quickest: a
-; note's tail is in its cells, a fade to its end.
+; width and a filter's cut-off, which are its notes' means and move in
+; their cells.  Its release is the SID's quickest: a note's tail is in
+; its cells, a fade to its end.  The filter's resonance, 0 to 15, is a
+; Q from 0.707 to 1.707, as reSID has it: the mixer's RES 31 to 75.
 (def %sd-props
   (fn (_ fr v)
     (def ctrl (%v-ctrl fr v))
@@ -539,12 +552,15 @@
     (def wave (%v-wave ctrl))
     (def a (List ref (int>> ad 4) %attack-ms))
     (def d (List ref (int& ad 15) %decay-ms))
-    (def lowpass (if (int< 0 (int& (%fb fr 23) (int<< 1 v))) (int< 0 (int& (%fb fr 24) 16)) #f))
-    (def cutoff (int| (int& (%fb fr 21) 7) (int<< (%fb fr 22) 3)))
+    (def mode (%fb fr 24))
+    (def passes (List filter (fn (_ p) (int< 0 (int& mode (first p)))) (list (pair 16 "low") (pair 32 "band") (pair 64 "high"))))
     (Str8 append "(wave " (if (str=? wave "noise") "noise" wave) ")"
       " (env (0 0) (" (Str8 str a) " 100) (" (Str8 str (int+ a d)) " " (Str8 str (int/ (int* (int>> sr 4) 100) 15)) "))"
       " (release " (Str8 str (first %decay-ms)) ")"
-      (if lowpass (Str8 append " (cut " (Str8 str (int+ 5 (int/ (int* cutoff 95) 2047))) ")") ""))))
+      (if (%v-filtered? fr v)
+        (Str8 append " (res " (Str8 str (int+ 31 (int/ (int* (int>> (%fb fr 23) 4) 44) 15))) ")"
+                     " (pass " (Str8 join " " (List map rest passes)) ")")
+        ""))))
 
 ; The rows of voice V: (CELLS INSTRUMENTS), row R from frame START + R *
 ; SPAN / UNITS, RISEN the frame each row's note starts in or nil,
@@ -571,12 +587,16 @@
           props)
         i))
     (def pulse "(wave pulse)")
+    ; WS each note's (WIDTH . HZ): a pulse's mean width, and a filtered
+    ; voice's mean cut-off.
+    (def mean (fn (_ ws f) (int/ (List fold (fn (_ a w) (int+ a (f w))) 0 ws) (List length ws))))
     (def text
       (fn (_ p ws)
+        (def cut (if (null? (Str8 index-of " (res " p)) "" (Str8 append " (cutoff (0 " (Str8 str (mean ws rest)) "))")))
         (if (if (int< 11 (str-byte-len p)) (str=? (Str8 sub 0 12 p) pulse) #f)
-          (Str8 append pulse " (width (0 " (Str8 str (int/ (List fold (fn (_ a w) (int+ a w)) 0 ws) (List length ws))) "))"
-                       (Str8 sub 12 (int- (str-byte-len p) 12) p))
-          p)))
+          (Str8 append pulse " (width (0 " (Str8 str (mean ws first)) "))"
+                       (Str8 sub 12 (int- (str-byte-len p) 12) p) cut)
+          (Str8 append p cut))))
     ; Each frame's pitch, found once, two bytes a frame: 0 until it is, 1
     ; for none, else its cents and 2.  A buffer, as a vector of a slot a
     ; frame is filled a slot at a time, leaving a heap of garbage.
@@ -587,6 +607,33 @@
                                            ((int= p 1) ())
                                            (#t (int- p 2))))
                           (int& (ptr-ref mp (int* 2 f) 2) 65535))))
+    ; The moves of a row playing from frame FR0 to FR1 (nil past the tune's
+    ; end), the note struck in it when STRUCK at BASE cents: a pulse's
+    ; width and a filtered voice's cut-off from where they start, on a
+    ; struck row, to where the next row finds them; and on a struck row,
+    ; a ring (on a triangle, as the SID rings only that) and a sync by
+    ; the voice before it, its frequency's cents from the note's.
+    ; Answers (WIDTH HZ AFTER): on a struck row the width and cut-off the
+    ; note starts at (nil where it has none), kept apart for its cell to
+    ; name only where they are not its instrument's; AFTER the rest.
+    (def moves
+      (fn (_ fr0 fr1 struck base)
+        (def ctrl (%v-ctrl fr0 v))
+        (def pulsed (int< 0 (int& ctrl 64)))
+        (def filtered (%v-filtered? fr0 v))
+        (def width (fn (_ fr) (%v-width fr v)))
+        (def to
+          (fn (_ on letter at)
+            (if (if on (if (null? fr1) #f (not (int= (at fr1) (at fr0)))) #f) (Str8 append "/" letter (Str8 str (at fr1))) "")))
+        (def theirs (%cents (%v-freq fr0 (int% (int+ v 2) 3))))
+        (def by (if (null? theirs) "" (Str8 str (int- theirs base))))
+        (list (if (if struck pulsed #f) (width fr0) ())
+              (if (if struck filtered #f) (%sd-hz fr0) ())
+              (Str8 append
+                (to pulsed "w" width)
+                (to filtered "o" %sd-hz)
+                (if (if struck (if (null? theirs) #f (if (int< 0 (int& ctrl 4)) (equal? (%v-wave ctrl) "triangle") #f)) #f) (Str8 append "/x" by) "")
+                (if (if struck (if (null? theirs) #f (int< 0 (int& ctrl 2))) #f) (Str8 append "/y" by) "")))))
     ; Per row: whether a note sounds, the frame its tail ends in once let
     ; go, its base in cents, its pitch with its slides, the arpeggio
     ; playing, whether the last row slid, its vibrato's period or #f, the
@@ -690,6 +737,7 @@
                           ; Under a vibrato a move no wider than its swing is the swing.
                           ((fn (_ d) (if (int< (%sd-dist d 0) (if vib (%sd-at-least 10 (List ref 1 wide)) 10)) 0 d)) (int- next-p now-at))
                           0))
+             (def mv (if playing (moves (%fr frames (if struck tone f)) (if (int< f1 n) (%fr frames f1) ()) struck now-base) (list () () "")))
              (def fx
                (Str8 append
                  vib-fx
@@ -697,13 +745,30 @@
                         ((not (null? arpeggio)) (if (equal? arpeggio was-arp) "" (Str8 append "/a" (Str8 join "," (List map (fn (_ o) (Str8 str o)) arpeggio)))))
                         ((null? was-arp) "")
                         (#t "/a"))
-                 (match ((not now-on) "") ((not (int= slide 0)) (Str8 append "/s" (Str8 str slide))) (was-slid "/s0") (#t ""))))
+                 (match ((not now-on) "") ((not (int= slide 0)) (Str8 append "/s" (Str8 str slide))) (was-slid "/s0") (#t ""))
+                 (List ref 2 mv)))
+             ; A struck cell is kept as (HEAD WIDTH HZ FX) until its
+             ; instrument's means are known.
              (unless (if (str=? head ".") (str=? fx "") #f)
                (Vector set! r (if (not struck) (pair () (Str8 append head fx))
-                                (pair (inst-of (%sd-props (%fr frames tone) v) (%v-width (%fr frames tone) v)) (Str8 append head fx)))
+                                (pair (inst-of (%sd-props (%fr frames tone) v) (pair (%v-width (%fr frames tone) v) (%sd-hz (%fr frames tone))))
+                                      (list head (first mv) (List ref 1 mv) fx)))
                  cells))
              (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f) nrise nnoise))))
      0 #f () 0 0 () #f #f 0 #f)
+    ; Each struck cell named: its start's width and cut-off where they are
+    ; not its instrument's means.
+    (def means (List map (fn (_ ws) (pair (mean ws first) (mean ws rest))) (Vector ref 1 props)))
+    (def opening (fn (_ letter at m) (if (if (null? at) #t (int= at m)) "" (Str8 append "/" letter (Str8 str at)))))
+    (List for-each
+      (fn (_ r)
+        ((fn (_ c)
+           (when (if (pair? c) (pair? (rest c)) #f)
+             ((fn (_ m) (Vector set! r (pair (first c) (Str8 append (List ref 1 c) (opening "w" (List ref 2 c) (first m)) (opening "o" (List ref 3 c) (rest m)) (List ref 4 c)))
+                                     cells))
+              (List ref (first c) means))))
+         (Vector ref r cells)))
+      (List range 0 rows))
     (list cells (List map (fn (_ k) (text (List ref k (Vector ref 0 props)) (List ref k (Vector ref 1 props))))
                       (List range 0 (List length (Vector ref 0 props)))))))
 

@@ -161,7 +161,8 @@ or a solo from the next row.  A muted channel's heading is dim, a
 soloed one's green.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):
 `a` arpeggio, `v` vibrato, `s` slide, `p` portamento, `t` tremolo, `f`
-fade, `l` low-pass, `c` cut, `d` delay, `r` retrigger; `C4:60/v20,4`
+fade, `l` low-pass, `w` width, `o` cut-off, `x` ring, `y` sync, `c` cut,
+`d` delay, `r` retrigger; `C4:60/v20,4`
 is C4 at 60 percent with a vibrato.
 
 Written back, a file keeps everything the editor did not change as it
@@ -202,9 +203,13 @@ the level the SID's envelope leaves, then cut (`/c`) where it ends,
 which is where a driver writes a quick release or the voice's next note
 starts.  A pitch wobbling less than a semitone is a vibrato (`/v`),
 one stepping by semitones from frame to frame an arpeggio (`/a`), and
-one gliding or moving from row to row a slide (`/s`).  Each voice and
-sound (waveform, envelope, filter) is an instrument, `pulse1`, `saw2`
-and so on, a pulse's width its notes' mean.  Only the CPU and the SID
+one gliding or moving from row to row a slide (`/s`).  A pulse's width
+moves in its cells (`/w`), and so does a filtered voice's cut-off
+(`/o`) through the resonant filter, and a note rung or synced by the
+voice before it is coupled to that voice's pitch (`/x`, `/y`).  Each
+voice and sound (waveform, envelope, the filter's resonance and modes)
+is an instrument, `pulse1`, `saw2` and so on, its width and cut-off its
+notes' means.  Only the CPU and the SID
 are there, no screen and no ROM, so a tune that waits on the screen may
 not play.
 

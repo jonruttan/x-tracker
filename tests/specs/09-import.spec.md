@@ -145,6 +145,39 @@ B4 D5 a frame each, then C5 held.
 ```
 
 
+### a pulse's width and a filter's cut-off move in the cells, the filter's resonance and modes are the instrument's, and a sync couples the note to the voice before it
+
+One note on voice 1, a pulse through the low-pass at full resonance,
+synced to voice 3 an E4 against its C4, its width and its cut-off
+climbing a little every frame.
+
+```tracker
+(def table (fn (_ f) (List map f (List range 0 24))))
+(def sid-set (fn (_ v reg) (list 0xA9 v 0x8D reg 0xD4)))
+(def init-code
+  (List append (list 0xA9 0x00 0x85 0xFB)
+    (sid-set 0x09 0x05) (sid-set 0xA5 0x06) (sid-set 0x00 0x02) (sid-set 0xED 0x0E) (sid-set 0x15 0x0F)
+    (sid-set 0xF1 0x17) (sid-set 0x1F 0x18) (sid-set 0x67 0x00) (sid-set 0x11 0x01) (list 0x60)))
+(def moving-code
+  (List append init-code (List repeat (- 64 (List length init-code)) 0)
+    (list 0xA6 0xFB 0xE0 24 0xB0 0x15 0xBD 0x60 0x10 0x8D 0x03 0xD4 0xBD 0x78 0x10 0x8D 0x16 0xD4
+          0xBD 0x90 0x10 0x8D 0x04 0xD4 0xE6 0xFB 0x60 0x60 0 0 0 0)
+    (table (fn (_ k) (int/ k 2)))
+    (table (fn (_ k) (* k 8)))
+    (table (fn (_ k) 0x43))))
+(spec-lines (song-text (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1040 moving-code) "moving" 0 1 ())))
+```
+---
+```output
+(song "moving" (bpm 125) (rows 4) (ticks 6)
+  (limit 90 120)
+  (instrument pulse1 (wave pulse) (width (0 1)) (env (0 0) (2 100) (752 66)) (release 6) (res 75) (pass low) (cutoff (0 30)) (gain 35))
+  (pattern p1
+    (pulse1 "C4/w18/o2275/y400 ./w37/o4520 ./w56/o6766 ./w68/o8637 .  .  .  .  ."))
+  (order p1))
+```
+
+
 ### a note's tail is held and faded to the level its release leaves, cut where the driver ends it, its arpeggio heard
 
 Three notes, a frame's gate each, 13 and 14 frames apart as a driver
