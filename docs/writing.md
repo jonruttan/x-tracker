@@ -16,6 +16,8 @@ takes `lighthouse` apart.  To hear either:
 
 `data/hungarian-dance-5.xon` is a longer song, Brahms's Hungarian Dance
 No. 5; the section after `lighthouse` says how it is made.
+`data/undertow.xon` is an original drum and bass tune; the last section
+takes it apart.
 
 Every example below in an `xon` block is a whole file, and the spec
 suite plays each one, so any of them can be copied into a file and
@@ -850,3 +852,49 @@ changes are written into the rows instead.
 - Its order is the score's form with its repeats: the theme, the second
   strain twice, the Vivace twice and its slow bars twice, then the theme
   and the strain again, and the coda.
+
+## The demo: undertow
+
+`data/undertow.xon` is an original drum and bass tune in D minor at 174
+bpm, 4 rows a beat, so a row is a sixteenth and a pattern of 32 rows
+two bars.  Every pattern is two chords of one turn, Dm and Bb, then Gm
+and A, and no pattern is played twice: each changes the drums, the
+bass's movement or the lead.
+
+- Its waves are kept in the file: `choir`, uneven harmonics for the pad
+  and the vox, `glass` for the bell, and `rasp`, a drawn wave whose
+  jumps make it rough.
+- The beat is a two-step: the kick on the first beat and the second
+  half of the third, the snare on two and four, ghost snares between at
+  25 to 35 percent, one flammed with `d3`.  The hats swing with `d3` on
+  the offbeats or run in sixteenths, an open hat sits on the offbeat,
+  and the fills roll the snare and the hats with `r3`, `r2` and `r1`.
+- The bass is two instruments: a clean `sub`, a sine on the roots, and
+  a `reese` above it of four voices, two saws detuned 16 cents either
+  way and panned apart, a `pulse` whose width sweeps from 20 to 50
+  percent and back, and the `rasp`.  The reese growls with its filter
+  opened and closed through the bar, `l30`, `l90`, `l25`, slides a tone
+  and back with `s200` and `s-200`, cuts short with `c3`, glides with
+  `p2`, and falls an octave with `s-1200` into the next pattern.
+- The hook is two bars, the same in every drop: the lead, a pulse with
+  a moving width and a saw detuned against it, calls in the first bar,
+  and in the second the stabs answer it, saws in two channels cut short
+  with `c3`.  The song's echo is three rows long, so the hook repeats a
+  dotted eighth behind itself; in the third pattern of each drop the
+  bell plays it again a row behind, and in the second drop a third
+  above it, and the vox doubles it an octave down.
+- The breakdown takes the drums away and the vox sings the hook half
+  time, over the pad and a reese with its filter almost closed.
+- The tension layer brings the drop in: the arp, a thin pulse in
+  sixteenths in the builds and an arpeggio, `a4,7,12`, at each drop's
+  end; the riser, two detuned saws sliding up an octave with `s1200`; a
+  noise whoosh opening with `l5` then `l100`; and the tick, a metal hat
+  in sixteenths over the drops.  The pad is the calm layer.  At full tension the tune is 8
+  bpm faster.
+- Its effects are the grit and the space: a chorus, a heavy drive, a
+  sweep of the mix's filter over eight bars, a crush to 11 bits at
+  22050 hertz, the echo, a reverb and a limit.
+- Its order is the intro and the haze, the build (rise, lift), drop 1
+  (drop, turn, echo, roll), the breakdown (fall, hush), the build again
+  (climb, edge), drop 2 (return, answer, stack, crest) and the outro
+  (ebb, last), where the pad, the sub and the reese fade with `f0`.

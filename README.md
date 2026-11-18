@@ -1,5 +1,7 @@
 # x-tracker
 
+<p align="center"><img src="docs/bitwise-banner.svg" alt="x-tracker, with Bitwise the owl" width="100%"></p>
+
 A music tracker written in [x-lang](https://github.com/jonruttan/x-lang),
 loaded as a lang: songs of patterns and instruments, edited on the
 terminal and heard through SDL's audio.
@@ -33,6 +35,12 @@ one to start from:
 No. 5, its changes of tempo written into the rows.
 
     x -l tracker -- play data/hungarian-dance-5.xon
+
+`data/undertow.xon` is an original drum and bass tune at 174 bpm: a
+two-step breakbeat, a reese over a sub, and a hook that comes back,
+echoed, in each drop.
+
+    x -l tracker -- play data/undertow.xon
 
 [docs/guide.md](docs/guide.md) is a guide to using the tracker: a first
 track written key by key, then each kind of work the editor does.
