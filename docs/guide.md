@@ -9,7 +9,8 @@ through each kind of work the editor does.
 [writing.md](writing.md) is the companion to this guide: what each
 part of a song does to the sound, every effect in detail, and how to
 make music with them.  `data/demo.xon` has two finished songs to open
-and take apart, and `data/hungarian-dance-5.xon` a longer one.
+and take apart, `data/hungarian-dance-5.xon` a longer one, and
+`data/undertow.xon` one in drum and bass.
 
 ## Starting
 
@@ -522,3 +523,5 @@ forms and every key's action name, to bind it to another key.
 - `data/hungarian-dance-5.xon`: Brahms's Hungarian Dance No. 5, three
   minutes long, its Allegro, Vivace and ritardandos written into the
   rows.  writing.md says how.
+- `data/undertow.xon`: drum and bass at 174 bpm, eighteen patterns
+  from the intro through two drops to the outro, none played twice.
