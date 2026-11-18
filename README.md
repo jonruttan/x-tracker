@@ -36,6 +36,12 @@ No. 5, its changes of tempo written into the rows.
 
     x -l tracker -- play data/hungarian-dance-5.xon
 
+`data/undertow.xon` is an original drum and bass tune at 174 bpm: a
+two-step breakbeat, a reese over a sub, and a hook that comes back,
+echoed, in each drop.
+
+    x -l tracker -- play data/undertow.xon
+
 [docs/guide.md](docs/guide.md) is a guide to using the tracker: a first
 track written key by key, then each kind of work the editor does.
 [docs/writing.md](docs/writing.md) is a guide to writing songs: the
