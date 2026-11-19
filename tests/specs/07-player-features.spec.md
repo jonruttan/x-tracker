@@ -155,8 +155,8 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 ### M and S mute and solo the cursor's channel, H and A its instrument; :unmute hears all
 
 ```tracker
-(def doc (file-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (instrument b (wave sine))\n  (pattern p (a \"C4 . E4 .\") (b \"C3 . . .\"))\n  (order p))"))
-(def st (edit-make doc () (player-open (spec-front) ())))
+(def parsed (file-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (instrument b (wave sine))\n  (pattern p (a \"C4 . E4 .\") (b \"C3 . . .\"))\n  (order p))"))
+(def st (edit-make parsed () (player-open (spec-front) ())))
 (def screen (Screen make 8 60))
 (def said (fn (_ keys) (spec-keys! st keys) (edit-message st)))
 (def m1 (said (list "M")))
@@ -177,8 +177,8 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 ### G plays from the cursor's row; L marks a row and L again loops to the cursor
 
 ```tracker
-(def doc (file-parse (song-text spec-tune)))
-(def st (edit-make doc () (player-open (spec-front) ())))
+(def parsed (file-parse (song-text spec-tune)))
+(def st (edit-make parsed () (player-open (spec-front) ())))
 (def screen (Screen make 8 120))
 (spec-keys! st (list 'down 'down "G"))
 (edit-tick! st)
@@ -199,8 +199,8 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 ### tension, pace and volume move by ten, kept in their bounds, and are shown
 
 ```tracker
-(def doc (file-parse (song-text spec-tune)))
-(def st (edit-make doc () (player-open (spec-front) ())))
+(def parsed (file-parse (song-text spec-tune)))
+(def st (edit-make parsed () (player-open (spec-front) ())))
 (def screen (Screen make 8 140))
 (spec-keys! st (list "'" "'" ";" "+" "_" "_" "0" "9" "9"))
 (def said (edit-message st))
@@ -217,12 +217,12 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 
 ```tracker
 (def path (rest (File temp "/tmp/x-tracker-spec-")))
-(def doc (file-parse (song-text spec-tune)))
-(def st (edit-make doc () (player-open (spec-front) ())))
+(def parsed (file-parse (song-text spec-tune)))
+(def st (edit-make parsed () (player-open (spec-front) ())))
 (spec-keys! st (list " " (Str8 append ":render " path) 'enter))
 (def with (list (Str8 starts? "Rendered " (edit-message st)) (player-playing? (edit-player st)) (File exists? path)))
 (File unlink path)
-(def quiet (edit-make doc () ()))
+(def quiet (edit-make parsed () ()))
 (spec-keys! quiet (list (Str8 append ":render " path) 'enter))
 (def without (list (Str8 starts? "Rendered " (edit-message quiet)) (File exists? path)))
 (File unlink path)

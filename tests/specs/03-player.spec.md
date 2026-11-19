@@ -146,8 +146,8 @@ Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowe
 ### the editor follows the pattern and row heard, until F stops it
 
 ```tracker
-(def doc (file-parse (song-text spec-tune)))
-(def st (edit-make doc () (player-open (spec-front) ())))
+(def parsed (file-parse (song-text spec-tune)))
+(def st (edit-make parsed () (player-open (spec-front) ())))
 (spec-keys! st (list " "))
 (def spin (fn (self n seen) (if (< 0 n) (do (spec-play! 4096) (edit-tick! st) (self (- n 1) (if (List includes? (first (edit-place st)) seen) seen (pair (first (edit-place st)) seen)))) seen)))
 (def seen (spin 60 ()))

@@ -10,8 +10,8 @@ document and written back, and the songs in it.
 
 ```tracker
 (def text "; songs\n(wave hollow 6 0 2)\n\n(song \"hum\" (bpm 60) (rows 2)\n  ; the voice\n  (instrument a (wave sine) (env (0 0) (5 80)))\n  (pattern p (a \"C3 . E3 .\"))\n  (order p))  ; end\n")
-(def doc (file-parse text))
-(write (list (str=? (file-text doc) text) (List map first doc) (file-changed? doc)))
+(def parsed (file-parse text))
+(write (list (str=? (file-text parsed) text) (List map first parsed) (file-changed? parsed)))
 ```
 ---
     (#t ('gap 'form 'gap 'song 'gap) #f)
@@ -52,10 +52,10 @@ document and written back, and the songs in it.
 
 ```tracker
 (def text "(song \"hum\" (bpm 60)\n  ; kept until the song changes\n  (instrument a (wave sine))\n  (pattern p (a \"C3 . E3 .\"))\n  (order p))\n")
-(def doc (file-parse text))
-(def s (first (file-songs doc)))
+(def parsed (file-parse text))
+(def s (first (file-songs parsed)))
 (def chs (song-pattern s "p"))
-(def doc2 (file-song! doc 0 (song-set-pattern s "p" (pattern-set-cell chs 0 1 "D#3/v20,4"))))
+(def doc2 (file-song! parsed 0 (song-set-pattern s "p" (pattern-set-cell chs 0 1 "D#3/v20,4"))))
 (spec-lines (file-text doc2))
 (write (list (file-changed? doc2) (file-changed? (file-written doc2))))
 ```
