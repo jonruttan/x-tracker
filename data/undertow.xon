@@ -11,15 +11,16 @@
 ;                    and the stabs that answer it
 ;   fall, hush       the breakdown: the hook sung half time on the vox
 ;   climb, edge      the build again, the rolls faster
-;   return .. crest  drop 2: the hook again, a bell a third above, the
-;                    reese sliding, the vox doubling it an octave down
+;   return .. crest  drop 2: the hook again, doubled by a hard-synced saw,
+;                    a bell a third above, the reese growling through its
+;                    resonant filter, the vox doubling it an octave down
 ;   ebb, last        the outro, everything fading
 ;
 ; The hook is the same two bars in every drop, its echo the song's echo
 ; three rows long and the bell playing it again a row behind.
 
 ; The pad and the vox are a wave of uneven harmonics, the bell a glass;
-; the reese's third voice is a drawn wave, rough at its jumps.
+; the reese's fourth voice is a drawn wave, rough at its jumps.
 (wave choir 6 3 4 1 2 0 1)
 (wave glass 5 0 0 2 0 0 0 1)
 (wave rasp (0 -100) (4 100) (4 0) (6 60) (8 -100))
@@ -38,11 +39,11 @@
   (instrument kick (wave sine) (note "C2") (env (0 0) (1 98) (40 70) (130 0)) (bend (0 1000) (30 0)) (release 25) (gain 66))
   (instrument snare (env (0 0) (1 70) (25 32) (150 0)) (release 40) (gain 42)
     (voice (wave noise) (hz 1) (cut 62)) (voice (wave triangle) (note "A3") (bend (0 300) (20 0)) (gain 45)))
-  (instrument hat (wave noise) (hz 1) (cut 92) (env (0 0) (1 26) (28 0)) (release 12) (gain 14) (pan 28))
+  (instrument hat (wave noise) (hz 1) (cut 92) (cutoff (0 6000)) (res 15) (pass high) (env (0 0) (1 26) (28 0)) (release 12) (gain 16) (pan 28))
   (instrument ohat (wave noise) (hz 1) (cut 82) (env (0 0) (1 22) (170 0)) (release 60) (gain 11) (pan -22))
   (instrument tick (layer tension) (wave metal) (hz 5200) (cut 90) (env (0 0) (1 20) (22 0)) (release 10) (gain 10) (pan 45))
   (instrument sub (wave sine) (env (0 0) (4 92) (300 78)) (release 60) (gain 46))
-  (instrument reese (cut 34) (env (0 0) (8 75) (400 60)) (release 70) (gain 20)
+  (instrument reese (cut 34) (cutoff (0 500) (200 1400) (700 600)) (res 55) (env (0 0) (8 75) (400 60)) (release 70) (gain 20)
     (voice (wave saw) (detune -16) (pan -35))
     (voice (wave saw) (detune 16) (pan 35))
     (voice (wave pulse) (width (0 20) (700 50) (1400 20)) (gain 60))
@@ -50,17 +51,18 @@
   (instrument lead (cut 48) (env (0 0) (6 62) (220 46)) (release 180) (gain 20) (pan -12)
     (voice (wave pulse) (width (0 18) (500 42)) (detune -6))
     (voice (wave saw) (detune 6) (cut 40)))
+  (instrument tear (wave saw) (sync 0) (bend (0 0) (220 1900) (700 500)) (cut 55) (env (0 0) (4 55) (250 40)) (release 150) (gain 13) (pan 18))
   (instrument bell (wave glass) (env (0 0) (2 40) (900 0)) (release 500) (gain 15) (pan 30))
-  (instrument stab (wave saw) (cut 50) (env (0 0) (2 70) (140 8)) (release 60) (gain 14)
+  (instrument stab (wave saw) (cut 50) (cutoff (0 4500) (160 700)) (res 60) (env (0 0) (2 70) (140 8)) (release 60) (gain 14)
     (voice (detune -10) (pan -45)) (voice (detune 10) (pan 45)))
   (instrument vox (wave choir) (cut 36) (env (0 0) (70 48) (700 38)) (release 420) (gain 17) (pan -20)
     (voice (detune -8)) (voice (detune 8) (wave triangle) (gain 70)))
   (instrument pad (layer calm) (wave choir) (cut 22) (env (0 0) (500 30) (2500 24)) (release 1000) (gain 14)
     (voice (detune -9) (pan -55)) (voice (detune 9) (pan 55)))
   (instrument arp (layer tension) (wave pulse) (width (0 12) (300 35)) (cut 45) (env (0 0) (2 45) (110 0)) (release 30) (gain 11) (pan -38))
-  (instrument riser (layer tension) (cut 30) (env (0 0) (2000 45)) (release 80) (gain 10)
+  (instrument riser (layer tension) (cut 30) (cutoff (0 300)) (res 70) (env (0 0) (2000 45)) (release 80) (gain 10)
     (voice (wave saw) (detune -20) (pan -40)) (voice (wave saw) (detune 20) (pan 40)))
-  (instrument whoosh (layer tension) (wave noise) (hz 1) (cut 70) (env (0 0) (2500 30)) (release 60) (gain 10))
+  (instrument whoosh (layer tension) (wave noise) (hz 1) (cut 70) (cutoff (0 300)) (res 65) (pass band) (env (0 0) (2500 30)) (release 60) (gain 12))
 
   ; the intro: the chords, the hook glimpsed on the bell
   (pattern intro
@@ -89,9 +91,9 @@
     (pad    "F4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
     (stab   ". . . . . . . . . . . . . . . .  . . . . . . . . F4/c3 . . F4/c3 . . . .")
     (stab   ". . . . . . . . . . . . . . . .  . . . . . . . . Bb4/c3 . . Bb4/c3 . . . .")
-    (arp    "D5 A4 F5 A4 D5 A4 F5 A4 D5 A4 F5 A4 D5 A4 F5 A4  D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4")
-    (riser  "D3/s700 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
-    (whoosh "C4/l5 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))
+    (arp    "D5/w8 A4 F5/w20 A4 D5/w30 A4 F5/w40 A4 D5/w8 A4 F5/w20 A4 D5/w30 A4 F5/w40 A4  D5/w10 Bb4 F5/w25 Bb4 D5/w35 Bb4 F5/w45 Bb4 D5/w10 Bb4 F5/w25 Bb4 D5/w35 Bb4 F5/w50 Bb4")
+    (riser  "D3/s700/o5000 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
+    (whoosh "C4/l5/o5800 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))
   (pattern lift
     (kick   "C4 . . . . . . . C4 . . . . . . .  C4 . . . C4 . . . C4 . C4 . C4 C4 C4 -")
     (snare  ". . . . C4 . . . . . . . C4 . . C4:50  C4/r3 . . . C4/r2 . . . C4/r1 . . . . . . -")
@@ -103,9 +105,9 @@
     (pad    "G4 . . . . . . . . . . . . . . .  E4 . . . . . . . . . . . . . . -")
     (stab   ". . . . . . . . . . . . . . . .  . . . . . . . . E4/c3 . E4/c3 . E4/c3 . . .")
     (stab   ". . . . . . . . . . . . . . . .  . . . . . . . . A4/c3 . A4/c3 . A4/c3 . . .")
-    (arp    "D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4  E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 -")
-    (riser  "G3/s1200 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
-    (whoosh "C4/l5 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -"))
+    (arp    "D5/w8 Bb4 G5/w20 Bb4 D5/w30 Bb4 G5/w40 Bb4 D5/w8 Bb4 G5/w20 Bb4 D5/w30 Bb4 G5/w40 Bb4  E5/w12 C#5 A5/w30 C#5 E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 -")
+    (riser  "G3/s1200/o5500 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
+    (whoosh "C4/l5/o5800 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -"))
 
   ; drop 1: the hook calls, the stabs answer
   (pattern drop
@@ -163,7 +165,7 @@
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . E4/c3 E4/c3 . . E4/c2 E4/c2 . -")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . A4/c3 A4/c3 . . A4/c2 A4/c2 . -")
     (arp   "G5 . D5 . Bb5 . D5 . G5 . D5 . Bb5 . D5 .  A4/a4,7,12 . . . . . . . . . . . . . . -")
-    (riser "G3/s1200 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
+    (riser "G3/s1200/o5500 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
     (pad   "Bb3 . . . . . . . . . . . . . . .  A3 . . . . . . . . . . . . . . .")
     (pad   "D4 . . . . . . . . . . . . . . .  C#4 . . . . . . . . . . . . . . .")
     (pad   "G4 . . . . . . . . . . . . . . .  E4 . . . . . . . . . . . . . . ."))
@@ -174,7 +176,7 @@
     (sub   "D2 . . . . . . . . . . . . . . .  Bb1 . . . . . . . . . . . . . . .")
     (reese "D3:50/l10 . . . . . . . . . . . . . . .  Bb2:50/l10 . . . . . . . ./l40 . . . . . . .")
     (vox   "A4 . . . . . D5 . . . . . C5 . . .  A4 . . . . . . . F4 . . . G4 . . .")
-    (bell  ". . . . . . . . . . . . . . . .  . . . . . . . . A5:50 . . D6:50 . . C6:50 .")
+    (bell  ". . . . . . . . . . . . . . . .  . . . . . . . . A5:50/x1900 . . D6:50/x700 . . C6:50/x1900 .")
     (pad   "A3 . . . . . . . . . . . . . . .  Bb3 . . . . . . . . . . . . . . .")
     (pad   "D4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
     (pad   "F4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))
@@ -185,8 +187,8 @@
     (sub   "G1 . . . . . . . . . . . . . . .  A1 . . . . . . . . . . . . . . .")
     (reese "G2:50/l10 . . . . . . . . . . . . . . .  A2:50/l10 . . . . . . . ./l50 . . . . . . .")
     (vox   "A4 . . . . . D5 . . . . . C5 . . .  A4 . . . . . . . G4 . . . E4/v20,6 . . .")
-    (bell  ". . . . . . . . . . . . . . . .  . . . . . . . . A5:50 . . D6:50 . . C6:50 .")
-    (riser "G2/s1200 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
+    (bell  ". . . . . . . . . . . . . . . .  . . . . . . . . A5:50/x700 . . D6:50/x1900 . . C6:50/x1200 .")
+    (riser "G2/s1200/o4000 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
     (pad   "Bb3 . . . . . . . . . . . . . . .  A3 . . . . . . . . . . . . . . .")
     (pad   "D4 . . . . . . . . . . . . . . .  C#4 . . . . . . . . . . . . . . .")
     (pad   "G4 . . . . . . . . . . . . . . .  E4 . . . . . . . . . . . . . . ."))
@@ -204,9 +206,9 @@
     (pad    "A3 . . . . . . . . . . . . . . .  Bb3 . . . . . . . . . . . . . . .")
     (pad    "D4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
     (pad    "F4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
-    (arp    "D5 A4 F5 A4 D5 A4 F5 A4 D5 A4 F5 A4 D5 A4 F5 A4  D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4 D5 Bb4 F5 Bb4")
-    (riser  "D3/s700 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
-    (whoosh "C4/l5 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))
+    (arp    "D5/w8 A4 F5/w20 A4 D5/w30 A4 F5/w40 A4 D5/w8 A4 F5/w20 A4 D5/w30 A4 F5/w40 A4  D5/w10 Bb4 F5/w25 Bb4 D5/w35 Bb4 F5/w45 Bb4 D5/w10 Bb4 F5/w25 Bb4 D5/w35 Bb4 F5/w50 Bb4")
+    (riser  "D3/s700/o5000 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
+    (whoosh "C4/l5/o5800 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))
   (pattern edge
     (kick   "C4 . . . C4 . . . C4 . . . C4 . . .  C4 . C4 . C4 . C4 . C4 C4 C4 C4 C4 C4 C4 -")
     (snare  "C4:70/r3 . . . C4:80/r3 . . . C4/r2 . . . C4/r2 . . .  C4/r1 . . . . . . . . . . . . . . -")
@@ -217,9 +219,9 @@
     (pad    "Bb3 . . . . . . . . . . . . . . .  A3 . . . . . . . . . . . . . . -")
     (pad    "D4 . . . . . . . . . . . . . . .  C#4 . . . . . . . . . . . . . . -")
     (pad    "G4 . . . . . . . . . . . . . . .  E4 . . . . . . . . . . . . . . -")
-    (arp    "D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4 D5 Bb4 G5 Bb4  E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 -")
-    (riser  "G3/s1200 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
-    (whoosh "C4/l5 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -"))
+    (arp    "D5/w8 Bb4 G5/w20 Bb4 D5/w30 Bb4 G5/w40 Bb4 D5/w8 Bb4 G5/w20 Bb4 D5/w30 Bb4 G5/w40 Bb4  E5/w12 C#5 A5/w30 C#5 E5 C#5 A5 C#5 E5 C#5 A5 C#5 E5 C#5 A5 -")
+    (riser  "G3/s1200/o5500 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
+    (whoosh "C4/l5/o5800 ./l100 . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -"))
 
   ; drop 2: the hook again, a bell a third above it, the reese moving
   (pattern return
@@ -229,8 +231,9 @@
     (ohat  ". . . . . . C4 . . . . . . . C4 .  . . . . . . C4 . . . . . . . C4 .")
     (tick  "C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40  C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40")
     (sub   "D2 . . . . . . . . . D2 . . . . .  Bb1 . . . . . . . . . Bb1 . . . C2/p2 .")
-    (reese "D3/l20 ./l100 D3/c3 . D3/l40 . ./s200 . ./s-200 . D3/l70 . C3/p2 . D3/p2 .  Bb2/l20 ./l100 Bb2/c3 . Bb2/l40 . ./s-200 . ./s200 . Bb2/l70 . A2/p2 . C3/p2 .")
+    (reese "D3/l20/o300 ./l100/o2400 D3/c3 . D3/l40/w15 . ./s200/o3500 . ./s-200/o500 . D3/l70/w50 . C3/p2 . D3/p2/o2000 .  Bb2/l20/o300 ./l100/o2400 Bb2/c3 . Bb2/l40/w15 . ./s-200/o3500 . ./s200/o500 . Bb2/l70/w50 . A2/p2 . C3/p2/o2000 .")
     (lead  "A4 . . D5 . . C5 . A4 . . . F5/p3 . E5 .  D5 . . . A4 . ./v20,6 . - . . . . . . .")
+    (tear  "A4:70 . . D5:70 . . C5:70 . A4:70 . . . F5:70/p3 . E5:70 .  D5:70 . . . A4:70 . . . - . . . . . . .")
     (bell  "C5:70 . . F5:70 . . E5:70 . C5:70 . . . A5:70 . G5:70 .  . D6:40 . . . A5:40 . . . . . . . . . .")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . F4/c3 . . F4/c3 . . F4/c3 .")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . Bb4/c3 . . Bb4/c3 . . Bb4/c3 .")
@@ -244,8 +247,9 @@
     (ohat  ". . . . . . C4 . . . . . . . C4 .  . . . . . . C4 . . . . . . . C4 .")
     (tick  "C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40  C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40")
     (sub   "G1 . . . . . . . . . G1 . . . . .  A1 . . . . . . . . . A1 . . . . .")
-    (reese "G2/l20 ./l100 G2/c3 . G2/l40 . ./s300 . ./s-300 . G2/l70 . F2/p2 . G2/p2 .  A2/l20 ./l100 A2/c3 . A2/l40 . ./s-1200 . . . A2/l70/p3 . . . E2/p2 .")
+    (reese "G2/l20/o300 ./l100/o2400 G2/c3 . G2/l40/w15 . ./s300/o3500 . ./s-300/o500 . G2/l70/w50 . F2/p2 . G2/p2/o2000 .  A2/l20/o300 ./l100/o2400 A2/c3 . A2/l40/w15 . ./s-1200/o200 . . . A2/l70/p3/o3000 . . . E2/p2 .")
     (lead  "A4 . . D5 . . C5 . A4 . . . Bb4 . A4 .  G4 . . . E4/p2 . ./v20,6 . - . . . . . . .")
+    (tear  "A4:70 . . D5:70 . . C5:70 . A4:70 . . . Bb4:70 . A4:70 .  G4:70 . . . E4:70/p2 . . . - . . . . . . .")
     (bell  "C5:70 . . F5:70 . . E5:70 . C5:70 . . . D5:70 . C5:70 .  . . . . . . . . . . . . . . . .")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . E4/c3 . E4/c3 . . E4/c3 . E4/c2")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . A4/c3 . A4/c3 . . A4/c3 . A4/c2")
@@ -260,8 +264,8 @@
     (ohat  ". . . . . . C4 . . . . . . . C4 .  . . . . . . C4 . . . . . . . C4 .")
     (tick  "C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40  C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40")
     (sub   "D2 . . . . . . . . . D2 . . . . .  Bb1 . . . . . . . . . Bb1 . . . C2/p2 .")
-    (reese "D3/l30 . . ./l90 . . ./l25 . . D3/l60 . . . F3/p2 . .  Bb2/l20 ./l100 Bb2/c3 . Bb2/l40 . ./s-200 . ./s200 . Bb2/l70 . A2/p2 . C3/p2 .")
-    (lead  "A4 . . D5 . . C5 . A4 . . . F4 . G4 .  F4 . . . D4 . ./v20,6 . - . . . . . . .")
+    (reese "D3/l30/o400 . . ./l90/o3000 . . ./l25/o300 . . D3/l60/w20 . . . F3/p2/o2500 . .  Bb2/l20/o300 ./l100/o2400 Bb2/c3 . Bb2/l40/w15 . ./s-200/o3500 . ./s200/o500 . Bb2/l70/w50 . A2/p2 . C3/p2/o2000 .")
+    (lead  "A4 . . D5 . . C5 . A4 . . . F4 . G4 .  F4 . . . D4/w45 . ./v20,6/w15 . - . . . . . . .")
     (vox   "A3:60 . . D4:60 . . C4:60 . A3:60 . . . F3:60 . G3:60 .  F3:60 . . . D3:60 . . . - . . . . . . .")
     (bell  ". A5:45 . . D6:45 . . C6:45 . A5:45 . . . F5:45 . G5:45  . F5:45 . . . D5:45 . . . . . . . . . .")
     (stab  ". . F4:50/c2 . . . . . . . F4:50/c2 . . . . .  . . . . . . . . F4/c3 . . F4/c3 . . F4/c3 .")
@@ -276,14 +280,15 @@
     (hat   "C4 C4:40 C4:70 C4:40/d3 C4 C4:40 C4:70 C4:40/d3 C4 C4:40 C4:70 C4:40/d3 C4 C4:40 C4:70 C4:40/d3  C4 C4 C4 C4 C4 C4 C4 C4 C4/r2 . . . C4/r1 . . -")
     (tick  "C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40 C4 C4:40 C4:70 C4:40  C4/r1 . . . . . . . . . . . . . . -")
     (sub   "G1 . . . . . . . . . G1 . . . . .  A1 . . . . . . . . . . . . . . -")
-    (reese "G2/l20 ./l100 G2/c3 . G2/l40 . ./s300 . ./s-300 . G2/l70 . F2/p2 . G2/p2 .  A2/l20 ./l100 A2/c3 . A2/l40 . . . A2/s-1200 . . . . . . -")
+    (reese "G2/l20/o300 ./l100/o2400 G2/c3 . G2/l40/w15 . ./s300/o3500 . ./s-300/o500 . G2/l70/w50 . F2/p2 . G2/p2/o2000 .  A2/l20/o300 ./l100/o2400 A2/c3 . A2/l40/w15 . . . A2/s-1200/o4000 . . . . . . -")
     (lead  "A4 . . D5 . . C5 . A4 . . . Bb4 . A4 .  G4 . . . A4/p2 . . . . . ./v25,5 . . . . -")
+    (tear  "A4:70 . . D5:70 . . C5:70 . A4:70 . . . Bb4:70 . A4:70 .  G4:70 . . . A4:70/p2 . . . . . . . . . . -")
     (vox   "A3:60 . . D4:60 . . C4:60 . A3:60 . . . Bb3:60 . A3:60 .  G3:60 . . . A3:60 . . . . . . . . . . -")
     (bell  "C5:70 . . F5:70 . . E5:70 . C5:70 . . . D5:70 . C5:70 .  . . . . . . . . . . . . . . . .")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . E4/c3 E4/c3 . . E4/c2 E4/c2 . -")
     (stab  ". . . . . . . . . . . . . . . .  . . . . . . . . A4/c3 A4/c3 . . A4/c2 A4/c2 . -")
     (arp   "G5 . D5 . Bb5 . D5 . G5 . D5 . Bb5 . D5 .  A4/a4,7,12 . . . . . . . . . . . . . . -")
-    (riser "G3/s1200 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
+    (riser "G3/s1200/o5500 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . -")
     (pad   "Bb3 . . . . . . . . . . . . . . .  A3 . . . . . . . . . . . . . . .")
     (pad   "D4 . . . . . . . . . . . . . . .  C#4 . . . . . . . . . . . . . . .")
     (pad   "G4 . . . . . . . . . . . . . . .  E4 . . . . . . . . . . . . . . ."))
@@ -294,7 +299,7 @@
     (hat   "C4 . C4:60 . C4 . C4:60/d3 . C4 . C4:60 . C4 . C4:60/d3 .  . . C4:40 . . . C4:40 . . . C4:40 . . . C4:40 .")
     (sub   "D2 . . . . . . . . . D2 . . . . .  Bb1 . . . . . . . . . . . . . . .")
     (reese "D3:60/l40 . . . . . . . ./l10 . . . . . . .  Bb2:50/l10 . . . . . . . . . . . . . . .")
-    (bell  "A5:60 . . D6:60 . . C6:60 . A5:60 . . . F5:50 . G5:50 .  F5:40 . . . D5:40/f0 . . . . . . . . . . .")
+    (bell  "A5:60 . . D6:60 . . C6:60 . A5:60 . . . F5:50 . G5:50 .  F5:40/x1900 . . . D5:40/f0/x700 . . . . . . . . . . .")
     (pad   "A3 . . . . . . . . . . . . . . .  Bb3 . . . . . . . . . . . . . . .")
     (pad   "D4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . .")
     (pad   "F4 . . . . . . . . . . . . . . .  . . . . . . . . . . . . . . . ."))

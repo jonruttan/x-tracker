@@ -867,30 +867,39 @@ bass's movement or the lead.
 - The beat is a two-step: the kick on the first beat and the second
   half of the third, the snare on two and four, ghost snares between at
   25 to 35 percent, one flammed with `d3`.  The hats swing with `d3` on
-  the offbeats or run in sixteenths, an open hat sits on the offbeat,
-  and the fills roll the snare and the hats with `r3`, `r2` and `r1`.
+  the offbeats or run in sixteenths, a high-pass at 6000 hertz keeping
+  them crisp; an open hat sits on the offbeat, and the fills roll the
+  snare and the hats with `r3`, `r2` and `r1`.
 - The bass is two instruments: a clean `sub`, a sine on the roots, and
   a `reese` above it of four voices, two saws detuned 16 cents either
   way and panned apart, a `pulse` whose width sweeps from 20 to 50
-  percent and back, and the `rasp`.  The reese growls with its filter
-  opened and closed through the bar, `l30`, `l90`, `l25`, slides a tone
+  percent and back, and the `rasp`, all through a resonant low-pass
+  that opens to 1400 hertz on each note and closes again.  In drop 1
+  the reese's filter opens and closes through the bar, `l30`, `l90`,
+  `l25`; in drop 2 it growls, its cut-off moved with `o300`, `o2400`,
+  `o3500` and its pulse's width with `w15` and `w50`.  It slides a tone
   and back with `s200` and `s-200`, cuts short with `c3`, glides with
   `p2`, and falls an octave with `s-1200` into the next pattern.
 - The hook is two bars, the same in every drop: the lead, a pulse with
   a moving width and a saw detuned against it, calls in the first bar,
   and in the second the stabs answer it, saws in two channels cut short
-  with `c3`.  The song's echo is three rows long, so the hook repeats a
-  dotted eighth behind itself; in the third pattern of each drop the
-  bell plays it again a row behind, and in the second drop a third
-  above it, and the vox doubles it an octave down.
+  with `c3` through a resonant filter that falls from 4500 to 700
+  hertz, a squelch.  The song's echo is three rows long, so the hook
+  repeats a dotted eighth behind itself; in the third pattern of each
+  drop the bell plays it again a row behind.  In drop 2 the tear, a saw
+  hard-synced to its own note, `(sync 0)`, its bend sweeping its
+  harmonics up and back, doubles the hook; the bell plays it a third
+  above, and the vox doubles it an octave down.
 - The breakdown takes the drums away and the vox sings the hook half
-  time, over the pad and a reese with its filter almost closed.
+  time, over the pad and a reese with its filter almost closed; the
+  bell answers it rung, `x700`, `x1200` and `x1900`, a clang.
 - The tension layer brings the drop in: the arp, a thin pulse in
-  sixteenths in the builds and an arpeggio, `a4,7,12`, at each drop's
-  end; the riser, two detuned saws sliding up an octave with `s1200`; a
-  noise whoosh opening with `l5` then `l100`; and the tick, a metal hat
-  in sixteenths over the drops.  The pad is the calm layer.  At full tension the tune is 8
-  bpm faster.
+  sixteenths in the builds whose width opens beat by beat, `w8` to
+  `w40`, and an arpeggio, `a4,7,12`, at each drop's end; the riser, two
+  detuned saws sliding up an octave with `s1200` as a resonant filter
+  opens with `o5000`; a noise whoosh through a band-pass swept up with
+  `o5800`; and the tick, a metal hat in sixteenths over the drops.  The
+  pad is the calm layer.  At full tension the tune is 8 bpm faster.
 - Its effects are the grit and the space: a chorus, a heavy drive, a
   sweep of the mix's filter over eight bars, a crush to 11 bits at
   22050 hertz, the echo, a reverb and a limit.
