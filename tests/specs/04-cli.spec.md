@@ -9,7 +9,7 @@ terminal or the audio.
 ### list prints each song of a file: its length, patterns and order
 
 ```tracker
-(write (tracker-main (list "list" (Str8 append %lang-root "/data/demo.xon"))))
+(write (tracker-main (list "list" (Str8 append (Bundle root "tracker") "/data/demo.xon"))))
 ```
 ---
 ```output
@@ -29,7 +29,7 @@ lighthouse  0:22  6 patterns  order intro verse turn verse fill bridge verse tur
 ### a song the file does not have cannot be played
 
 ```tracker
-(write (tracker-main (list "-s" "nope" "play" (Str8 append %lang-root "/data/demo.xon"))))
+(write (tracker-main (list "-s" "nope" "play" (Str8 append (Bundle root "tracker") "/data/demo.xon"))))
 ```
 ---
     1

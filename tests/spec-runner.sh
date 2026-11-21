@@ -43,14 +43,14 @@ SPEC_PATH="${SPEC_PATH:-$BUNDLE/tests/specs}"
 
 # The suite boots from a state image of the harness when the platform can write
 # one, keyed on what it depends on (the harness, the platform's lib/, its
-# engine, and tracker/).  IMG=0 runs the same suite from source.
+# engine, and lib/tracker/).  IMG=0 runs the same suite from source.
 if [ "${IMG:-1}" = 0 ]; then
 	SPEC_BATCH="${SPEC_BATCH:-1}"; export SPEC_BATCH
 else
 	_builder="$X_ROOT/tools/dev/image-build.sh"
 	if [ ! -f "$_builder" ]; then
 		echo "x-tracker: no image writer at $_builder (not a checkout) -- the suite boots from source" >&2
-	elif X_BIN="$X_BIN" sh "$_builder" "$LANG_LIB" "$BUNDLE/tests/lib/.images" "$BUNDLE/tracker"; then
+	elif X_BIN="$X_BIN" sh "$_builder" "$LANG_LIB" "$BUNDLE/tests/lib/.images" "$BUNDLE/lib/tracker"; then
 		X_IMG_DIR="$BUNDLE/tests/lib/.images"; export X_IMG_DIR
 	else
 		echo "x-tracker: no state image -- the suite boots from source" >&2

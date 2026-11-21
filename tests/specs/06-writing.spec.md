@@ -14,7 +14,7 @@ misspelt effect is caught here.
 ### every xon block of docs/writing.md reads, and each of its songs plays through to its end
 
 ```tracker
-(def text (File read-all (Str8 append %lang-root "/docs/writing.md")))
+(def text (File read-all (Str8 append (Bundle root "tracker") "/docs/writing.md")))
 (def blocks
   (rest (List fold
           (fn (_ acc line)

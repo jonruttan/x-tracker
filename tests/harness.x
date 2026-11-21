@@ -6,10 +6,12 @@
 ; @copyright 2026 Jon Ruttan
 ; @license MIT No Attribution (MIT-0)
 ;
-; The lang kit's generator writes tests/lib/harness.gen.x: the dialect
-; lang.xon declares, the bundle's root on the import path, then this file.
+; The bundle kit's generator writes tests/lib/harness.gen.x: the dialect
+; bundle.xon declares, the bundle's lib/ on the import path, then this file.
 (import tracker/base)
 (import x/sys/gc)
+; (Bundle root "tracker"): where the specs read the songs and docs from.
+(import x/sys/bundle)
 
 ; Each line of TEXT written as a line of its own, so a spec's expected
 ; output can be the whole of it.

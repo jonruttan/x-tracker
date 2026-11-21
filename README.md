@@ -311,7 +311,7 @@ file that does not read is one line, and the defaults.
 
     make install X=/path/to/x
 
-copies the bundle to `<share>/langs/tracker`, where `x -l` looks.  The
+copies the bundle to `<share>/bundles/tracker`, where `x -l` looks.  The
 sound needs SDL3: without it the editor runs silent and says so.
 
 ## Tests

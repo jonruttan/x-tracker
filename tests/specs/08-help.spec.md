@@ -32,7 +32,7 @@ line's help word, and a check that it leaves nothing out.
 ### every command the editor dispatches has an entry
 
 ```tracker
-(def text (File read-all (Str8 append %lang-root "/tracker/edit.x")))
+(def text (File read-all (Str8 append (Bundle root "tracker") "/lib/tracker/edit.x")))
 (def from (Str8 index-of "(def %command!" text))
 (def after (Str8 sub (+ from 1) (- (Str8 length text) (+ from 1)) text))
 (def body (Str8 sub 0 (Str8 index-of "\n(def " after) after))

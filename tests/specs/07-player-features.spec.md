@@ -238,10 +238,10 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 
 ```tracker
 (def path "/tmp/x-tracker-spec-render.wav")
-(def status (tracker-main (list "render" (Str8 append %lang-root "/data/demo.xon") "-o" path)))
+(def status (tracker-main (list "render" (Str8 append (Bundle root "tracker") "/data/demo.xon") "-o" path)))
 (def wrote (File exists? path))
 (File unlink path)
-(write (list status wrote (tracker-main (list "render" (Str8 append %lang-root "/data/demo.xon"))) (tracker-main (list "-s" "nope" "render" (Str8 append %lang-root "/data/demo.xon") "-o" path))))
+(write (list status wrote (tracker-main (list "render" (Str8 append (Bundle root "tracker") "/data/demo.xon"))) (tracker-main (list "-s" "nope" "render" (Str8 append (Bundle root "tracker") "/data/demo.xon") "-o" path))))
 ```
 ---
 ```output

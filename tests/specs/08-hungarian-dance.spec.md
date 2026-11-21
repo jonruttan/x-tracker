@@ -18,7 +18,7 @@ comes round to its start.
 ### the song plays through to its end on the file's waves and the mixer's
 
 ```tracker
-(def hdoc (file-read (Str8 append %lang-root "/data/hungarian-dance-5.xon")))
+(def hdoc (file-read (Str8 append (Bundle root "tracker") "/data/hungarian-dance-5.xon")))
 (def play-out
   (fn (_ waves s)
     (guard (e (e msg))

@@ -10,18 +10,25 @@
 # @license MIT No Attribution (MIT-0)
 #
 # The platform ships the gate; a bundle does not vendor it. The gate lives in
-# the platform's tools/lang-kit/. This file only says where the bundle is and
+# the platform's tools/bundle-kit/. This file only says where the bundle is and
 # which x to ask for the kit.
 #
-# Set X to point at a particular x; X_LANG_KIT overrides the kit location.
+# Set X to point at a particular x; X_BUNDLE_KIT overrides the kit location.
+#
+# X_COMPILED_REPORT is on: a compiled loop that fails to build (the mixer's,
+# a codec's) says so on stderr instead of running its pure-x version in
+# silence.  Every host the gate runs on has an assembler backend, so a line
+# there is a defect.  Set it to the empty string to quiet it.
 set -e
 
 BUNDLE="$(cd "$(dirname "$0")/.." && pwd)"
 X="${X:-x}"
+X_COMPILED_REPORT="${X_COMPILED_REPORT-1}"
+if [ -n "$X_COMPILED_REPORT" ]; then export X_COMPILED_REPORT; else unset X_COMPILED_REPORT; fi
 
-KIT="${X_LANG_KIT:-$("$X" --share-dir)/tools/lang-kit}"
+KIT="${X_BUNDLE_KIT:-$("$X" --share-dir)/tools/bundle-kit}"
 [ -f "$KIT/spec-gate.sh" ] || {
-	echo "x-tracker: no lang kit at $KIT -- set X_LANG_KIT or upgrade x" >&2
+	echo "x-tracker: no bundle kit at $KIT -- set X_BUNDLE_KIT or upgrade x" >&2
 	exit 2
 }
 
