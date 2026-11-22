@@ -14,7 +14,7 @@ through to its end.
 ### the walkthrough's keys make the screens and the file the guide shows, and the song plays
 
 ```tracker
-(def guide (File read-all (Str8 append %lang-root "/docs/guide.md")))
+(def guide (File read-all (Str8 append (Bundle root "tracker") "/docs/guide.md")))
 (def pl (player-open (spec-front) ()))
 (def st (edit-make () "harbour.xon" pl))
 (def screen (Screen make 24 120))

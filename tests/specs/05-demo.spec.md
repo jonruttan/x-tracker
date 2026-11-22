@@ -13,7 +13,7 @@ it does: a misspelt effect is caught here.
 ### every song of data/demo.xon plays through to its end
 
 ```tracker
-(def wdoc (file-read (Str8 append %lang-root "/data/demo.xon")))
+(def wdoc (file-read (Str8 append (Bundle root "tracker") "/data/demo.xon")))
 (def play-out
   (fn (_ waves s)
     (guard (e (e msg))

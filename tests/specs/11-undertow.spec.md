@@ -18,7 +18,7 @@ than a row.
 ### the song plays through to its end on the file's waves and the mixer's
 
 ```tracker
-(def udoc (file-read (Str8 append %lang-root "/data/undertow.xon")))
+(def udoc (file-read (Str8 append (Bundle root "tracker") "/data/undertow.xon")))
 (def play-out
   (fn (_ waves s)
     (guard (e (e msg))
@@ -39,7 +39,7 @@ than a row.
 
 ```tracker
 (import x/core/doors str-make str-byte-sub)
-(def udoc (file-read (Str8 append %lang-root "/data/undertow.xon")))
+(def udoc (file-read (Str8 append (Bundle root "tracker") "/data/undertow.xon")))
 (def path (rest (File temp "/tmp/x-tracker-spec-")))
 (def pl (player-open () (file-waves udoc)))
 (player-tension! pl 50)

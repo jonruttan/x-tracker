@@ -1,0 +1,18 @@
+; bundle.xon -- what this bundle is.
+
+(name "tracker")
+
+; Self-contained: this bundle depends on nothing but the platform.
+;
+; Helium, plus exactly the libraries this bundle imports and nothing
+; ambient: the terminal, files, the mixer and SDL's audio, none of the
+; tower.
+(dialect he)
+
+; v0.60.0: the bundle shape (x-lang#1420), lib/tracker/ and the entry
+; tracker/run; (Bundle root "tracker") in place of %lang-root (x-lang#1421);
+; a program's definitions shadow the library's (x-lang#1406); and
+; X_COMPILED_REPORT, which tests/spec-gate.sh sets (x-lang#1409).
+(requires-release "v0.60.0")
+
+(entry run)
