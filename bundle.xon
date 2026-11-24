@@ -13,6 +13,8 @@
 ; tracker/run; (Bundle root "tracker") in place of %lang-root (x-lang#1421);
 ; a program's definitions shadow the library's (x-lang#1406); and
 ; X_COMPILED_REPORT, which tests/spec-gate.sh sets (x-lang#1409).
-(requires-release "v0.60.0")
+; v0.62.0: `Lexer make` refuses an end text (node.x passes none), and
+; `min`/`max` replace `least`/`greatest` (the tracker's are local names).
+(requires-release "v0.62.0")
 
 (entry run)
