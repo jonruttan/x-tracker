@@ -98,23 +98,56 @@
                                (#t (List take 3 p))))
       doc)))
 
+(def %fl-write (prim-ref (lit io) (lit write-to-str)))
+
+; FORM as the file writes it: a symbol bare, a string in quotes, a list
+; in parentheses.
+(def file-form-text
+  (fn (self v)
+    (match ((symbol? v) (symbol->str v))
+           ((null? v) "()")
+           ((pair? v) (Str8 append "(" (Str8 join " " (List map self v)) ")"))
+           (#t (%fl-write v)))))
+
 (def %fl-wave? (fn (_ p) (if (eq? (first p) (lit form)) (str=? (List ref 2 p) "wave") #f)))
 
-; The (wave NAME AMP ...) forms of DOC.
+; The (wave NAME ...) forms of DOC; with DIR, the directory DOC was read
+; from, each sample's file (wave NAME (sample FILE ...)) named from it
+; when FILE is not a path from the root.
 (def file-waves
-  (fn (_ doc)
-    (List map (fn (_ p) (first (Xon parse (List ref 1 p)))) (List filter %fl-wave? doc))))
+  (fn (_ doc . dir)
+    (def at (if (null? dir) () (first dir)))
+    (List map (fn (_ p) (file-sample-at (first (Xon parse (List ref 1 p))) at)) (List filter %fl-wave? doc))))
+
+; Whether wave form W is a sample's, (wave NAME (sample FILE ...)).
+(def file-sample?
+  (fn (_ w) (if (pair? (rest (rest w))) (if (pair? (List ref 2 w)) (eq? (first (List ref 2 w)) (lit sample)) #f) #f)))
+
+(def file-sample-at
+  (fn (_ w dir)
+    (if (if (null? dir) #t (not (file-sample? w))) w
+      ((fn (_ s)
+         (def path (List ref 1 s))
+         (if (Str8 starts? "/" path) w
+           (list (lit wave) (List ref 1 w) (pair (lit sample) (pair (Str8 append dir "/" path) (rest (rest s)))))))
+       (List ref 2 w)))))
+
+; The directory PATH is in: "." for a name with no /.
+(def file-dir
+  (fn (_ path)
+    ((fn (self i) (match ((< i 0) ".") ((str=? (Str8 sub i 1 path) "/") (if (= i 0) "/" (Str8 sub 0 i path))) (#t (self (- i 1)))))
+     (- (Str8 length path) 1))))
 
 ; The (wave NAME AMP ...) form of DOC named NAME, a string, or nil.
 (def file-wave
   (fn (_ doc name) (List find (fn (_ w) (str=? (symbol->str (List ref 1 w)) name)) (file-waves doc))))
 
-; DOC with the wave NAME made of the harmonics AMPS, numbers: in place of
-; its form when it has one, or else on a line after its last wave, or
-; else before its first song.
+; DOC with the wave NAME made of AMPS, the harmonics' strengths, its
+; points, or its (sample FILE ...): in place of its form when it has one,
+; or else on a line after its last wave, or else before its first song.
 (def file-set-wave
   (fn (_ doc name amps)
-    (def piece (list (lit form) (Str8 append "(wave " name (Str8 join "" (List map (fn (_ a) (Str8 append " " (Str8 str a))) amps)) ")") "wave" #t))
+    (def piece (list (lit form) (Str8 append "(wave " name (Str8 join "" (List map (fn (_ a) (Str8 append " " (file-form-text a))) amps)) ")") "wave" #t))
     (def named? (fn (_ p) (if (%fl-wave? p) (str=? (symbol->str (List ref 1 (first (Xon parse (List ref 1 p))))) name) #f)))
     (def last-wave (List fold (fn (_ at i) (if (%fl-wave? (List ref i doc)) i at)) () (List range 0 (List length doc))))
     (def first-song (List find-index (fn (_ p) (eq? (first p) (lit song))) doc))
@@ -138,5 +171,5 @@
     (File write-all path (file-text doc))
     (file-written doc)))
 
-(provide tracker/file file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
-  file-waves file-wave file-set-wave file-read file-write!)
+(provide tracker/file file-form-text file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
+  file-waves file-wave file-set-wave file-read file-write! file-sample? file-sample-at file-dir)

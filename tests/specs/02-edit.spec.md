@@ -81,7 +81,7 @@ draws.
 (spec-keys! st (list ":instrument b (wave noise) (hz 1)" 'enter ":channel b" 'enter "z"
                      ":channel nope" 'enter))
 (def msg (edit-message st))
-(spec-keys! st (list 'left ":drop" 'enter ":drop" 'enter))
+(spec-keys! st (list 'alt-left ":drop" 'enter ":drop" 'enter))
 (spec-lines (spec-song st))
 (write (list msg (edit-message st)))
 ```
@@ -189,26 +189,26 @@ draws.
 
 ## the screen
 
-### the pattern is drawn a row a line, a channel a column, the cursor's cell marked
+### the pattern is drawn a row a line, a channel its note, instrument, volume and effect columns, the cursor's field marked
 
 ```tracker
 (def st (edit-make (file-parse "(song \"tune\" (bpm 100) (rows 2)\n  (instrument lead (wave sine))\n  (instrument bass (wave sine))\n  (pattern p (lead \"C4 . E4:50 .\") (bass \"C2 - . G2/v20,4\"))\n  (order p p))") "t.xon" ()))
 (def screen (Screen make 10 90))
-(spec-keys! st (list 'down 'right))
+(spec-keys! st (list 'down 'alt-right))
 (spec-draw! st screen)
 (spec-lines (spec-rows screen (List range 0 10)))
-(write (list (Style has? (Screen style-at screen 5 14) 'reverse) (Style has? (Screen style-at screen 5 5) 'reverse)))
+(write (list (Style has? (Screen style-at screen 5 23) 'reverse) (Style has? (Screen style-at screen 5 27) 'reverse)))
 ```
 ---
 ```output
  x-tracker  t.xon   "tune"   bpm 100  rows 2  ticks 6   octave 4  step 1   (no sound)
  order: [p] p
 
-     lead     bass
-  0  C4       C2
-  1  .        -
-  2  E4:50    .
-  3  .        G2/v20,4
+     1 lead 01          2 bass 02
+  0 C-4 01 ... ....... C-2 02 ... .......
+  1 ... .. ... ....... === .. ... .......
+  2 E-4 01  50 ....... ... .. ... .......
+  3 ... .. ... ....... G-2 02 ... v20,4
 
  ? help   Space play   p pattern   : command
 (#t #f)
@@ -363,9 +363,9 @@ Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one  
 
 ```tracker
 (def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (instrument b (wave noise))\n  (pattern p (a \"C4 D4 E4 F4\") (b \"G4 . . .\"))\n  (order p))") () ()))
-(spec-keys! st (list "V" 'down 'right "Y" 'down 'down "P"))
+(spec-keys! st (list "V" 'down 'alt-right "Y" 'down 'down "P"))
 (def pasted (spec-song st))
-(spec-keys! st (list 'home 'left "V" 'down ":transpose 12" 'enter ":gain 40" 'enter 'escape))
+(spec-keys! st (list 'home 'alt-left "V" 'down ":transpose 12" 'enter ":gain 40" 'enter 'escape))
 (def moved (spec-song st))
 (spec-keys! st (list 'end "V" 'up "X" ")" ":channel-instrument b" 'enter))
 (spec-lines pasted) (spec-lines moved) (spec-lines (spec-song st))

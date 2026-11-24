@@ -65,6 +65,8 @@
         (list (lit beat) () 3 ())
         (list (lit off) () 1 ())
         (list (lit effect) () 6 ())
+        (list (lit instrument) () 5 ())
+        (list (lit volume) () 2 ())
         (list (lit cursor) (list (lit reverse)) () ())
         (list (lit playing) (list (lit bold)) 2 ())
         (list (lit block) () 0 6)))

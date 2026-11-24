@@ -32,6 +32,7 @@
 (import x/sys/gc)
 (import x/core/doors str->sym int/ int%)
 (import tracker/node node-read node-form? node-text node-parts node-head node-value)
+(import tracker/cell cell-parts cell-join cell-note?)
 
 (def %sg-fail (fn (_ what) (Err raise (lit value) (Str8 append "x-tracker: " what) ())))
 (def %sg-write (prim-ref (lit io) (lit write-to-str)))
@@ -497,10 +498,92 @@
            ((null? (guard (e ()) (Mixer semitone head))) (Str8 append "no note " head))
            (#t ()))))
 
+
+; N held rows put in at R in channels C0 to C1, the rows below moved
+; down; the pattern's length kept.
+(def pattern-insert-rows
+  (fn (_ chs c0 c1 r n)
+    (def rows (pattern-rows chs))
+    (List map (fn (_ k)
+                ((fn (_ ch)
+                   (if (if (< k c0) #t (< c1 k)) ch
+                     ((fn (_ cells) (pair (first ch) (List take rows (List append (List take r cells) (List repeat n ".") (List drop r cells)))))
+                      (%sg-fit (rest ch) rows))))
+                 (List ref k chs)))
+      (List range 0 (List length chs)))))
+
+; Row R taken out of channel C alone, the rows below moved up, a held row
+; at its end.
+(def pattern-delete-rows
+  (fn (_ chs c0 c1 r n)
+    (def rows (pattern-rows chs))
+    (List map (fn (_ k)
+                ((fn (_ ch)
+                   (if (if (< k c0) #t (< c1 k)) ch
+                     ((fn (_ cells) (pair (first ch) (List append (List take r cells) (List drop (+ r n) cells) (List repeat (%sg-max 0 (- rows (List length (List drop (+ r n) cells)) r)) "."))))
+                      (%sg-fit (rest ch) rows))))
+                 (List ref k chs)))
+      (List range 0 (List length chs)))))
+
+
+; A to B at I of N steps, rounded to the nearest.
+(def %sg-between
+  (fn (_ a b i n) (+ a (int/ (+ (* 2 (* (- b a) i)) (if (< b a) (- 0 n) n)) (* 2 n)))))
+
+; An effect's letter and its numbers: "v20,6" as ("v" 20 6), nil for one
+; whose numbers do not read.
+(def %sg-effect-numbers
+  (fn (_ e)
+    (def ns (List map (fn (_ w) (guard (x ()) ((prim-ref (lit convert) (lit to)) w (Type named INTEGER) 10)))
+              (Str8 split "," (Str8 sub 1 (- (Str8 length e) 1) e))))
+    (if (List any? null? ns) () (pair (Str8 sub 0 1 e) ns))))
+
+; Channel C from row R0 to R1 slid from its first row's to its last's:
+; WHAT gain, the notes' gains; else effect, the cells' first effects,
+; which must be of one letter at both ends.  Raises a label 'value with
+; what is wrong otherwise.
+(def pattern-slide
+  (fn (_ chs c r0 r1 what)
+    (def a (cell-parts (pattern-cell chs c r0)))
+    (def b (cell-parts (pattern-cell chs c r1)))
+    (def n (- r1 r0))
+    (def put (fn (_ chs f) (List fold (fn (_ acc r) (pattern-set-cell acc c r (f r (cell-parts (pattern-cell acc c r))))) chs (List range r0 (+ r1 1)))))
+    (if (eq? what (lit gain))
+      (do (unless (if (cell-note? (first a)) (cell-note? (first b)) #f) (%sg-fail "a volume slide runs from a note to a note"))
+          (def ga (if (null? (List ref 1 a)) 100 (List ref 1 a)))
+          (def gb (if (null? (List ref 1 b)) 100 (List ref 1 b)))
+          (put chs (fn (_ r p) (if (cell-note? (first p)) (cell-join (first p) (%sg-between ga gb (- r r0) n) (List ref 2 p))
+                                  (cell-join (first p) (List ref 1 p) (List ref 2 p))))))
+      (do (def ea (if (null? (List ref 2 a)) () (%sg-effect-numbers (first (List ref 2 a)))))
+          (def eb (if (null? (List ref 2 b)) () (%sg-effect-numbers (first (List ref 2 b)))))
+          (unless (if (null? ea) #f (if (null? eb) #f (if (str=? (first ea) (first eb)) (= (List length ea) (List length eb)) #f)))
+            (%sg-fail "an effect slide runs from an effect to one of its letter and as many numbers"))
+          (put chs (fn (_ r p)
+                     (def e (Str8 append (first ea)
+                              (Str8 join "," (List map (fn (_ k) (Str8 str (%sg-between (List ref k (rest ea)) (List ref k (rest eb)) (- r r0) n)))
+                                               (List range 0 (List length (rest ea)))))))
+                     (def others (List ref 2 p))
+                     (cell-join (first p) (List ref 1 p)
+                       (if (if (pair? others) (Str8 starts? (first ea) (first others)) #f) (pair e (rest others)) (pair e others)))))))))
+
+; Channel C's rows R0 to R1 made twice as long, a hold after each, or
+; half as long, every other row, from R0: what falls past the pattern's
+; end is left out, and rows freed are held.
+(def pattern-stretch
+  (fn (_ chs c r0 r1 twice)
+    (def rows (pattern-rows chs))
+    (def cells (%sg-fit (rest (List ref c chs)) rows))
+    (def block (List take (+ 1 (- r1 r0)) (List drop r0 cells)))
+    (def made (if twice (List flat-map (fn (_ x) (list x ".")) block)
+                (List map (fn (_ i) (List ref (* 2 i) block)) (List range 0 (int/ (+ 1 (List length block)) 2)))))
+    (def after (if twice (List drop (+ r0 (List length made)) cells)
+                 (List append (List repeat (- (List length block) (List length made)) ".") (List drop (+ r1 1) cells))))
+    (List update c (pair (first (List ref c chs)) (List take rows (List append (List take r0 cells) made after))) chs)))
 (provide tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
   song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
   pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem
   song-effects song-set-effect song-drop-effect song-copy-instrument song-rename-instrument song-drop-instrument
   song-instrument-uses song-rename-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste
-  pattern-map-block song-note-name cell-transpose cell-gain)
+  pattern-map-block song-note-name cell-transpose cell-gain pattern-insert-rows pattern-delete-rows pattern-slide
+  pattern-stretch)

@@ -1,6 +1,6 @@
 ; # x-tracker -- a music tracker on x-lang
 ;
-; ## tracker/edit.x -- the editor: its state, keys and drawing
+; ## tracker/edit.x -- the editor: what its keys and commands do
 ;
 ; @author [Jon Ruttan](jonruttan@gmail.com)
 ; @copyright 2026 Jon Ruttan
@@ -19,85 +19,34 @@
 ; instrument's form.  : takes a command, as vi does: :w, :q, :bpm 90,
 ; :pattern NAME, :order a b a ...  ? lists the keys and the commands.
 ;
-; The state is a Vector; the slots are named below.  The document is never
+; The state is tracker/state's, drawn by tracker/draw.  The document is never
 ; changed in place (tracker/file, tracker/song): a change makes a new one,
 ; and the old is kept to undo to.
 
 (module tracker/edit)
 
 (import x/type/vector)
+(import x/codec/xon)
 (import x/tui/screen)
-(import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
+(import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub str->sym)
 (import tracker/song song-new song-name song-rename song-patterns song-pattern song-order song-prop
   song-instruments song-instrument-text song-waves song-set-pattern song-set-order song-set-prop song-set-instrument
   pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row pattern-delete-row
   pattern-add-channel pattern-drop-channel song-cell-problem song-effects song-set-effect song-drop-effect
   song-copy-instrument song-rename-instrument song-drop-instrument song-instrument-uses song-rename-pattern
   song-drop-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste pattern-map-block
-  cell-transpose cell-gain)
-(import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave file-set-wave)
+  cell-transpose cell-gain pattern-insert-rows pattern-delete-rows pattern-slide pattern-stretch)
+(import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave file-set-wave file-sample? file-sample-at file-dir file-form-text)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
-  player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open
+  player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open player-give!
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
   player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
 (import tracker/help help-index help-topic help-topics help-on)
+(import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
 
-(def %doc 0)
-(def %path 1)
-(def %song 2)       ; which song of the document, from 0
-(def %pattern 3)    ; the name of the pattern edited, or nil when the song has none
-(def %at 4)         ; the place in the order the pattern was reached from, or nil
-(def %row 5)
-(def %chan 6)
-(def %top 7)        ; the first row shown
-(def %left 8)       ; the first channel shown
-(def %octave 9)
-(def %step 10)      ; rows the cursor moves after a note is typed
-(def %msg 11)
-(def %input 12)     ; (KIND . TEXT) while a line is typed: command, cell or instrument
-(def %undo 13)      ; ((DOC SONG PATTERN) ...), the latest first
-(def %redo 14)
-(def %player 15)    ; the player (tracker/player), or nil when there is no sound
-(def %quit 16)
-(def %help 17)      ; the lines shown over the grid, ? or :song, or #f
-(def %warned 18)    ; whether :q was refused once for a change not written
-(def %heard 19)     ; the place last drawn as heard, (AT . ROW), or nil
-(def %follow 20)    ; whether the pattern and row heard are followed while playing
-(def %pick 21)      ; the song highlighted while :song lists them, or nil
-(def %stale 22)     ; whether the song heard is behind the song edited
-(def %borrowed 23)  ; the (wave ...) forms the player was given from other files (-w)
-(def %config 24)    ; the settings (tracker/config)
-(def %order-at 25)  ; the place picked in the order while O edits it, or nil
-(def %mark 26)      ; (ROW . CHANNEL) where the block marked with V starts, or nil
-(def %clip 27)      ; the cells copied, a list of columns, or nil
-(def %loop-at 28)   ; the row L marked as a loop's first, or nil
-(def %browse 29)    ; (TOPIC . ROW) while ? pages through the help: TOPIC 0 the index, nil none
-(def %slots 30)
-
-(def %get (fn (_ st i) (Vector ref i st)))
-(def %put! (fn (_ st i x) (Vector set! i x st)))
-(def %max (fn (_ a b) (if (< a b) b a)))
-(def %min (fn (_ a b) (if (< a b) a b)))
-(def %same? (fn (_ a b) (if (null? b) #f (= a b))))
-(def %num (fn (_ s) (guard (e ()) ((prim-ref (lit convert) (lit to)) s (Type named INTEGER) 10))))
-
-; --- the state ---------------------------------------------------------------
-
-(def edit-song (fn (_ st) (List ref (%get st %song) (file-songs (%get st %doc)))))
-(def edit-doc (fn (_ st) (%get st %doc)))
-(def edit-quit? (fn (_ st) (%get st %quit)))
-(def edit-message (fn (_ st) (%get st %msg)))
-(def edit-message! (fn (_ st text) (%put! st %msg text)))
-(def edit-player (fn (_ st) (%get st %player)))
-(def edit-place (fn (_ st) (list (%get st %pattern) (%get st %row) (%get st %chan))))
-
-(def %channels
-  (fn (_ st)
-    (if (null? (%get st %pattern)) () (song-pattern (edit-song st) (%get st %pattern)))))
-
-(def %rows (fn (_ st) (%max 1 (pattern-rows (%channels st)))))
 
 ; The pattern to edit in song S: the first of its order, or its first
 ; pattern, or nil; and the place in the order it is at.
@@ -139,7 +88,8 @@
     (%put! st %pattern (first fp))
     (%put! st %at (rest fp))
     (%put! st %row 0) (%put! st %chan 0) (%put! st %top 0) (%put! st %left 0)
-    (%put! st %mark ()) (%put! st %order-at ())
+    (%put! st %mark ()) (%put! st %mark-end ()) (%put! st %order-at ())
+    (%put! st %field 0) (%put! st %digit ())
     st))
 
 ; An editor of DOC, read from PATH, heard through PLAYER (nil for none),
@@ -160,6 +110,11 @@
     (%put! st %help #f)
     (%put! st %warned #f)
     (%put! st %follow (config-get cfg (lit follow)))
+    (%put! st %page (lit pattern))
+    (%put! st %inst-at 0)
+    (%put! st %setting-at 0)
+    (%put! st %sample-at 0)
+    (%put! st %env-held #f)
     (%put! st %stale #f)
     (%put! st %borrowed
       (if (null? player) ()
@@ -188,6 +143,11 @@
 ; Where the editor is, to undo to: (DOC SONG PATTERN).
 (def %here (fn (_ st) (list (%get st %doc) (%get st %song) (%get st %pattern))))
 
+; The document's waves, each sample's file named from the file's directory.
+(def %doc-waves
+  (fn (_ st)
+    (if (null? (%get st %path)) (file-waves (%get st %doc)) (file-waves (%get st %doc) (file-dir (%get st %path))))))
+
 ; The mixer given the document's waves, and the borrowed ones it does
 ; not have, as they were: after a change or an undo of one.
 (def %sync-waves!
@@ -196,7 +156,7 @@
     (unless (null? (%get st %player))
       (player-waves! (%get st %player)
         (List append (List filter (fn (_ w) (null? (file-wave doc (symbol->str (List ref 1 w))))) (%get st %borrowed))
-          (file-waves doc))))))
+          (%doc-waves st))))))
 
 ; The document made DOC: the old one kept to undo to.
 (def %doc-change!
@@ -413,7 +373,7 @@
     (edit-message! st
       (guard (e (if (Err err? e) (e msg) "the song cannot be rendered"))
         (Str8 append "Rendered " path ": "
-          (%frames-text (player-render! (if (null? p) (player-open () (file-waves (%get st %doc))) p) (edit-song st) path))
+          (%frames-text (player-render! (if (null? p) (player-open () (%doc-waves st)) p) (edit-song st) path))
           ".")))))
 
 ; --- the order ---------------------------------------------------------------
@@ -646,6 +606,11 @@
                ((if (= (List length args) 1) (str=? (first args) "keep") #f) (%keep-waves! st))
                (#t (edit-message! st ":waves  or  :waves keep"))))
       ((str=? cmd "wave") (%wave-cmd! st args))
+      ((str=? cmd "sample") (%sample-cmd! st args))
+      ((str=? cmd "open") (%open-cmd! st args))
+      ((str=? cmd "amplify")
+        (if (null? (%get st %pattern)) (edit-message! st "No pattern.")
+          (%number-cmd! st args 0 400 (fn (_ n) (%map-block! st (fn (_ c) (%amplified c n)))))))
       ((str=? cmd "set") (%set-cmd! st args))
       ((str=? cmd "help") (%help-cmd! st args))
       ((str=? cmd "rename")
@@ -721,15 +686,6 @@
       ((null? (rest args)) (%put! st %input (pair (pair (lit effect) (- k 1)) (%one-line (List ref (- k 1) (song-effects s))))))
       (#t (%try! st "not an effect" (fn (_) (%change! st (song-set-effect s (- k 1) form-text)) ()))))))
 
-; The rows and channels the block covers, (R0 R1 C0 C1), from the mark
-; to the cursor; the cursor's cell alone when nothing is marked.
-(def %block
-  (fn (_ st)
-    (def m (%get st %mark))
-    (def r (%get st %row)) (def c (%get st %chan))
-    (if (null? m) (list r r c c)
-      ((fn (_ mr mc) (list (%min mr r) (%max mr r) (%min mc c) (%max mc c)))
-       (%min (first m) (- (%rows st) 1)) (%min (rest m) (- (List length (%channels st)) 1))))))
 
 ; Each cell of the block made F of it; the mark kept, so a second
 ; change can follow.
@@ -863,6 +819,515 @@
       ((eq? key (lit enter)) (do (stop!) (%goto-at! st at)))
       (#t ()))))
 
+; --- the pattern editor's fields ------------------------------------------------
+
+; The cursor moved D fields: past a channel's effect to the next
+; channel's note, before its note to the last one's effect.
+(def %field-move!
+  (fn (_ st d)
+    (def n (List length (%channels st)))
+    (def at (+ (+ (* 4 (%get st %chan)) (%get st %field)) d))
+    (def to (%max 0 (%min (- (* 4 n) 1) at)))
+    (%put! st %digit ())
+    (%put! st %chan (int/ to 4))
+    (%put! st %field (int% to 4))))
+
+; The cell at the cursor's parts (tracker/cell) made F of them, the
+; cell's text checked; the cursor moved on by the step when MOVE.
+(def %parts-change!
+  (fn (_ st f move)
+    (def p (cell-parts (%cell st)))
+    (def text ((fn (_ q) (cell-join (first q) (List ref 1 q) (List ref 2 q))) (f p)))
+    (def why (song-cell-problem text))
+    (if (not (null? why)) (edit-message! st why)
+      (do (%set-channels! st (pattern-set-cell (%channels st) (%get st %chan) (%get st %row) text))
+          (when move (%move! st (%get st %step)))))))
+
+; A digit typed in the instrument or the volume column: the first of two
+; is held, the second makes the number.  The volume is the note's gain,
+; 0 to 99, in percent of its instrument's; the instrument, from 01, is
+; the channel's: x-tracker plays a channel with one instrument.
+(def %digit!
+  (fn (_ st d)
+    (def held (%get st %digit))
+    (def field (%get st %field))
+    (if (null? held)
+      (do (%put! st %digit (* 10 d))
+          (edit-message! st (Str8 append (if (= field 1) "Instrument " "Volume ") (Str8 str d) "_")))
+      (do (%put! st %digit ())
+          (edit-message! st "")
+          (def n (+ held d))
+          (if (= field 2)
+            (if (cell-note? (first (cell-parts (%cell st))))
+              (%parts-change! st (fn (_ p) (list (first p) n (List ref 2 p))) #t)
+              (edit-message! st "A volume is a note's: type a note first."))
+            ((fn (_ names)
+               (if (if (< 0 n) (not (< (List length names) n)) #f)
+                 (do (%set-channels! st (pattern-set-instrument (%channels st) (%get st %chan) (List ref (- n 1) names)))
+                     (edit-message! st (Str8 append "Channel " (Str8 str (+ 1 (%get st %chan))) " plays " (List ref (- n 1) names)
+                                         ", every row: x-tracker plays a channel with one instrument.")))
+                 (edit-message! st (Str8 append "No instrument " (Str8 str n) ": F4 lists them."))))
+             (song-instruments (edit-song st))))))))
+
+; A key in the effect column: Enter, or a letter starting one, edits the
+; cell's effects as text, each a letter and its numbers, apart by /.
+(def %effect-key!
+  (fn (_ st key)
+    (def now (Str8 join "/" (List ref 2 (cell-parts (%cell st)))))
+    (%put! st %input (pair (lit effects) (if (eq? key (lit enter)) now (if (str=? now "") key (Str8 append now "/" key)))))))
+
+; --- blocks -------------------------------------------------------------------
+
+; The block's corner at the cursor: Alt-B its first, Alt-E its last.
+; Either alone marks the cursor's cell; a block whose last corner is not
+; set follows the cursor.
+(def %mark-at! (fn (_ st) (pair (%get st %row) (%get st %chan))))
+
+(def %block-begin!
+  (fn (_ st)
+    (%put! st %mark (%mark-at! st))
+    (when (null? (%get st %mark-end)) (%put! st %mark-end (%mark-at! st)))
+    (%block-said! st)))
+
+(def %block-end!
+  (fn (_ st)
+    (when (null? (%get st %mark)) (%put! st %mark (%mark-at! st)))
+    (%put! st %mark-end (%mark-at! st))
+    (%block-said! st)))
+
+(def %block-said!
+  (fn (_ st)
+    (def b (%block st))
+    (edit-message! st (Str8 append "Block: rows " (Str8 str (first b)) " to " (Str8 str (List ref 1 b)) ", channels "
+                        (Str8 str (+ 1 (List ref 2 b))) " to " (Str8 str (+ 1 (List ref 3 b)))
+                        "   Alt-C copy  Alt-Z cut  Alt-P paste  Alt-Q Alt-A transpose  Alt-U unmark"))))
+
+(def %unmark! (fn (_ st) (%put! st %mark ()) (%put! st %mark-end ()) (edit-message! st "")))
+
+; Shift and an arrow: the block from where the cursor was, to where it goes.
+(def %shift-move!
+  (fn (_ st f)
+    (when (null? (%get st %mark)) (%put! st %mark (%mark-at! st)))
+    (f)
+    (%put! st %mark-end (%mark-at! st))
+    (%block-said! st)))
+
+; Alt-L: the cursor's channel, then again the whole pattern.
+(def %mark-column!
+  (fn (_ st)
+    (def whole (if (null? (%get st %mark)) #f
+                 (if (= 0 (first (%get st %mark)))
+                   (if (= (rest (%get st %mark)) (%get st %chan)) (= (rest (%get st %mark-end)) (%get st %chan)) #f) #f)))
+    (if whole
+      (do (%put! st %mark (pair 0 0)) (%put! st %mark-end (pair (- (%rows st) 1) (- (List length (%channels st)) 1))))
+      (do (%put! st %mark (pair 0 (%get st %chan))) (%put! st %mark-end (pair (- (%rows st) 1) (%get st %chan)))))
+    (%block-said! st)))
+
+; Alt-D: the beat's rows from the cursor, then twice as many each again.
+(def %quick-mark!
+  (fn (_ st)
+    (def beat (%max 1 (song-prop (edit-song st) "rows" 4)))
+    (def m (%get st %mark))
+    (def again (if (null? m) #f (if (= (first m) (%get st %row)) (= (rest m) (%get st %chan)) #f)))
+    (def n (if again (* 2 (+ 1 (- (first (%get st %mark-end)) (first m)))) beat))
+    (%put! st %mark (%mark-at! st))
+    (%put! st %mark-end (pair (%min (- (%rows st) 1) (+ (%get st %row) (- n 1))) (%get st %chan)))
+    (%block-said! st)))
+
+; The clipboard put at the cursor: over what is there (OVER), or mixed
+; into its holds (MIX), or the rows below moved down (neither), in the
+; channels it covers.
+(def %paste!
+  (fn (_ st how)
+    (def clip (%get st %clip))
+    (def c (%get st %chan)) (def r (%get st %row))
+    (def chs (%channels st))
+    (if (null? clip) (edit-message! st "Nothing copied: Alt-B and Alt-E mark a block, Alt-C copies it.")
+      (%set-channels! st
+        (match ((eq? how (lit over)) (pattern-paste chs c r clip))
+               ((eq? how (lit mix))
+                 (pattern-paste chs c r
+                   (List map (fn (_ k) (List map (fn (_ j) ((fn (_ now new) (if (str=? now ".") new now))
+                                                            (pattern-cell chs (+ c k) (+ r j)) (List ref j (List ref k clip))))
+                                         (List range 0 (List length (List ref k clip)))))
+                     (List range 0 (%min (List length clip) (- (List length chs) c))))))
+               (#t (pattern-paste (pattern-insert-rows chs c (+ c (- (List length clip) 1)) r (List length (first clip))) c r clip)))))))
+
+; The block's notes' gains, or its cells' first effects' numbers, slid
+; from the first row's to the last's over the rows between: Alt-K, Alt-X.
+(def %interpolate!
+  (fn (_ st what)
+    (def b (%block st))
+    (if (= (first b) (List ref 1 b)) (edit-message! st "Mark a block of more than one row to slide across.")
+      (%set-channels! st
+        (List fold (fn (_ chs c) (pattern-slide chs c (first b) (List ref 1 b) what))
+          (%channels st) (List range (List ref 2 b) (+ (List ref 3 b) 1)))))))
+
+; The block made twice as long, or half, from its first row: Alt-F, Alt-G.
+(def %stretch!
+  (fn (_ st twice)
+    (def b (%block st))
+    (def n (+ (- (List ref 1 b) (first b)) 1))
+    (%set-channels! st
+      (List fold (fn (_ chs c) (pattern-stretch chs c (first b) (List ref 1 b) twice))
+        (%channels st) (List range (List ref 2 b) (+ (List ref 3 b) 1))))
+    ; The block keeps the rows it now fills.
+    (unless (null? (%get st %mark-end))
+      (do (%put! st %mark (pair (first b) (List ref 2 b)))
+          (%put! st %mark-end
+            (pair (%min (- (%rows st) 1) (+ (first b) (- (if twice (* n 2) (int/ (+ n 1) 2)) 1))) (List ref 3 b)))))))
+
+; --- the pages ------------------------------------------------------------------
+
+; What each page's foot says when it is shown.
+(def %page-hints
+  (list (pair (lit pattern) "")
+        (pair (lit samples) "Samples   up down pick   Enter or Insert: :sample NAME FILE.wav [ROOT]   Space hear   F2 the pattern")
+        (pair (lit instruments) "Instruments   up down pick   Enter edit   Tab its envelope   Space or the piano hear it   F2 the pattern")
+        (pair (lit orders) "Order   up down pick   left right its pattern   Insert copy   Delete drop   [ ] move   Enter edit")
+        (pair (lit song) "Song   up down pick   left right change   Enter type it   F2 the pattern")))
+
+(def %show-page!
+  (fn (_ st page)
+    (%put! st %page page)
+    (%put! st %digit ())
+    (when (eq? page (lit orders)) (%put! st %order-at (if (null? (%get st %at)) 0 (%get st %at))))
+    (unless (eq? page (lit orders)) (%put! st %order-at ()))
+    (edit-message! st "")
+    #t))
+
+; The song played from the start of its order, its first pattern shown.
+(def %play-start!
+  (fn (_ st)
+    (if (null? (song-order (edit-song st))) (edit-message! st "The song has no order: :order NAME ...")
+      (do (%goto-at! st 0) (%put! st %row 0) (%start! st (lit song) 0 () #f "")))))
+
+(def %stop!
+  (fn (_ st)
+    (def p (%get st %player))
+    (unless (null? p) (when (player-playing? p) (player-stop! p)))
+    (%put! st %heard ())
+    (edit-message! st "")))
+
+; The keys every page takes, Impulse Tracker's: the pages on F1 to F4,
+; F11 and F12, playing on F5 to F8, writing and leaving.  Answers whether
+; KEY was one.
+(def %global-key!
+  (fn (_ st key)
+    (def has-pattern (not (null? (%get st %pattern))))
+    (match
+      ((not (symbol? key)) #f)
+      ((eq? key (lit f1)) (do (%browse! st 0 0) #t))
+      ((eq? key (lit f2)) (%show-page! st (lit pattern)))
+      ((eq? key (lit f3)) (%show-page! st (lit samples)))
+      ((eq? key (lit f4)) (%show-page! st (lit instruments)))
+      ((eq? key (lit f11)) (%show-page! st (lit orders)))
+      ((eq? key (lit f12)) (%show-page! st (lit song)))
+      ((eq? key (lit f5)) (do (%play-start! st) #t))
+      ((eq? key (lit f6)) (do (%start! st (lit pattern) 0 () #f "") #t))
+      ((eq? key (lit shift-f6)) (do (%start! st (lit song) 0 () #f "") #t))
+      ((eq? key (lit f7)) (do (if has-pattern (%play-here! st) (edit-message! st "The song has no pattern to play.")) #t))
+      ((eq? key (lit f8)) (do (%stop! st) #t))
+      ((if (eq? key (lit ctrl-s)) #t (eq? key (lit f10))) (do (%write! st ()) #t))
+      ((eq? key (lit f9)) (do (%put! st %input (pair (lit command) "open ")) #t))
+      ((eq? key (lit ctrl-q)) (do (%quit! st #f) #t))
+      ((eq? key (lit ctrl-z)) (do (%undo-step! st %undo %redo "undo") #t))
+      ((if has-pattern (eq? key (lit alt-f9)) #f) (do (%hush! st (lit channel) (%get st %chan) #f) #t))
+      ((if has-pattern (eq? key (lit alt-f10)) #f) (do (%hush! st (lit channel) (%get st %chan) #t) #t))
+      (#t #f))))
+
+; A key on a page other than the pattern's: Escape goes back to it; :,
+; ?, Space, U and R are as there.
+(def %page-key!
+  (fn (_ st key)
+    (def page (%get st %page))
+    (match
+      ((eq? key (lit escape)) (%show-page! st (lit pattern)))
+      ((eq? key (lit interrupt)) (%quit! st #f))
+      ((%is? key ":") (%put! st %input (pair (lit command) "")))
+      ((%is? key "?") (%browse! st 0 0))
+      ((%is? key "U") (%undo-step! st %undo %redo "undo"))
+      ((%is? key "R") (%undo-step! st %redo %undo "redo"))
+      ((eq? page (lit orders)) (%orders-key! st key))
+      ((eq? page (lit song)) (%song-page-key! st key))
+      ((eq? page (lit instruments)) (%instruments-key! st key))
+      ((eq? page (lit samples)) (%samples-key! st key))
+      (#t ()))))
+
+; The order list: up and down a place, left and right its pattern, the
+; keys of O otherwise; Enter edits the pattern there.
+(def %orders-key!
+  (fn (_ st key)
+    (when (null? (%get st %order-at)) (%put! st %order-at 0))
+    (match
+      ((eq? key (lit up)) (%order-key! st (lit left)))
+      ((eq? key (lit down)) (%order-key! st (lit right)))
+      ((if (eq? key (lit left)) #t (%is? key "-")) (%order-key! st (lit up)))
+      ((if (eq? key (lit right)) #t (%is? key "+")) (%order-key! st (lit down)))
+      ((eq? key (lit enter))
+        (do (%order-key! st key) (%show-page! st (lit pattern))))
+      ((%is? key " ") (%play! st (lit song)))
+      (#t (%order-key! st key)))
+    (when (null? (%get st %order-at)) (%put! st %order-at 0))))
+
+; --- the song page ----------------------------------------------------------------
+
+; The song page's lines: (LABEL VALUE COMMAND STEP), COMMAND the command
+; Enter types, STEP what left and right change it by, nil for none.
+(def %song-settings
+  (fn (_ st)
+    (def s (edit-song st))
+    (List append
+      (list (list "Name" (song-name s) (Str8 append "rename " (song-name s)) ())
+            (list "Tempo, beats a minute" (Str8 str (song-prop s "bpm" 90)) "bpm " 1)
+            (list "Rows a beat" (Str8 str (song-prop s "rows" 4)) "rows " 1)
+            (list "Ticks a row" (Str8 str (song-prop s "ticks" 6)) "ticks " 1)
+            (list "Tempo added at full tension" (Str8 str (song-prop s "tension-bpm" 0)) "tension-bpm " 1)
+            (list "Octave typed in" (Str8 str (%get st %octave)) "octave " 1)
+            (list "Step after a note" (Str8 str (%get st %step)) "step " 1)
+            (list "Follow the playing" (if (%get st %follow) "on" "off") "set follow " ()))
+      (List map (fn (_ i) (list (Str8 append "Effect " (Str8 str (+ i 1))) (%one-line (List ref i (song-effects s)))
+                                (Str8 append "effect " (Str8 str (+ i 1))) ()))
+        (List range 0 (List length (song-effects s))))
+      (list (list "A new effect" "" "effect (" ())))))
+
+(def %song-page-key!
+  (fn (_ st key)
+    (def lines (%song-settings st))
+    (def at (%min (%get st %setting-at) (- (List length lines) 1)))
+    (def line (List ref at lines))
+    (def nudge!
+      (fn (_ d)
+        (if (null? (List ref 3 line)) (when (str=? (first line) "Follow the playing") (%command! st (Str8 append "set follow " (if (%get st %follow) "off" "on"))))
+          (%command! st (Str8 append (List ref 2 line) (Str8 str (+ d (%num (List ref 1 line)))))))))
+    (match
+      ((eq? key (lit up)) (%put! st %setting-at (%max 0 (- at 1))))
+      ((eq? key (lit down)) (%put! st %setting-at (%min (- (List length lines) 1) (+ at 1))))
+      ((eq? key (lit left)) (nudge! -1))
+      ((eq? key (lit right)) (nudge! 1))
+      ((eq? key (lit page-up)) (nudge! -10))
+      ((eq? key (lit page-down)) (nudge! 10))
+      ((eq? key (lit enter))
+        (%put! st %input (pair (lit command) (if (null? (List ref 3 line)) (List ref 2 line) (Str8 append (List ref 2 line) (List ref 1 line))))))
+      ((if (eq? key (lit delete)) (Str8 starts? "Effect " (first line)) #f)
+        (%command! st (Str8 append "effect drop " (Str8 sub 7 (- (Str8 length (first line)) 7) (first line)))))
+      ((%is? key " ") (%play! st (lit song)))
+      (#t ()))))
+
+; --- the instruments page ---------------------------------------------------------
+
+(def %write-form file-form-text)
+
+; The instrument picked on the instruments page, its name, or nil.
+(def %picked-instrument
+  (fn (_ st)
+    ((fn (_ names) (if (null? names) () (List ref (%min (%get st %inst-at) (- (List length names) 1)) names)))
+     (song-instruments (edit-song st)))))
+
+; Instrument NAME's form, (instrument NAME PROP ...).
+(def %instrument-form
+  (fn (_ st name) (first (Xon parse (song-instrument-text (edit-song st) name)))))
+
+; Its envelope's points, ((MS PCT) ...), or nil for none.
+(def %envelope
+  (fn (_ form)
+    ((fn (_ e) (if (null? e) () (rest e)))
+     (List find (fn (_ p) (if (pair? p) (eq? (first p) (lit env)) #f)) (rest (rest form))))))
+
+; Instrument NAME with its envelope made POINTS.
+(def %set-envelope!
+  (fn (_ st name points)
+    (def form (%instrument-form st name))
+    (def props (rest (rest form)))
+    (def env (pair (lit env) points))
+    (def had (List any? (fn (_ p) (if (pair? p) (eq? (first p) (lit env)) #f)) props))
+    (def made (List append (list (lit instrument) (List ref 1 form))
+                (if had (List map (fn (_ p) (if (if (pair? p) (eq? (first p) (lit env)) #f) env p)) props) (List append props (list env)))))
+    (%try! st "not an instrument" (fn (_) (%change! st (song-set-instrument (edit-song st) (%write-form made))) ()))))
+
+; A note of instrument NAME heard, SEMI semitones above the octave's C.
+(def %hear-instrument!
+  (fn (_ st name semi)
+    (unless (null? (%get st %player))
+      (%try! st "the note cannot be played"
+        (fn (_) (player-preview! (%get st %player) (edit-song st) name (%note-for st semi)) (edit-feed! st) ())))))
+
+; The cells of channels CHANS at the cursor's row heard, each as its
+; channel's instrument plays it: 4 the cursor's, 8 the row's.
+(def %hear-cells!
+  (fn (_ st chans)
+    (List for-each
+      (fn (_ c)
+        (def cell (pattern-cell (%channels st) c (%get st %row)))
+        (def note (first (cell-parts cell)))
+        (when (if (cell-note? note) (not (null? (%get st %player))) #f)
+          (%try! st "the note cannot be played"
+            (fn (_) (player-preview! (%get st %player) (edit-song st) (first (List ref c (%channels st))) note) (edit-feed! st) ()))))
+      chans)
+    (%move! st 1)))
+
+(def %instruments-key!
+  (fn (_ st key)
+    (def names (song-instruments (edit-song st)))
+    (def name (%picked-instrument st))
+    (def points (if (null? name) () (%envelope (%instrument-form st name))))
+    (def at (%get st %env-at))
+    (def n (List length points))
+    (def piano (if (str? key) (%str-entry key %piano) ()))
+    (def move-point!
+      (fn (_ dms dpct)
+        (def i (%min at (- n 1)))
+        (def p (List ref i points))
+        (def lo (if (= i 0) 0 (first (List ref (- i 1) points))))
+        (def hi (if (= i (- n 1)) 60000 (first (List ref (+ i 1) points))))
+        (def ms (if (= i 0) (first p) (%max lo (%min hi (+ (first p) dms)))))
+        (%set-envelope! st name (List update i (list ms (%max 0 (%min 100 (+ (List ref 1 p) dpct)))) points))))
+    (match
+      ((null? name) (when (eq? key (lit enter)) (%put! st %input (pair (lit command) "instrument "))))
+      ((eq? key (lit complete))
+        (if (null? at) (if (null? points) (edit-message! st "No envelope: Enter edits the instrument, (env (MS PCT) ...).") (%put! st %env-at 0))
+          (do (%put! st %env-at ()) (%put! st %env-held #f))))
+      ((%is? key " ") (%hear-instrument! st name 0))
+      ((not (null? piano)) (%hear-instrument! st name (rest piano)))
+      ; The list has the keys.
+      ((null? at)
+        (match ((eq? key (lit up)) (%put! st %inst-at (%max 0 (- (%min (%get st %inst-at) (- (List length names) 1)) 1))))
+               ((eq? key (lit down)) (%put! st %inst-at (%min (- (List length names) 1) (+ (%get st %inst-at) 1))))
+               ((eq? key (lit enter)) (%put! st %input (pair (lit instrument) (%one-line (song-instrument-text (edit-song st) name)))))
+               ((eq? key (lit insert)) (%put! st %input (pair (lit command) "instrument ")))
+               (#t ())))
+      ; The envelope has them: a point picked, picked up with Enter and
+      ; moved with the arrows, Alt for ten at a time.
+      ((eq? key (lit enter)) (%put! st %env-held (not (%get st %env-held))))
+      ((if (%get st %env-held) (List includes? key (list (lit left) (lit right) (lit up) (lit down) (lit alt-left) (lit alt-right) (lit alt-up) (lit alt-down))) #f)
+        (match ((eq? key (lit left)) (move-point! -1 0)) ((eq? key (lit right)) (move-point! 1 0))
+               ((eq? key (lit alt-left)) (move-point! -10 0)) ((eq? key (lit alt-right)) (move-point! 10 0))
+               ((eq? key (lit up)) (move-point! 0 1)) ((eq? key (lit down)) (move-point! 0 -1))
+               ((eq? key (lit alt-up)) (move-point! 0 10)) (#t (move-point! 0 -10))))
+      ((eq? key (lit left)) (%put! st %env-at (%max 0 (- at 1))))
+      ((eq? key (lit right)) (%put! st %env-at (%min (- n 1) (+ at 1))))
+      ((eq? key (lit insert))
+        ((fn (_ i)
+           (def p (List ref i points))
+           (def q (if (< i (- n 1)) (List ref (+ i 1) points) (list (+ (first p) 50) 0)))
+           (%set-envelope! st name (List insert (+ i 1) (list (int/ (+ (first p) (first q)) 2) (int/ (+ (List ref 1 p) (List ref 1 q)) 2)) points))
+           (%put! st %env-at (+ i 1)))
+         (%min at (- n 1))))
+      ((eq? key (lit delete))
+        (if (< n 2) (edit-message! st "An envelope keeps one point.")
+          (do (%set-envelope! st name (List remove (%min at (- n 1)) 1 points)) (%put! st %env-at (%max 0 (- (%min at (- n 1)) 1))))))
+      (#t ()))))
+
+; --- the samples page ---------------------------------------------------------------
+
+; The file's waves that are samples, (wave NAME (sample FILE ...)).
+(def %samples (fn (_ st) (List filter file-sample? (file-waves (%get st %doc)))))
+
+(def %samples-key!
+  (fn (_ st key)
+    (def ws (%samples st))
+    (def at (%min (%get st %sample-at) (%max 0 (- (List length ws) 1))))
+    (def w (if (null? ws) () (List ref at ws)))
+    (match
+      ((eq? key (lit up)) (%put! st %sample-at (%max 0 (- at 1))))
+      ((eq? key (lit down)) (%put! st %sample-at (%min (%max 0 (- (List length ws) 1)) (+ at 1))))
+      ((if (eq? key (lit insert)) #t (null? w)) (when (List includes? key (list (lit insert) (lit enter))) (%put! st %input (pair (lit command) "sample "))))
+      ((eq? key (lit enter))
+        (%put! st %input (pair (lit command) (Str8 append "sample " (%wave-name w) " " (Str8 join " " (List map %write-form (rest (List ref 2 w))))))))
+      ((%is? key " ") (%hear-sample! st (%wave-name w)))
+      (#t ()))))
+
+; Sample NAME heard at C4, as an instrument of it alone would play it.
+(def %hear-sample!
+  (fn (_ st name)
+    (unless (null? (%get st %player))
+      (%try! st "the sample cannot be played"
+        (fn (_)
+          (player-preview! (%get st %player)
+            (song-set-instrument (edit-song st) (Str8 append "(instrument sample-heard (wave " name ") (env (0 100) (60000 100)) (release 30))"))
+            "sample-heard" "C4")
+          (edit-feed! st) ())))))
+
+; :sample NAME FILE [ROOT] [START END]: the WAV file FILE kept as the wave
+; NAME, read from the directory of the file edited, sounding at ROOT and
+; looping from START to END when they are given.
+(def %sample-cmd!
+  (fn (_ st args)
+    (def name (if (null? args) () (first args)))
+    (match
+      ((< (List length args) 2) (edit-message! st ":sample NAME FILE.wav [ROOT] [START END]"))
+      ((not (%name? name)) (edit-message! st "A sample's name is a word."))
+      (#t ((fn (_ parts)
+             (def form (list (lit wave) (str->sym name) (pair (lit sample) parts)))
+             (def dir (if (null? (%get st %path)) "." (file-dir (%get st %path))))
+             (%try! st "not a WAV file"
+               (fn (_)
+                 ; Read once here, so a file that is not one says so now.
+                 (player-give! (file-sample-at form dir))
+                 (%doc-change! st (file-set-wave (%get st %doc) name (list (pair (lit sample) parts))))
+                 (edit-message! st (Str8 append "Sample " name ": " (List ref 1 args) ". An instrument plays it with (wave " name ")."))
+                 ())))
+           (pair (List ref 1 args)
+             (List map (fn (_ w) (if (null? (%num w)) w (%num w))) (rest (rest args)))))))))
+
+; --- the pattern editor's columns ---------------------------------------------------
+
+(def %digits (list "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+(def %effect-letters (list "a" "v" "s" "p" "t" "f" "l" "w" "o" "x" "y" "c" "d" "r"))
+
+; A key in the instrument, volume or effect column: digits make the
+; instrument or the volume, . clears the volume or the effects, a
+; letter or Enter edits the effects.  A key that would type a note does
+; nothing there.  Answers whether KEY was one of these.
+(def %field-key!
+  (fn (_ st key)
+    (def field (%get st %field))
+    (def digit (if (str? key) (List index-of key %digits) ()))
+    (match
+      ((null? (%get st %pattern)) #f)
+      ((if (null? field) #t (= field 0)) #f)
+      ((if (null? digit) #f (< field 3)) (do (%digit! st digit) #t))
+      ((%is? key ".")
+        (do (match ((= field 2) (%parts-change! st (fn (_ p) (list (first p) () (List ref 2 p))) #t))
+                   ((= field 3) (%parts-change! st (fn (_ p) (list (first p) (List ref 1 p) ())) #t))
+                   (#t ()))
+            #t))
+      ((if (= field 3) (if (eq? key (lit enter)) #t (if (str? key) (List includes? key %effect-letters) #f)) #f)
+        (do (%effect-key! st key) #t))
+      ((if (str? key) (not (null? (%str-entry key %piano))) #f) #t)
+      (#t #f))))
+
+; --- opening another file --------------------------------------------------------
+
+; :open FILE: FILE edited in place of this one, made when it is first
+; written if it does not exist; refused once while there are changes not
+; written, as :q is.
+(def %open-cmd!
+  (fn (_ st args)
+    (def path (Str8 join " " args))
+    (match
+      ((null? args) (edit-message! st ":open FILE"))
+      ((if (file-changed? (%get st %doc)) (not (%get st %warned)) #f)
+        (do (%put! st %warned #t) (edit-message! st "The song has changed: :w writes it, :open again leaves it.")))
+      (#t (%try! st "the file cannot be read"
+            (fn (_)
+              (def doc (file-read path))
+              (%put! st %doc (if (null? (file-songs doc)) (file-add-song doc (song-new "untitled")) doc))
+              (%put! st %path path)
+              (%put! st %undo ()) (%put! st %redo ()) (%put! st %warned #f)
+              (%go-song! st 0)
+              (%sync-waves! st)
+              (%show-page! st (lit pattern))
+              (edit-message! st (Str8 append "Opened " path "."))
+              ()))))))
+
+; CELL's gain taken to PCT percent of itself: a note's, held and let-go
+; cells as they were.
+(def %amplified
+  (fn (_ cell pct)
+    (def p (cell-parts cell))
+    (if (not (cell-note? (first p))) cell
+      (cell-join (first p) (%min 400 (int/ (+ 50 (* pct (if (null? (List ref 1 p)) 100 (List ref 1 p)))) 100)) (List ref 2 p)))))
 ; --- keys --------------------------------------------------------------------
 
 (def %is? (fn (_ key s) (if (str? key) (str=? key s) #f)))
@@ -879,6 +1344,8 @@
     (match
       ((eq? kind (lit command)) (%command! st text))
       ((eq? kind (lit cell)) (%put-cell! st (Str8 trim text)))
+      ((eq? kind (lit effects))
+        (%parts-change! st (fn (_ p) (list (first p) (List ref 1 p) (List filter (fn (_ e) (not (str=? e ""))) (Str8 split "/" (Str8 trim text))))) #t))
       ((pair? kind)
         (%try! st "not an effect" (fn (_) (%change! st (song-set-effect (edit-song st) (rest kind) (Str8 trim text))) ())))
       (#t ((fn (_ e) (unless (null? e) (edit-message! st e)))
@@ -913,7 +1380,10 @@
       ((not (null? (%get st %pick))) (%pick-key! st key))
       ((not (null? (%get st %browse))) (%browse-key! st key))
       ((%get st %help) (%put! st %help #f))
+      ((%global-key! st key) ())
+      ((not (eq? (%get st %page) (lit pattern))) (%page-key! st key))
       ((not (null? (%get st %order-at))) (%order-key! st key))
+      ((%field-key! st key) ())
       ((%is? key "O")
         (do (%put! st %order-at (if (null? (%get st %at)) 0 (%get st %at)))
             (edit-message! st "Order: left right pick, up down its pattern, i copy, d drop, [ ] move, Enter edit, Escape done")))
@@ -953,21 +1423,63 @@
       ((eq? key (lit page-down)) (%put! st %row (%min (- (%rows st) 1) (+ (%get st %row) 16))))
       ((eq? key (lit home)) (%put! st %row 0))
       ((eq? key (lit end)) (%put! st %row (- (%rows st) 1)))
-      ((eq? key (lit left)) (%put! st %chan (%max 0 (- (%get st %chan) 1))))
-      ((eq? key (lit right)) (%put! st %chan (%min (- (List length (%channels st)) 1) (+ (%get st %chan) 1))))
-      ((eq? key (lit complete)) (%put! st %chan (int% (+ (%get st %chan) 1) (List length (%channels st)))))
+      ((eq? key (lit left)) (%field-move! st -1))
+      ((eq? key (lit right)) (%field-move! st 1))
+      ((eq? key (lit alt-left)) (%put! st %chan (%max 0 (- (%get st %chan) 1))))
+      ((eq? key (lit alt-right)) (%put! st %chan (%min (- (List length (%channels st)) 1) (+ (%get st %chan) 1))))
+      ((eq? key (lit complete))
+        (do (%put! st %chan (int% (+ (%get st %chan) 1) (List length (%channels st)))) (%put! st %field 0)))
+      ((eq? key (lit shift-tab))
+        (do (%put! st %chan (int% (+ (%get st %chan) (- (List length (%channels st)) 1)) (List length (%channels st))))
+            (%put! st %field 0)))
+      ((eq? key (lit shift-up)) (%shift-move! st (fn (_) (%put! st %row (%max 0 (- (%get st %row) 1))))))
+      ((eq? key (lit shift-down)) (%shift-move! st (fn (_) (%put! st %row (%min (- (%rows st) 1) (+ (%get st %row) 1))))))
+      ((eq? key (lit shift-left)) (%shift-move! st (fn (_) (%put! st %chan (%max 0 (- (%get st %chan) 1))))))
+      ((eq? key (lit shift-right)) (%shift-move! st (fn (_) (%put! st %chan (%min (- (List length (%channels st)) 1) (+ (%get st %chan) 1))))))
+      ((eq? key (lit ctrl-page-up)) (%put! st %row 0))
+      ((eq? key (lit ctrl-page-down)) (%put! st %row (- (%rows st) 1)))
+      ((eq? key (lit alt-b)) (%block-begin! st))
+      ((eq? key (lit alt-e)) (%block-end! st))
+      ((eq? key (lit alt-l)) (%mark-column! st))
+      ((eq? key (lit alt-d)) (%quick-mark! st))
+      ((eq? key (lit alt-u)) (%unmark! st))
+      ((eq? key (lit alt-c)) (do (%copy-block! st) (edit-message! st (Str8 append (edit-message st) "  Alt-P paste, Alt-O over, Alt-M mix"))))
+      ((eq? key (lit alt-z)) (do (%copy-block! st) (%map-block! st (fn (_ c) ".")) (%unmark! st)))
+      ((eq? key (lit alt-p)) (%paste! st (lit insert)))
+      ((eq? key (lit alt-o)) (%paste! st (lit over)))
+      ((eq? key (lit alt-m)) (%paste! st (lit mix)))
+      ((eq? key (lit alt-q)) (%map-block! st (fn (_ c) (cell-transpose c 1))))
+      ((eq? key (lit alt-a)) (%map-block! st (fn (_ c) (cell-transpose c -1))))
+      ((eq? key (lit alt-Q)) (%map-block! st (fn (_ c) (cell-transpose c 12))))
+      ((eq? key (lit alt-A)) (%map-block! st (fn (_ c) (cell-transpose c -12))))
+      ((eq? key (lit alt-k)) (%try! st "not a slide" (fn (_) (%interpolate! st (lit gain)) ())))
+      ((eq? key (lit alt-x)) (%try! st "not a slide" (fn (_) (%interpolate! st (lit effect)) ())))
+      ((eq? key (lit alt-w)) (%map-block! st (fn (_ c) (cell-gain c 100))))
+      ((eq? key (lit alt-v)) (%put! st %input (pair (lit command) "gain ")))
+      ((eq? key (lit alt-j)) (%put! st %input (pair (lit command) "amplify ")))
+      ((eq? key (lit alt-s)) (%put! st %input (pair (lit command) "channel-instrument ")))
+      ((eq? key (lit alt-f)) (%stretch! st #t))
+      ((eq? key (lit alt-g)) (%stretch! st #f))
+      ((eq? key (lit insert)) (%set-channels! st (pattern-insert-rows (%channels st) (%get st %chan) (%get st %chan) (%get st %row) 1)))
+      ((eq? key (lit shift-delete)) (%set-channels! st (pattern-delete-rows (%channels st) (%get st %chan) (%get st %chan) (%get st %row) 1)))
+      ((eq? key (lit alt-insert)) (%set-channels! st (pattern-insert-row (%channels st) (%get st %row))))
+      ((eq? key (lit alt-delete)) (%set-channels! st (pattern-delete-row (%channels st) (%get st %row))))
+      ((%is? key "4") (%hear-cells! st (list (%get st %chan))))
+      ((%is? key "8") (%hear-cells! st (List range 0 (List length (%channels st)))))
+      ((%is? key "1") (%parts-change! st (fn (_ p) (list "." () (pair "c0" (List filter (fn (_ e) (not (str=? e "c0"))) (List ref 2 p))))) #t))
+      ((%is? key "`") (%put-cell! st "-"))
       ((eq? key (lit enter)) (%put! st %input (pair (lit cell) (%cell st))))
       ((%is? key "E")
         (%put! st %input (pair (lit instrument)
                            (%one-line (song-instrument-text (edit-song st) (first (List ref (%get st %chan) (%channels st))))))))
       ((%is? key "V")
         (if (null? (%get st %mark))
-          (do (%put! st %mark (pair (%get st %row) (%get st %chan)))
+          (do (%put! st %mark (pair (%get st %row) (%get st %chan))) (%put! st %mark-end ())
               (edit-message! st "Marking: move to the block's other corner; Y copy, X cut, P paste, Delete clear, :transpose N, :gain PCT"))
-          (do (%put! st %mark ()) (edit-message! st ""))))
-      ((eq? key (lit escape)) (%put! st %mark ()))
-      ((%is? key "Y") (do (%copy-block! st) (%put! st %mark ())))
-      ((%is? key "X") (do (%copy-block! st) (%map-block! st (fn (_ c) ".")) (%put! st %mark ())))
+          (%unmark! st)))
+      ((eq? key (lit escape)) (do (%put! st %mark ()) (%put! st %mark-end ())))
+      ((%is? key "Y") (do (%copy-block! st) (%put! st %mark ()) (%put! st %mark-end ())))
+      ((%is? key "X") (do (%copy-block! st) (%map-block! st (fn (_ c) ".")) (%put! st %mark ()) (%put! st %mark-end ())))
       ((%is? key "P")
         (if (null? (%get st %clip)) (edit-message! st "Nothing copied: V marks a block, Y copies it.")
           (%set-channels! st (pattern-paste (%channels st) (%get st %chan) (%get st %row) (%get st %clip)))))
@@ -978,7 +1490,7 @@
         (when (< (%get st %chan) (- (List length (%channels st)) 1))
           (do (%set-channels! st (pattern-move-channel (%channels st) (%get st %chan) 1)) (%put! st %chan (+ (%get st %chan) 1)))))
       ((if (null? (%get st %mark)) #f (if (%is? key ".") #t (if (eq? key (lit backspace)) #t (eq? key (lit delete)))))
-        (do (%map-block! st (fn (_ c) ".")) (%put! st %mark ())))
+        (do (%map-block! st (fn (_ c) ".")) (%put! st %mark ()) (%put! st %mark-end ())))
       ((%is? key "I") (%set-channels! st (pattern-insert-row (%channels st) (%get st %row))))
       ((%is? key "D") (%set-channels! st (pattern-delete-row (%channels st) (%get st %row))))
       ((if (%is? key ".") #t (if (eq? key (lit backspace)) #t (eq? key (lit delete)))) (%put-cell! st "."))
@@ -986,29 +1498,11 @@
       ((if (str? key) (not (null? (%str-entry key %piano))) #f) (%note! st (rest (%str-entry key %piano))))
       (#t ()))))
 
-; --- drawing -----------------------------------------------------------------
-
-; The style the setting colour NAME gives (tracker/config): looked up
-; once a drawing, not once a cell.
-(def %style (fn (_ st name) (config-style (%get st %config) name)))
-
-; S padded with blanks or cut to W bytes.  A cell is ASCII by its syntax,
-; and a screen of them is drawn for every row heard, so this is the byte
-; doors and one concatenation, not class sends.
-(def %blanks "                                                                ")
-(def %pad
-  (fn (_ w s)
-    (def n (str-byte-len s))
-    (match ((int< w n) (str-byte-sub s 0 w))
-           ((int< (int- w n) (str-byte-len %blanks)) (%str-concat (list s (str-byte-sub %blanks 0 (int- w n)))))
-           (#t (Str8 pad-right w #\space s)))))
-
 ; --- the help ------------------------------------------------------------------
 
 ; The help's pages: the index, then each topic (tracker/help).
 (def %browse-pages (fn (_) (+ 1 (List length (help-topics)))))
 
-(def %browse-hint "n p: the next topic, the one before   arrows PgUp PgDn: scroll   any other key: close")
 
 ; The help's page I from row ROW: page 0 the index, the rest the topics.
 (def %browse!
@@ -1077,293 +1571,6 @@
       ((eq? key (lit enter)) ((fn (_ i) (close!) (%go-song! st i) (edit-message! st "")) (%get st %pick)))
       (#t (close!)))))
 
-; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
-; past its right edge.  x/tui/screen's put keeps to the rows but not to
-; the columns: one past the edge is written past the row's end, and past
-; the last row's, into whatever the heap holds there.
-(def %put-text!
-  (fn (_ screen cols row col text style)
-    (when (int< col cols) (Screen put screen row col text style))))
 
-; A panel's lines to a column, in HIGH rows; its columns' width, of LINES.
-(def %panel-high (fn (_ high) (%max 1 (- high 1))))
-(def %panel-width (fn (_ lines) (+ 2 (List fold (fn (_ m l) (%max m (Str8 length l))) 0 (rest lines)))))
-
-; Whether LINES as a panel of HIGH rows are wider than COLS.
-(def %panel-cut?
-  (fn (_ lines high cols)
-    (< (* (%max 1 (int/ cols (%panel-width lines))) (%panel-high high)) (List length (rest lines)))))
-
-; LINES put on SCREEN from row TOP, HIGH rows: the first a heading on a
-; row of its own, the rest beneath it, a column of HIGH less one, the
-; columns side by side as wide as the widest line, as many as the screen
-; is wide for.  A line not starting with a blank is a heading, in bold;
-; the line HI of the rest, when it is not nil, is highlighted.  More
-; columns than fit start from the one HI is in, and the heading counts
-; the lines left out to either side.
-(def %draw-panel!
-  (fn (_ st screen lines top high hi)
-    (def h (%panel-high high))
-    (def body (rest lines))
-    (def n (List length body))
-    (def cols (Screen cols screen))
-    (def w (%panel-width lines))
-    (def shown (%max 1 (int/ cols w)))
-    (def first-col (if (null? hi) 0 (%max 0 (+ (- (int/ hi h) shown) 1))))
-    (def from (* first-col h))
-    (def to (%min n (* (+ first-col shown) h)))
-    (def heading (%style st (lit heading)))
-    (def cursor (%style st (lit cursor)))
-    (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 heading) 0)))
-    (Screen put screen top 0
-      (Str8 append (first lines)
-        (if (< 0 from) (Str8 append "   (" (Str8 str from) " to the left)") "")
-        (if (< to n) (Str8 append "   (" (Str8 str (- n to)) " to the right)") ""))
-      (style (first lines)))
-    (List fold
-      (fn (_ i l)
-        (when (if (<= from i) (< i to) #f)
-          (%put-text! screen cols (+ (+ top 1) (int% i h)) (* w (- (int/ i h) first-col)) l (if (%same? i hi) cursor (style l))))
-        (+ i 1))
-      0 body)))
-
-; The help's LINES put on SCREEN from row TOP, HIGH rows: the first a
-; heading, the rest from the line ROW down, one column, the lines left
-; above and below it counted on the heading.  ROW is kept to where the
-; last line shows on the last row, as the help's place.
-(def %draw-page!
-  (fn (_ st screen lines at top high)
-    (def h (%max 1 (- high 1)))
-    (def row (%max 0 (%min at (- (- (List length lines) 1) h))))
-    (%put! st %browse (pair (first (%get st %browse)) row))
-    (def body (List drop row (rest lines)))
-    (def cols (Screen cols screen))
-    (def heading (%style st (lit heading)))
-    (def below (%max 0 (- (List length body) h)))
-    (%put-text! screen cols top 0
-      (Str8 append (first lines)
-        (if (< 0 row) (Str8 append "   (" (Str8 str row) " above)") "")
-        (if (< 0 below) (Str8 append "   (" (Str8 str below) " below)") ""))
-      heading)
-    (List fold
-      (fn (_ i l)
-        (when (< i h) (%put-text! screen cols (+ (+ top 1) i) 0 l (if (if (< 0 (Str8 length l)) (not (Str8 starts? " " l)) #f) heading 0)))
-        (+ i 1))
-      0 body)))
-
-; PARTS, each (RANK . TEXT), in WIDTH columns: while they are wider, the
-; last of the highest RANK left out.  Rank 0 is never left out.
-(def %fit-parts
-  (fn (self parts width)
-    (def worst (List fold (fn (_ m p) (%max m (first p))) 0 parts))
-    (if (if (< 0 worst) (< width (List fold (fn (_ m p) (+ m (Str8 length (rest p)))) 0 parts)) #f)
-      (self (List reverse ((fn (go l) (if (= worst (first (first l))) (rest l) (pair (first l) (go (rest l)))))
-                           (List reverse parts)))
-            width)
-      parts)))
-
-; The title bar, COLS wide: the file, the song, its settings, the
-; editor's, and what plays.  On a narrow screen the least needed go
-; first: rows and ticks, octave and step, bpm and the player's
-; settings, the song's name; what plays and the file stay.
-(def %title
-  (fn (_ st cols)
-    (def s (edit-song st))
-    (def p (%get st %player))
-    (Str8 join ""
-      (List map rest
-        (%fit-parts
-          (list
-            (pair 0 (Str8 append " x-tracker  " (if (null? (%get st %path)) "(no file)" (%get st %path))
-                      (if (file-changed? (%get st %doc)) " [+]" "")))
-            (pair 2 (Str8 append "   \"" (song-name s) "\""))
-            (pair 3 (Str8 append "   bpm " (Str8 str (song-prop s "bpm" 90))))
-            (pair 5 (Str8 append "  rows " (Str8 str (song-prop s "rows" 4))))
-            (pair 5 (Str8 append "  ticks " (Str8 str (song-prop s "ticks" 6))))
-            (pair 4 (Str8 append "   octave " (Str8 str (%get st %octave))))
-            (pair 4 (Str8 append "  step " (Str8 str (%get st %step))))
-            (pair 0 (match ((null? p) "   (no sound)")
-                           ((not (player-playing? p)) "")
-                           ((eq? (player-mode p) (lit song)) "   > song")
-                           ((null? (player-loop p)) "   > pattern")
-                           (#t (Str8 append "   > rows " (Str8 str (first (player-loop p))) "-" (Str8 str (rest (player-loop p)))))))
-            (pair 3 (if (if (null? p) #t (= 0 (player-tension p))) "" (Str8 append "  tension " (Str8 str (player-tension p)))))
-            (pair 3 (if (if (null? p) #t (= 100 (player-pace p))) "" (Str8 append "  pace " (Str8 str (player-pace p)) "%")))
-            (pair 3 (if (if (null? p) #t (= 100 (player-volume p))) "" (Str8 append "  volume " (Str8 str (player-volume p)) "%"))))
-          cols)))))
-
-; The width of ITEMS joined by blanks.
-(def %joined-length (fn (_ items) (List fold (fn (_ m s) (+ m (+ 1 (Str8 length s)))) -1 items)))
-
-; ITEMS from S to E, E not included.
-(def %slice (fn (_ items s e) (List take (- e s) (List drop s items))))
-
-; ITEMS joined by blanks in WIDTH columns, item F among them: from the
-; first item that leaves room for F, as many as fit after it.  "..."
-; stands for the items left out at either end.
-(def %window
-  (fn (_ items f width)
-    (def n (List length items))
-    (def fits? (fn (_ s e) (<= (+ (+ (if (< 0 s) 4 0) (%joined-length (%slice items s e))) (if (< e n) 4 0)) width)))
-    (def s ((fn (self s) (if (if (< s f) (not (fits? s (+ f 1))) #f) (self (+ s 1)) s)) 0))
-    (def e ((fn (self e) (if (if (< e n) (fits? s (+ e 1)) #f) (self (+ e 1)) e)) (%min n (+ f 1))))
-    (Str8 append (if (< 0 s) "... " "") (Str8 join " " (%slice items s e)) (if (< e n) " ..." ""))))
-
-; The order, COLS wide: the place edited marked [NAME], the place picked
-; while O edits it <NAME>, the place heard >NAME.  An order wider than
-; the screen shows the part around the place picked, else the place
-; heard while the song plays, else the place edited.
-(def %order-line
-  (fn (_ st cols)
-    (def order (song-order (edit-song st)))
-    (def heard (if (null? (%get st %heard)) () (first (%get st %heard))))
-    (def playing-song (if (null? (%get st %player)) #f (if (player-playing? (%get st %player)) (eq? (player-mode (%get st %player)) (lit song)) #f)))
-    (def tail (if (if (null? (%get st %at)) (not (null? (%get st %pattern))) #f)
-                (Str8 append "   editing " (%get st %pattern) ", not in the order") ""))
-    (def focus (match ((not (null? (%get st %order-at))) (%get st %order-at))
-                      ((if playing-song (not (null? heard)) #f) heard)
-                      ((not (null? (%get st %at))) (%get st %at))
-                      (#t 0)))
-    (Str8 append " order: "
-      (if (null? order) "(none)"
-        (%window
-          (List map (fn (_ i)
-                      (def name (List ref i order))
-                      (def mark (if (if playing-song (%same? i heard) #f) (Str8 append ">" name) name))
-                      (match ((%same? i (%get st %order-at)) (Str8 append "<" mark ">"))
-                             ((if (null? (%get st %order-at)) (%same? i (%get st %at)) #f) (Str8 append "[" mark "]"))
-                             (#t mark)))
-            (List range 0 (List length order)))
-          (%min focus (- (List length order) 1))
-          (- (- cols 8) (Str8 length tail))))
-      tail)))
-
-; Whether S has a / from byte I on.
-(def %slash?
-  (fn (self s i) (if (int< i (str-byte-len s)) (if (int= (str-byte-ref s i) 47) #t (self s (int+ i 1))) #f)))
-
-(def %cell-style
-  (fn (_ cell empty off effect)
-    (def b (if (int< 0 (str-byte-len cell)) (str-byte-ref cell 0) 0))
-    (match ((if (int= b 46) (int= 1 (str-byte-len cell)) #f) empty)
-           ((int= b 45) off)
-           ((%slash? cell 0) effect)
-           (#t 0))))
-
-; Channel I's heading, of instrument INST: in the empty cell's colour
-; when it is not heard, the row playing's when it or its instrument is
-; soloed.
-(def %heading-style
-  (fn (_ st i inst)
-    (def p (%get st %player))
-    (match ((null? p) (%style st (lit heading)))
-           ((not (player-hears? p i inst)) (%style st (lit empty)))
-           ((if (player-soloed? p (lit channel) i) #t (player-soloed? p (lit instrument) inst)) (%style st (lit playing)))
-           (#t (%style st (lit heading))))))
-
-; The row being heard, in the pattern edited, or nil.
-(def %heard-row
-  (fn (_ st)
-    (def p (%get st %player))
-    (def h (%get st %heard))
-    (match ((null? h) ())
-           ((null? p) ())
-           ((eq? (player-mode p) (lit pattern)) (rest h))
-           ((%same? (first h) (%get st %at)) (rest h))
-           (#t ()))))
-
-(def %draw-grid!
-  (fn (_ st screen top bottom)
-    (def chs (%channels st))
-    (def rows (%rows st))
-    (def beat (%max 1 (song-prop (edit-song st) "rows" 4)))
-    (def cols (Screen cols screen))
-    (def w (%max 6 (%min 14 (+ 1 (List fold (fn (_ n c) (%max n (Str8 length c))) 0 (List flat-map rest chs))))))
-    (def fit (%max 1 (int/ (- cols 5) w)))
-    (when (< (%get st %chan) (%get st %left)) (%put! st %left (%get st %chan)))
-    (when (not (< (%get st %chan) (+ (%get st %left) fit))) (%put! st %left (+ (- (%get st %chan) fit) 1)))
-    (def shown (- (- bottom top) 1))
-    (when (< (%get st %row) (%get st %top)) (%put! st %top (%get st %row)))
-    (when (not (< (%get st %row) (+ (%get st %top) shown))) (%put! st %top (+ (- (%get st %row) shown) 1)))
-    (def left (%get st %left))
-    (def shown-chs (List take (%min (List length chs) fit) (List drop left chs)))
-    (def heard (%heard-row st))
-    (def first-row (%get st %top))
-    (def cur-row (%get st %row))
-    (def cur-chan (int- (%get st %chan) left))
-    (def empty (%style st (lit empty)))
-    (def off (%style st (lit off)))
-    (def effect (%style st (lit effect)))
-    (def cursor (%style st (lit cursor)))
-    (def playing (%style st (lit playing)))
-    (def on-beat (%style st (lit beat)))
-    (def marked (%style st (lit block)))
-    ; The block marked, its rows and its channels as shown, or nil.
-    (def blk (if (null? (%get st %mark)) () ((fn (_ b) (list (first b) (List ref 1 b) (int- (List ref 2 b) left) (int- (List ref 3 b) left))) (%block st))))
-    (def in-blk? (fn (_ r k) (if (null? blk) #f (if (int< r (first blk)) #f (if (int< (List ref 1 blk) r) #f (if (int< k (List ref 2 blk)) #f (not (int< (List ref 3 blk) k))))))))
-    ((fn (self cs k)
-       (unless (null? cs)
-         (do (%put-text! screen cols top (int+ 5 (* w k)) (%pad (int- w 1) (first (first cs))) (%heading-style st (int+ left k) (first (first cs))))
-             (self (rest cs) (int+ k 1)))))
-     shown-chs 0)
-    ; Each channel's cells from the first row shown, walked a row at a
-    ; time: a row's cells put, the lists of the rows after it answered.
-    (def put-row!
-      (fn (self y r cs k acc)
-        (if (null? cs) acc
-          ((fn (_ cells)
-             (def cell (if (null? cells) "." (first cells)))
-             (%put-text! screen cols (int+ (int+ top 1) y) (int+ 5 (* w k)) (%pad (int- w 1) cell)
-               (match ((if (int= r cur-row) (int= k cur-chan) #f) cursor) ((in-blk? r k) marked) (#t (%cell-style cell empty off effect))))
-             (self y r (rest cs) (int+ k 1) (pair (if (null? cells) () (rest cells)) acc)))
-           (first cs)))))
-    (def rev (fn (self xs acc) (if (null? xs) acc (self (rest xs) (pair (first xs) acc)))))
-    ((fn (self y cs)
-       (def r (int+ first-row y))
-       (when (if (int< y shown) (int< r rows) #f)
-         (do (%put-text! screen cols (int+ (int+ top 1) y) 0 (Str8 pad-left 3 #\space (Str8 str r))
-               (if (%same? r heard) playing (if (int= 0 (int% r beat)) on-beat empty)))
-             (when (%same? r heard) (%put-text! screen cols (int+ (int+ top 1) y) 3 ">" playing))
-             (self (int+ y 1) (rev (put-row! y r cs 0 ()) ())))))
-     0 (List map (fn (_ ch) (List drop first-row (rest ch))) shown-chs))))
-
-(def edit-draw!
-  (fn (_ st screen)
-    (Screen clear screen)
-    (def rows (Screen rows screen))
-    (def cols (Screen cols screen))
-    (Screen fill screen 0 0 cols (%style st (lit title)))
-    (Screen put screen 0 0 (%title st cols) (%style st (lit title)))
-    (Screen put screen 1 0 (%order-line st cols) 0)
-    (match
-      ((not (null? (%get st %browse))) (%draw-page! st screen (%get st %help) (rest (%get st %browse)) 2 (- rows 3)))
-      ; A list with nothing picked in it, too wide for the screen, pages
-      ; as the help does.
-      ((if (%get st %help) (if (null? (%get st %pick)) (%panel-cut? (%get st %help) (- rows 3) cols) #f) #f)
-        (do (%put! st %browse (pair () 0)) (edit-message! st %browse-hint)
-            (%draw-page! st screen (%get st %help) 0 2 (- rows 3))))
-      ((%get st %help) (%draw-panel! st screen (%get st %help) 2 (- rows 3) (%get st %pick)))
-      ((null? (%get st %pattern)) (Screen put screen 3 1 "The song has no pattern: :pattern NAME makes one." 0))
-      (#t (%draw-grid! st screen 3 (- rows 2))))
-    (def input (%get st %input))
-    (match
-      ((null? input)
-        (Screen put screen (- rows 1) 0
-          (if (str=? (%get st %msg) "") " ? help   Space play   p pattern   : command" (Str8 append " " (%get st %msg)))
-          (if (str=? (%get st %msg) "") (%style st (lit empty)) 0)))
-      (#t ((fn (_ prompt)
-             ; The cursor is at the end: a line too long for the screen
-             ; shows its end, ... for the rest.
-             (def text (rest input))
-             (def room (- (- cols 1) (Str8 length prompt)))
-             (def shown (if (< (Str8 length text) room) text
-                          (Str8 append "..." (Str8 sub (- (Str8 length text) (%max 0 (- room 3))) (%max 0 (- room 3)) text))))
-             (Screen put screen (- rows 1) 0 (Str8 append prompt shown) 0)
-             (Screen cursor screen (- rows 1) (%min (- cols 1) (+ (Str8 length prompt) (Str8 length shown)))))
-           (match ((eq? (first input) (lit command)) ":")
-                  ((eq? (first input) (lit cell)) "cell: ")
-                  (#t "instrument: ")))))
-    st))
-
-(provide tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
-  edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
+(provide tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!
+  %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name)

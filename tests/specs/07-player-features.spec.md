@@ -162,7 +162,7 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 (def m1 (said (list "M")))
 (spec-draw! st screen)
 (def dim-a (Style has? (Screen style-at screen 3 5) 'dim))
-(def m2 (said (list 'right "S")))
+(def m2 (said (list 'alt-right "S")))
 (def m3 (said (list ":mute")))
 (def m3 (said (list 'enter)))
 (def m4 (said (list "H" "A")))

@@ -116,10 +116,10 @@ effects: a cell's effects, after /
 ```
 ---
 ```output
-keys: every key, and the action :set key binds it by   (2 above)   (32 below)
-  q 2 w 3 e r 5 t 6 y 7 u i   a note, the octave above
-  . or Delete                 hold: what sounds carries on
-  -                           let go: what sounds fades over its release
+keys: every key, and the action :set key binds it by   (2 above)   (64 below)
+  F2                          the pattern editor
+  F3                          the samples: the WAV files the file keeps as waves
+  F4                          the instruments, and an instrument's envelope drawn and edited
 ("Help: :help TOPIC, or :help WORD for every command, effect, prop or setting named WORD   (4 below)" " ? help   Space play   p pattern   : command")
 ```
 

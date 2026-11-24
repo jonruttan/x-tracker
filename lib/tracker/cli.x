@@ -28,7 +28,7 @@
 (import x/audio/tracker)
 (import x/core/doors int/ int%)
 (import tracker/song song-name song-order song-pattern song-patterns song-form pattern-rows)
-(import tracker/file file-read file-songs file-waves)
+(import tracker/file file-read file-songs file-waves file-dir)
 (import tracker/player player-open player-render!)
 (import tracker/app app-edit app-play)
 (import tracker/config config-load config-get config-problems)
@@ -89,9 +89,9 @@
 
 ; The waves of DOC, then of each -w file, then of each the settings name.
 (def %cl-waves
-  (fn (_ doc opts cfg)
-    (List append (file-waves doc)
-      (List flat-map (fn (_ f) (file-waves (file-read f))) (List append (Opts values opts "-w") (config-get cfg (lit waves)))))))
+  (fn (_ doc path opts cfg)
+    (List append (if (null? path) (file-waves doc) (file-waves doc (file-dir path)))
+      (List flat-map (fn (_ f) (file-waves (file-read f) (file-dir f))) (List append (Opts values opts "-w") (config-get cfg (lit waves)))))))
 
 ; The settings, each problem the file has written to standard error.
 (def %cl-config
@@ -160,13 +160,13 @@
               ((if (str=? word "edit") #f (null? i))
                 (do (%cl-say 2 (Str8 append "x-tracker: no song " (if (null? (Opts value opts "-s")) "in the file" (Opts value opts "-s")) "\n")) 1))
               ((str=? word "play")
-                (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves doc opts (%cl-config))) (Opts on? opts "-l")))
+                (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves doc path opts (%cl-config))) (Opts on? opts "-l")))
               ((str=? word "render")
                 ((fn (_ out frames)
                    (%cl-say 1 (Str8 append "Rendered " out ": " (%cl-clock (int/ frames 44100)) "\n"))
                    0)
                  (Opts value opts "-o")
-                 (player-render! (player-open () (%cl-waves doc opts (%cl-config))) (List ref i (file-songs doc)) (Opts value opts "-o"))))
+                 (player-render! (player-open () (%cl-waves doc path opts (%cl-config))) (List ref i (file-songs doc)) (Opts value opts "-o"))))
               (#t
                 (do (def cfg (%cl-config))
                     ((fn (_ sound)
@@ -176,7 +176,7 @@
                          cfg))
                      (if (if (Opts on? opts "-n") #t (not (config-get cfg (lit sound)))) (pair () "")
                        (guard (e (pair () (Str8 append "No sound: " (%cl-err-text e))))
-                         (pair (player-open Sdl (%cl-waves doc opts cfg)) ""))))))))))))
+                         (pair (player-open Sdl (%cl-waves doc path opts cfg)) ""))))))))))))
 
 ; The terminal back on fd 0.  The launcher pipes the program to the
 ; engine on fd 0 and parks the terminal on fd 3, as x/repl/loop.x

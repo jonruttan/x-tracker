@@ -23,35 +23,68 @@
 ; the names :set key binds them by (tracker/config), nil for a key that
 ; cannot be bound.
 (def %hp-keys
-  (list "Notes"
+  (list "Pages"
+        (list () "F1" "this help")
+        (list () "F2" "the pattern editor")
+        (list () "F3" "the samples: the WAV files the file keeps as waves")
+        (list () "F4" "the instruments, and an instrument's envelope drawn and edited")
+        (list () "F11" "the order list")
+        (list () "F12" "the song's settings")
+        (list () "F9" "open a file, as :open")
+        (list () "F10 ctrl-s" "write the file, as :w")
+        (list () "Escape" "on a page, back to the pattern")
+        "Notes"
         (list () "z s x d c v g b h n j m ," "a note, C to C, in the octave; heard as it is typed")
         (list () "q 2 w 3 e r 5 t 6 y 7 u i" "a note, the octave above")
         (list (list (lit hold)) ". or Delete" "hold: what sounds carries on")
-        (list (list (lit let-go)) "-" "let go: what sounds fades over its release")
+        (list (list (lit let-go)) "- or `" "let go: what sounds fades over its release")
+        (list () "1" "cut: what sounds stops there, /c0")
         (list (list (lit octave-down) (lit octave-up)) "< >" "the octave notes are typed in, down, up")
         (list (list (lit step-down) (lit step-up)) "{ }" "the step: rows the cursor moves after a note")
+        (list () "4 8" "hear the cell, the whole row, and move down")
         "Moving"
-        (list (list (lit up) (lit down) (lit left) (lit right)) "arrows" "a row up or down, a channel left or right")
-        (list (list (lit next-channel)) "Tab" "the next channel")
+        (list (list (lit up) (lit down)) "up down" "a row up, down")
+        (list (list (lit left) (lit right)) "left right" "the cell's note, instrument, volume and effect columns, then the next channel's")
+        (list () "Alt-left Alt-right" "a channel left, right")
+        (list (list (lit next-channel)) "Tab Shift-Tab" "the next channel's note, the one before's")
         (list (list (lit page-up) (lit page-down)) "PgUp PgDn" "sixteen rows up, down")
-        (list (list (lit top) (lit bottom)) "Home End" "the first row, the last")
+        (list (list (lit top) (lit bottom)) "Home End  Ctrl-PgUp Ctrl-PgDn" "the first row, the last")
         (list (list (lit previous) (lit next)) "[ ]" "the pattern before, after in the order")
         "Editing"
+        (list () "digits" "in the instrument column, the channel's instrument by its number (F4 lists them);"
+              "  in the volume column, the note's gain in percent; . there clears it")
+        (list () "a letter" "in the effect column, an effect typed after it (:help effects)")
         (list (list (lit edit-cell)) "Enter" "edit the cell's text: NOTE[:GAIN][/EFFECT...]")
         (list (list (lit edit-instrument)) "E" "edit the channel's instrument, its form on one line")
-        (list (list (lit insert-row) (lit delete-row)) "I D" "insert a row, delete one, in every channel")
+        (list () "Insert Shift-Delete" "insert a row in the channel, delete one")
+        (list (list (lit insert-row) (lit delete-row)) "I D  Alt-Insert Alt-Delete" "insert a row, delete one, in every channel")
         (list (list (lit channel-left) (lit channel-right)) "( )" "move the channel left, right")
         (list (list (lit order)) "O" "edit the order in place (:help order)")
+        (list (list (lit undo) (lit redo)) "U R  ctrl-z" "undo, redo")
+        "Blocks"
+        (list () "Alt-B Alt-E" "mark where the block begins, where it ends")
+        (list () "Shift-arrows" "mark a block from the cursor as it moves")
+        (list () "Alt-L Alt-D" "mark the channel's column, then the pattern's; mark rows a beat at a time")
+        (list () "Alt-U" "unmark the block")
         (list (list (lit mark)) "V" "mark a block from the cursor; move to its other corner")
         (list (list (lit copy) (lit cut) (lit paste)) "Y X P" "copy, cut, paste the block, or the cell")
+        (list () "Alt-C Alt-Z" "copy the block, cut it")
+        (list () "Alt-P Alt-O Alt-M" "paste, the rows pushed down; paste over; paste into the holds only")
+        (list () "Alt-Q Alt-A" "the block a semitone up, down; with Shift an octave")
+        (list () "Alt-K" "the gains slid from the block's first row to its last")
+        (list () "Alt-X" "the first effect's numbers slid from the block's first row to its last")
+        (list () "Alt-W" "the block's gains cleared")
+        (list () "Alt-V Alt-J" "the block's gains set, :gain PCT; taken up or down, :amplify PCT")
+        (list () "Alt-S" "the channel played by another instrument, :channel-instrument")
+        (list () "Alt-F Alt-G" "the block stretched to twice its rows, squeezed to half")
         (list () "Delete" "with a block marked, clear it")
-        (list (list (lit undo) (lit redo)) "U R" "undo, redo")
         "Playing"
         (list (list (lit play)) "Space" "play the song from the pattern edited, or stop")
         (list (list (lit play-pattern)) "p" "play the pattern edited over and over, or stop")
+        (list () "F5 F6 Shift-F6 F7 F8" "play the song; the pattern; the song from the pattern; from the cursor's row; stop")
         (list (list (lit play-here)) "G" "play the song from the cursor's row")
         (list (list (lit loop)) "L" "loop rows: L on the first, L on the last; L again stops")
-        (list (list (lit mute-channel) (lit solo-channel)) "M S" "mute the channel, solo it; again to undo")
+        (list (list (lit mute-channel) (lit solo-channel)) "M S  Alt-F9 Alt-F10" "mute the channel, solo it; again to undo")
         (list (list (lit mute-instrument) (lit solo-instrument)) "H A" "mute the channel's instrument, solo it")
         (list (list (lit tension-down) (lit tension-up)) "; '" "the tension down, up: the tension layer and tempo")
         (list (list (lit pace-down) (lit pace-up)) "_ +" "the pace down, up: the whole song slower, faster")
@@ -60,7 +93,7 @@
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
-        (list (list (lit quit)) "ctrl-c" "quit, as :q")))
+        (list (list (lit quit)) "ctrl-c  ctrl-q" "quit, as :q")))
 
 ; The commands, each an entry, grouped under headings.
 (def %hp-commands
@@ -70,6 +103,7 @@
         (list "q!" ":q!" "quit, the changes lost")
         (list "wq" ":wq [FILE]  :x [FILE]" "write, then quit")
         (list "x" ":x [FILE]" "write, then quit, as :wq")
+        (list "open" ":open FILE" "edit FILE in place of this file; refused once while there are changes not written")
         "Songs"
         (list "song" ":song [NAME]" "edit the song NAME, made if new; alone, pick one from a list")
         (list "rename" ":rename NAME" "rename the song")
@@ -92,6 +126,7 @@
         (list "channel-instrument" ":channel-instrument NAME" "the cursor's channel played by instrument NAME")
         (list "transpose" ":transpose N" "the block marked, or the cell, N semitones up or down")
         (list "gain" ":gain PCT" "the block marked, or the cell, at PCT percent, 0-400")
+        (list "amplify" ":amplify PCT" "the gains of the block marked, or the cell, taken to PCT percent of themselves")
         "Instruments, effects and waves"
         (list "instrument" ":instrument NAME [PROP ...]" "make or change an instrument; NAME alone opens its form to edit"
               "  (:help instruments lists the props)")
@@ -105,6 +140,8 @@
         (list "waves" ":waves  :waves keep" "list the waves the songs name and where each comes from;"
               "  keep copies the ones borrowed from -w files into this file")
         (list "wave" ":wave NAME [AMP ...]" "show a wave, or make or change it: the strengths of its harmonics")
+        (list "sample" ":sample NAME FILE [ROOT] [START END]" "keep the WAV file FILE as the wave NAME: heard at ROOT, looped from START to END"
+              "  (sample frames); FILE named from the directory of the file edited")
         "Playing"
         (list "tension" ":tension N" "the tension heard, 0-100: the tension layer in, the calm out, the tempo up")
         (list "pace" ":pace N" "the pace, 10-400 percent: the whole song slower or faster")
@@ -188,7 +225,7 @@
         (list "undo" "(undo N)" "how many changes are kept to undo (200)")
         (list "sound" "(sound on|off)" "open the audio as the editor starts (on)")
         (list "waves" "(waves FILE ...)" "files whose (wave ...) forms are read, as -w")
-        (list "colour" "(colour NAME ATTRIBUTES FG BG)" "how NAME is drawn: title empty heading beat off"
+        (list "colour" "(colour NAME ATTRIBUTES FG BG)" "how NAME is drawn: title empty heading beat off instrument volume"
               "  effect cursor playing block; ATTRIBUTES a list of bold dim italic underline reverse"
               "  strike, FG and BG 0-255, a name (red, bright-blue ...) or ()")
         (list "key" "(key ACTION KEY ...)" "bind an action to other keys (:help keys names them);"
