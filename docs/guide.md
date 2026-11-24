@@ -42,23 +42,23 @@ A new file looks like this:
  x-tracker  harbour.xon [+]   "untitled"   bpm 120  rows 4  ticks 6   octave 4  step 1
  order: [a]
 
-     lead
-  0  .
-  1  .
-  2  .
-  3  .
-  4  .
-  5  .
-  6  .
-  7  .
-  8  .
-  9  .
- 10  .
- 11  .
- 12  .
- 13  .
- 14  .
- 15  .
+     1 lead 01
+  0 ... .. ... .......
+  1 ... .. ... .......
+  2 ... .. ... .......
+  3 ... .. ... .......
+  4 ... .. ... .......
+  5 ... .. ... .......
+  6 ... .. ... .......
+  7 ... .. ... .......
+  8 ... .. ... .......
+  9 ... .. ... .......
+ 10 ... .. ... .......
+ 11 ... .. ... .......
+ 12 ... .. ... .......
+ 13 ... .. ... .......
+ 14 ... .. ... .......
+ 15 ... .. ... .......
 ```
 
 The top line is the file, `[+]` when it has changes not yet written,
@@ -72,9 +72,13 @@ shows the part around the one heard while the song plays, else the
 one edited, `...` for the rest.
 
 Then the pattern: a row a line, numbered from 0, and a channel a
-column, headed by the instrument that plays it.  The rows on the beat
-are drawn in a colour of their own.  The cursor is the cell drawn
-reversed.  The last line shows the keys to start with, a command being
+column, headed by its number, the instrument that plays it and the
+instrument's number.  A cell is four columns, as Impulse Tracker draws
+them: the note (`C-4`, `C#4`; `===` a let-go, `^^^` a cut, `...` a
+hold), the instrument's number, the volume (the note's gain in
+percent) and the first effect, `+` after it when there are more.  The
+rows on the beat are drawn in a colour of their own.  The cursor is
+the column drawn reversed.  The last line shows the keys to start with, a command being
 typed (its end, after `...`, when it is longer than the screen), or a
 message.  `?` shows every key and command; any key closes
 it.  A list too wide for the screen, such as `:patterns` in a song of
@@ -129,23 +133,23 @@ The hats go on every other row, eight of them at a step of 2:
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 4  step 2
  order: [a]
 
-     lead  kick  hat
-  0  .     C4    C4
-  1  .     .     .
-  2  .     .     C4
-  3  .     .     .
-  4  .     C4    C4
-  5  .     .     .
-  6  .     .     C4
-  7  .     .     .
-  8  .     C4    C4
-  9  .     .     .
- 10  .     .     C4
- 11  .     .     .
- 12  .     C4    C4
- 13  .     .     .
- 14  .     .     C4
- 15  .     .     .
+     1 lead 01          2 kick 02          3 hat 03
+  0 ... .. ... ....... C-4 02 ... ....... C-4 03 ... .......
+  1 ... .. ... ....... ... .. ... ....... ... .. ... .......
+  2 ... .. ... ....... ... .. ... ....... C-4 03 ... .......
+  3 ... .. ... ....... ... .. ... ....... ... .. ... .......
+  4 ... .. ... ....... C-4 02 ... ....... C-4 03 ... .......
+  5 ... .. ... ....... ... .. ... ....... ... .. ... .......
+  6 ... .. ... ....... ... .. ... ....... C-4 03 ... .......
+  7 ... .. ... ....... ... .. ... ....... ... .. ... .......
+  8 ... .. ... ....... C-4 02 ... ....... C-4 03 ... .......
+  9 ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 10 ... .. ... ....... ... .. ... ....... C-4 03 ... .......
+ 11 ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 12 ... .. ... ....... C-4 02 ... ....... C-4 03 ... .......
+ 13 ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 14 ... .. ... ....... ... .. ... ....... C-4 03 ... .......
+ 15 ... .. ... ....... ... .. ... ....... ... .. ... .......
 ```
 
 Every note is heard as it is typed.  Typing over a note puts the new
@@ -186,12 +190,15 @@ On the keys, A is `n` and F is `v`:
 
 ### A tune
 
-The arrows move the cursor, Home and End go to the top and the bottom
-of the pattern, PgUp and PgDn go sixteen rows, and Tab goes to the
-next channel, round to the first.  Back to the lead's channel, three
-to the left, and the top:
+Up and down move the cursor a row, Home and End go to the top and the
+bottom of the pattern, and PgUp and PgDn go sixteen rows.  Left and
+right walk the four columns of a cell, its note, instrument, volume and
+effect, and on into the next channel; Alt-left and Alt-right go a whole
+channel, and Tab and Shift-Tab go to the next channel's note and the
+one before's, round the end.  Back to the lead's channel, three to the
+left, and the top:
 
-    left left left Home
+    Alt-left Alt-left Alt-left Home
 
 The keys, with the octave at 4:
 
@@ -218,23 +225,23 @@ bottom of `?`, and [writing.md](writing.md) has each with an example.
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 4  step 2
  order: [a]
 
-     lead     kick     hat      bass
-  0  E5       C4       C4       A2
-  1  .        .        .        .
-  2  D5       .        C4       .
-  3  .        .        .        .
-  4  C5       C4       C4       .
-  5  .        .        .        .
-  6  .        .        C4       .
-  7  .        .        .        .
-  8  C5       C4       C4       F2
-  9  .        .        .        .
- 10  A4/v20,6 .        C4       .
- 11  .        .        .        .
- 12  .        C4       C4       .
- 13  .        .        .        .
- 14  .        .        C4       .
- 15  .        .        .        .
+     1 lead 01          2 kick 02          3 hat 03           4 bass 04
+  0 E-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... A-2 04 ... .......
+  1 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  2 D-5 01 ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... .......
+  3 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  4 C-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... ... .. ... .......
+  5 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  6 ... .. ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... .......
+  7 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  8 C-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... F-2 04 ... .......
+  9 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 10 A-4 01 ... v20,6   ... .. ... ....... C-4 03 ... ....... ... .. ... .......
+ 11 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 12 ... .. ... ....... C-4 02 ... ....... C-4 03 ... ....... ... .. ... .......
+ 13 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 14 ... .. ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... .......
+ 15 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
 ```
 
 ### Listening
@@ -254,11 +261,11 @@ rest: looping rows, muting and soloing, tension, pace and volume.
 and the tune goes up and comes back down to B:
 
     :copy-pattern b
-    right right right Home
+    Alt-right Alt-right Alt-right Home
     :octave 2
     :step 8
     zb
-    left left left Home
+    Alt-left Alt-left Alt-left Home
     :octave 4
     :step 2
     etewq.m.
@@ -298,23 +305,23 @@ G in octave 5, comes in only with the tension:
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 5  step 8
  order: a [b] a b
 
-     lead  kick  hat   bass  bell
-  0  E5    C4    C4    C2    E5
-  1  .     .     .     .     .
-  2  G5    .     C4    .     .
-  3  .     .     .     .     .
-  4  E5    C4    C4    .     .
-  5  .     .     .     .     .
-  6  D5    .     C4    .     .
-  7  .     .     .     .     .
-  8  C5    C4    C4    G2    G5
-  9  .     .     .     .     .
- 10  .     .     C4    .     .
- 11  .     .     .     .     .
- 12  B4/p3 C4    C4    .     .
- 13  .     .     .     .     .
- 14  .     .     C4    .     .
- 15  .     .     .     .     .
+     1 lead 01          2 kick 02          3 hat 03           4 bass 04          5 bell 05
+  0 E-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... C-2 04 ... ....... E-5 05 ... .......
+  1 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  2 G-5 01 ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+  3 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  4 E-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+  5 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  6 D-5 01 ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+  7 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+  8 C-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... G-2 04 ... ....... G-5 05 ... .......
+  9 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 10 ... .. ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+ 11 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 12 B-4 01 ... p3      C-4 02 ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+ 13 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
+ 14 ... .. ... ....... ... .. ... ....... C-4 03 ... ....... ... .. ... ....... ... .. ... .......
+ 15 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
 ```
 
 To hear the bell, set the tension and play the song:
@@ -384,6 +391,32 @@ well, and opened again.
 
 ## Working in the editor
 
+### The pages
+
+The function keys go to the editor's pages, as in Impulse Tracker and
+Schism Tracker; Escape on a page goes back to the pattern.
+
+- F1 the help, F2 the pattern.
+- F3 the samples: the WAV files the file keeps as waves.
+  `:sample NAME FILE.wav [ROOT] [START END]` reads one, from the
+  directory of the file edited, as the wave NAME; an instrument plays it
+  with `(wave NAME)`.  ROOT is the note it sounds at as recorded, START
+  and END the frames it loops between.  Space hears the one picked.
+- F4 the instruments, numbered as the pattern shows them, with the
+  props of the one picked and its envelope drawn.  Enter edits it, Space
+  or the note keys hear it.  Tab goes into its envelope: left and right
+  pick a point, Enter picks it up for the arrows to move (Alt ten at a
+  time) and puts it down, Insert adds a point after it, Delete drops it.
+- F11 the order list: up and down pick a place, left and right change
+  its pattern, Insert copies it, Delete drops it, Enter edits its
+  pattern.
+- F12 the song's settings: up and down pick one, left and right change
+  it, Enter types it.
+- F5 plays the song, F6 the pattern, Shift-F6 the song from the
+  pattern, F7 from the cursor's row; F8 stops.
+- F9 opens another file, as `:open FILE`; F10 or ctrl-s writes, as
+  `:w`; ctrl-q quits, as `:q`.
+
 ### Typing notes
 
 - The step, `{` and `}` or `:step N`, is how far the cursor moves after
@@ -392,14 +425,24 @@ well, and opened again.
 - `<` and `>`, or `:octave N`, set the octave, 0 to 8.
 - A note typed over a cell keeps the cell's gain and effects: `g` over
   `C4:50/v20,4` makes `F#4:50/v20,4`.
-- `.` or Delete types a hold, `-` a let-go.
+- `.` or Delete types a hold, `-` or `` ` `` a let-go, `1` a cut.
+- `4` hears the cell and `8` the whole row, and moves down.
+- In the instrument column two digits give the channel another
+  instrument, by its number on F4: x-tracker plays a channel with one
+  instrument, every row.
+- In the volume column two digits are the note's gain in percent; `.`
+  clears it.
+- In the effect column a letter starts an effect, typed after it as
+  after a `/` (`:help effects`).
 - Enter edits the cell as text; a cell that is not a note, a hold or a
   let-go is refused, and says why.
 
 ### Rows and patterns
 
-- `I` inserts a row at the cursor and `D` deletes it; `:len N` makes the
-  pattern N rows long, 1 to 256.
+- Insert pushes the channel's rows down from the cursor, Shift-Delete
+  pulls them up.  `I` and `D`, or Alt-Insert and Alt-Delete, insert and
+  delete a row in every channel.  `:len N` makes the pattern N rows
+  long, 1 to 256.
 - `:pattern NAME` edits a pattern, made empty with the same channels if
   it is new.  `:patterns` lists them.
 - `:copy-pattern NEW`, `:rename-pattern NEW` and `:drop-pattern [NAME]`
@@ -407,9 +450,28 @@ well, and opened again.
 
 ### Blocks
 
-`V` marks a block from the cursor; move to its other corner.  `Y`
-copies it, `X` cuts it and `P` pastes it at the cursor; with nothing
-marked they take the one cell.  Delete clears the block.
+The block keys are Impulse Tracker's.  Alt-B marks where a block
+begins and Alt-E where it ends; Shift and the arrows mark one as the
+cursor moves.  Alt-L marks the channel's column, then the whole
+pattern's; Alt-D marks a beat's rows, twice as many each time again.
+Alt-U unmarks.
+
+- Alt-C copies the block, Alt-Z cuts it.
+- Alt-P pastes it at the cursor with the rows below pushed down, Alt-O
+  pastes over, and Alt-M pastes only into the holds.
+- Alt-Q and Alt-A move the notes a semitone up and down, with Shift an
+  octave.
+- Alt-K slides the gains from the block's first row to its last, and
+  Alt-X the first effect's numbers.
+- Alt-W clears the gains, Alt-V sets them (`:gain PCT`), Alt-J takes them
+  up or down (`:amplify PCT`).
+- Alt-F stretches the block to twice its rows and Alt-G squeezes it to
+  half.
+- Alt-S has another instrument play the channel.
+
+`V` marks a block from the cursor as well; move to its other corner.
+`Y` copies it, `X` cuts it and `P` pastes it at the cursor; with
+nothing marked they take the one cell.  Delete clears the block.
 
 `:transpose N` moves the notes of the block, or the cell, N semitones,
 `:transpose 12` an octave up and `:transpose -12` down.  `:gain PCT` sets

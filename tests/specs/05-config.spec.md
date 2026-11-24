@@ -77,7 +77,7 @@ tracker/config: the user's file, read as data, and :set in the editor.
              (config-set! cfg '(colour nope ()) #f)))
 ```
 ---
-    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect cursor playing block")
+    (() #t "a colour is 0 to 255, a name (red, bright-blue ...), or ()" "the attributes are a list of bold dim italic underline reverse strike: (bold), ()" "colour NAME ATTRIBUTES FOREGROUND BACKGROUND, NAME one of title empty heading beat off effect instrument volume cursor playing block")
 
 ## :set
 
@@ -120,15 +120,15 @@ tracker/config: the user's file, read as data, and :set in the editor.
 ```
 ---
 ```output
-  octave 5                         key octave-up ">"                key play-here "G"
-  step 1                           key step-down "{"                key loop "L"
-  follow on                        key step-up "}"                  key mute-channel "M"
-  backup on                        key up up                        key solo-channel "S"
-  undo 200                         key down down                    key mute-instrument "H"
-  sound on                         key left left                    key solo-instrument "A"
-  waves                            key right right                  key tension-down ";"
-  colour title (reverse) () ()     key page-up page-up              key tension-up "'"
-  colour empty (dim) () ()         key page-down page-down          key pace-down "_"
+  octave 5                         key next "]"                     key cut "X"
+  step 1                           key octave-down "<"              key paste "P"
+  follow on                        key octave-up ">"                key play-here "G"
+  backup on                        key step-down "{"                key loop "L"
+  undo 200                         key step-up "}"                  key mute-channel "M"
+  sound on                         key up up                        key solo-channel "S"
+  waves                            key down down                    key mute-instrument "H"
+  colour title (reverse) () ()     key left left                    key solo-instrument "A"
+  colour empty (dim) () ()         key right right                  key tension-down ";"
 #t
 ```
 

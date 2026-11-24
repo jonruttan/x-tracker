@@ -33,10 +33,10 @@ through to its end.
 (shot (list 23))
 (press (list 'escape ":instrument bass (wave soft) (cut 30) (env (0 0) (6 80) (600 50)) (release 120) (gain 50)" 'enter
              ":channel bass" 'enter ":octave 2" 'enter ":step 8" 'enter "nv"))
-(press (list 'left 'left 'left 'home ":octave 4" 'enter ":step 2" 'enter "ewq.qn" 'up 'up 'enter "/v20,6" 'enter))
+(press (list 'alt-left 'alt-left 'alt-left 'home ":octave 4" 'enter ":step 2" 'enter "ewq.qn" 'up 'up 'enter "/v20,6" 'enter))
 (shot (List range 0 20))
-(press (list ":copy-pattern b" 'enter 'right 'right 'right 'home ":octave 2" 'enter ":step 8" 'enter "zb"
-             'left 'left 'left 'home ":octave 4" 'enter ":step 2" 'enter "etewq.m." 'up 'up 'up 'up 'enter "/p3" 'enter))
+(press (list ":copy-pattern b" 'enter 'alt-right 'alt-right 'alt-right 'home ":octave 2" 'enter ":step 8" 'enter "zb"
+             'alt-left 'alt-left 'alt-left 'home ":octave 4" 'enter ":step 2" 'enter "etewq.m." 'up 'up 'up 'up 'enter "/p3" 'enter))
 (press (list ":order a b a b" 'enter ":pattern b" 'enter))
 (press (list ":wave glass 5 0 0 2 0 0 0 1" 'enter
              ":instrument bell (layer tension) (wave glass) (env (0 0) (3 40) (1200 0)) (release 600) (gain 22) (pan -30)" 'enter

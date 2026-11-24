@@ -23,8 +23,10 @@
 (import tracker/config config-default config-file config-read config-load config-set! config-set-text! config-get
   config-put! config-problems config-style config-key config-lines config-backup!)
 (import tracker/help help-topics help-topic help-index help-on help-word help-key-actions help-commands)
-(import tracker/edit edit-make edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place
-  edit-feed! edit-settle! edit-tick! edit-key! edit-draw!)
+(import tracker/keys keys-read)
+(import tracker/state edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place)
+(import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)
+(import tracker/draw edit-draw!)
 (import tracker/app app-edit app-play app-loop)
 (import tracker/score score-song)
 (import tracker/midi midi-song)

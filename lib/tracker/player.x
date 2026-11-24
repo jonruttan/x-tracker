@@ -59,8 +59,10 @@
 (import x/codec/struct)
 (import x/audio/mixer)
 (import x/audio/tracker)
+(import x/codec/wav)
+(import tracker/file file-sample?)
 (import x/core/doors int/ int%)
-(import tracker/song song-form song-order song-set-pattern song-prop song-instruments song-pattern song-patterns
+(import tracker/song song-note-name song-form song-order song-set-pattern song-prop song-instruments song-pattern song-patterns
   pattern-rows)
 
 (def %pl-rate 44100)
@@ -85,13 +87,32 @@
 (def %pl-put! (fn (_ p k x) (Vector set! k x p)))
 
 ; The (wave NAME ...) form W made in the mixer: drawn through its points
-; when it has them, (wave NAME (POSITION LEVEL) ...), else of its
-; harmonics, (wave NAME AMP ...).
-(def %pl-give!
+; when it has them, (wave NAME (POSITION LEVEL) ...); a recorded sound,
+; (wave NAME (sample FILE [ROOT] [START END])), read from the WAV file
+; FILE, sounding at ROOT, else at the note the file says, else C4, and
+; looping from START to END, else the file's loop, else not at all;
+; else of its harmonics, (wave NAME AMP ...).
+(def player-give!
   (fn (_ w)
-    (if (pair? (List ref 2 w))
-      (Mixer shape! (List ref 1 w) (rest (rest w)))
-      (Mixer wave! (List ref 1 w) (rest (rest w))))))
+    (match
+      ((file-sample? w) (%pl-sample! (List ref 1 w) (rest (List ref 2 w))))
+      ((pair? (List ref 2 w)) (Mixer shape! (List ref 1 w) (rest (rest w))))
+      (#t (Mixer wave! (List ref 1 w) (rest (rest w)))))))
+
+(def %pl-sample!
+  (fn (_ name args)
+    (def path (first args))
+    (def root (if (if (pair? (rest args)) (str? (List ref 1 args)) #f) (List ref 1 args) ()))
+    (def nums (List filter number? (rest args)))
+    (def bytes (File read-all path))
+    (def d (Wav decode bytes 0 (Assoc get (lit size) (File stat path))))
+    (def loop (if (= (List length nums) 2) nums (List ref 3 d)))
+    (def note (match ((not (null? root)) root)
+                     ((not (null? (List ref 4 d))) (song-note-name (- (List ref 4 d) 12)))
+                     (#t "C4")))
+    (if (null? loop)
+      (Mixer sample! name (List ref 2 d) (List ref 1 d) (first d) note)
+      (Mixer sample! name (List ref 2 d) (List ref 1 d) (first d) note (first loop) (List ref 1 loop)))))
 
 ; A player playing through FRONT, nothing yet; WAVES the (wave ...)
 ; forms its songs' instruments may name.  Raises what FRONT raises
@@ -100,7 +121,7 @@
 (def player-open
   (fn (_ front waves)
     (Mixer jit!)
-    (List for-each %pl-give! waves)
+    (List for-each player-give! waves)
     (def p (Vector make 26 ()))
     (%pl-put! p 0 front)
     (unless (null? front) (%pl-put! p 1 (front audio-open %pl-rate 2)))
@@ -124,7 +145,7 @@
   (fn (_ p waves)
     (def had (%pl-get p 8))
     (def fresh (List filter (fn (_ w) (not (List any? (fn (_ h) (equal? h w)) had))) waves))
-    (List for-each %pl-give! fresh)
+    (List for-each player-give! fresh)
     (%pl-put! p 8
       (List append (List filter (fn (_ h) (not (List any? (fn (_ w) (eq? (List ref 1 w) (List ref 1 h))) fresh))) had) fresh))
     p))
@@ -600,6 +621,6 @@
     ()))
 
 (provide tracker/player player-open player-playing? player-mode player-start! player-start-at! player-stop! player-update!
-  player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
+  player-give! player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-tension player-pace player-volume player-volume! player-hears?
   player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)

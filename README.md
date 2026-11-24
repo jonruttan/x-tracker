@@ -66,23 +66,38 @@ fundamental first: `(wave hollow 6 0 2 0 1)`.
 
 ## The editor
 
-A pattern fills the screen, a row a line and a channel a column headed
-by its instrument; above it are the song's tempo, the octave notes are
-typed in, and the order, the pattern edited in brackets and the one
-being heard marked `>`.  Notes are typed on two rows of the keyboard as
-on a piano's keys:
+The editor is laid out and keyed as Impulse Tracker and Schism Tracker
+are.  A pattern fills the screen, a row a line and a channel a column
+headed by its instrument and the instrument's number; a cell is four
+columns, the note, the instrument, the volume and the effect.  Above
+it are the song's tempo, the octave notes are typed in, and the order,
+the pattern edited in brackets and the one being heard marked `>`.
+Notes are typed on two rows of the keyboard as on a piano's keys:
 
     z s x d c v g b h n j m ,    C to C, in the octave
     q 2 w 3 e r 5 t 6 y 7 u i    the octave above
 
-and heard as they are typed.  The other keys:
+and heard as they are typed.  The function keys go to the pages:
 
-    .  or Delete    hold                 -    let go
+    F1 help   F2 pattern   F3 samples   F4 instruments, and envelopes
+    F11 order list   F12 song settings   F9 open   F10 ctrl-s write
+    F5 play   F6 the pattern   F7 from the row   F8 stop   ctrl-q quit
+
+The pattern's other keys:
+
+    .  or Delete    hold                 - or `  let go    1  cut
     < >             octave down, up      { }  the step: rows moved after a note
-    arrows Tab PgUp PgDn Home End        move
+    up down PgUp PgDn Home End           move a row, sixteen, to the top, the end
+    left right      the cell's columns, then the next channel's
+    Alt-left Alt-right  Tab Shift-Tab    a channel left, right
+    digits          the instrument column: the channel's instrument;
+                    the volume column: the note's gain in percent
+    a letter        the effect column: an effect typed after it
     Enter           edit the cell's text: NOTE[:GAIN][/EFFECT...]
     E               edit the channel's instrument
-    I D             insert, delete a row
+    Insert Shift-Delete                  push the channel's rows down, pull them up
+    I D             insert, delete a row in every channel
+    4 8             hear the cell, the row
     [ ]             the pattern before, after in the order
     Space           play the song from the pattern edited, or stop
     p               play the pattern edited over and over, or stop
@@ -101,12 +116,23 @@ and heard as they are typed.  The other keys:
                     down change its pattern, i copy it, d drop it, [ ] move
                     it, Enter edit its pattern, Escape done
     ( )             move the channel left, right
-    V               mark a block from the cursor; move to its other corner
-    Y X P           copy, cut, paste the block (or the cell)
-    Delete          clear the block marked
-    U R             undo, redo
+    U R  ctrl-z     undo, redo
     ?               the help: n p turn the topic, the arrows scroll
     ctrl-c          quit
+
+The blocks, on Impulse Tracker's keys:
+
+    Alt-B Alt-E     mark where the block begins, ends; or Shift and the arrows
+    Alt-L Alt-D     mark the channel, then the pattern; a beat's rows, then more
+    Alt-U           unmark
+    Alt-C Alt-Z     copy, cut
+    Alt-P Alt-O Alt-M                    paste pushing the rows down, over, into the holds
+    Alt-Q Alt-A     a semitone up, down; with Shift an octave
+    Alt-K Alt-X     slide the gains, the first effect, from the first row to the last
+    Alt-W Alt-V Alt-J                    clear the gains, set them, take them up or down
+    Alt-F Alt-G     stretch to twice the rows, squeeze to half
+    V  Y X P        mark from the cursor; copy, cut, paste
+    Delete          clear the block marked
 
 `:` takes a command, as vi does:
 
@@ -136,6 +162,9 @@ and heard as they are typed.  The other keys:
     :waves keep                       copy the waves borrowed from -w files
                                       into this file
     :wave NAME [AMP ...]              show a wave, or make or change it
+    :sample NAME FILE [ROOT] [START END]  keep a WAV file as the wave NAME
+    :open FILE                        edit another file
+    :amplify PCT                      the block's gains taken up or down
     :effects                          list the effects over the whole mix
     :effect (NAME N ...)              add one: echo reverb phase chorus
                                       drive crush sweep limit
@@ -278,7 +307,9 @@ those, or `()` for the terminal's own.  The names and their defaults:
     heading  (bold) () ()       a channel's instrument, a heading
     beat     () 3 ()            a row on the beat
     off      () 1 ()            a let-go cell
-    effect   () 6 ()            a cell with effects
+    effect   () 6 ()            the effect column
+    instrument () 5 ()          the instrument column
+    volume   () 2 ()            the volume column
     cursor   (reverse) () ()    the cursor, a song picked
     playing  (bold) 2 ()        the row heard
     block    () 0 6             the cells of the block marked
