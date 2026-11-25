@@ -81,7 +81,8 @@
         "Playing"
         (list (list (lit play)) "Space" "play the song from the pattern edited, or stop")
         (list (list (lit play-pattern)) "p" "play the pattern edited over and over, or stop")
-        (list () "F5 F6 Shift-F6 F7 F8" "play the song; the pattern; the song from the pattern; from the cursor's row; stop")
+        (list () "F5 F6 Shift-F6 F7 F8" "play the song and show what plays; the pattern; the song from the pattern; from the cursor's row; stop")
+        (list () "Ctrl-F5 Shift-F8" "play the song, staying on the page; pause, and play on from where it stopped")
         (list (list (lit play-here)) "G" "play the song from the cursor's row")
         (list (list (lit loop)) "L" "loop rows: L on the first, L on the last; L again stops")
         (list (list (lit mute-channel) (lit solo-channel)) "M S  Alt-F9 Alt-F10" "mute the channel, solo it; again to undo")
@@ -90,6 +91,11 @@
         (list (list (lit pace-down) (lit pace-up)) "_ +" "the pace down, up: the whole song slower, faster")
         (list (list (lit volume-down) (lit volume-up)) "9 0" "the volume down, up")
         (list (list (lit follow)) "F" "follow the playing: the pattern and row heard shown")
+        "Info (F5)"
+        (list () "up down" "pick a channel")
+        (list () "M S" "mute the channel, solo it")
+        (list () "Enter G" "edit the pattern heard, at the row heard")
+        (list () "+ -" "play the place after, before, in the order")
         "Samples (F3)"
         (list () "up down" "pick a sample; Enter its :sample, Insert a new one")
         (list () "Tab Shift-Tab" "the next setting, the one before; past the last, the list again")

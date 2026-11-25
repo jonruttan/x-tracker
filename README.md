@@ -81,7 +81,8 @@ and heard as they are typed.  The function keys go to the pages:
 
     F1 help   F2 pattern   F3 samples   F4 instruments, and envelopes
     F11 order list   F12 song settings   F9 open   F10 ctrl-s write
-    F5 play   F6 the pattern   F7 from the row   F8 stop   ctrl-q quit
+    F5 play, and what plays   F6 the pattern   F7 from the row   F8 stop
+    Ctrl-F5 play   Shift-F8 pause   ctrl-q quit
 
 The pattern's other keys:
 

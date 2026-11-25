@@ -414,8 +414,16 @@ Schism Tracker; Escape on a page goes back to the pattern.
   pattern.
 - F12 the song's settings: up and down pick one, left and right change
   it, Enter types it.
-- F5 plays the song, F6 the pattern, Shift-F6 the song from the
-  pattern, F7 from the cursor's row; F8 stops.
+- F5 plays the song and shows what plays, as Schism Tracker's info
+  page does: the place in the order, the pattern and row heard, the
+  voices sounding, and each channel's instrument, the last note it
+  struck, its gain and the rows since, with the rows about the one
+  heard beneath.  Up and down pick a channel, M and S mute and solo
+  it, Enter or G edits the pattern heard at the row heard, and + and -
+  play the place after or before.  Ctrl-F5 plays the song and stays on
+  the page.  F6 plays the pattern, Shift-F6 the song from the pattern,
+  F7 from the cursor's row; F8 stops, and Shift-F8 pauses and plays on
+  from where it stopped.
 - F9 opens another file, as `:open FILE`; F10 or ctrl-s writes, as
   `:w`; ctrl-q quits, as `:q`.
 

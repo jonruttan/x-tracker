@@ -221,6 +221,12 @@
 (def player-playing? (fn (_ p) (%pl-get p 9)))
 (def player-mode (fn (_ p) (%pl-get p 4)))
 
+; The pattern a pattern played alone is, or nil.
+(def player-pattern (fn (_ p) (if (eq? (%pl-get p 4) (lit pattern)) (%pl-get p 25) ())))
+
+; How many voices are sounding or waiting to start, 0 when nothing plays.
+(def player-voices (fn (_ p) (if (%pl-get p 9) (Mixer playing (%pl-get p 2)) 0)))
+
 ; ORDER turned to start at AT.
 (def %pl-turn (fn (_ order at) (List append (List drop at order) (List take at order))))
 
@@ -687,4 +693,4 @@
   player-give! player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-tension player-pace player-volume player-volume! player-hears?
   player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!
-  player-pcm player-pcm! player-edited player-wav player-sampled)
+  player-pcm player-pcm! player-edited player-wav player-sampled player-pattern player-voices)
