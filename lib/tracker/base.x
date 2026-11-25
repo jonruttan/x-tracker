@@ -19,10 +19,14 @@
 (import tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
   player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-start-at! player-tension player-pace player-volume player-volume!
-  player-hears? player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
+  player-hears? player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!
+  player-pcm player-pcm! player-edited player-wav player-sampled)
 (import tracker/config config-default config-file config-read config-load config-set! config-set-text! config-get
   config-put! config-problems config-style config-key config-lines config-backup!)
 (import tracker/help help-topics help-topic help-index help-on help-word help-key-actions help-commands)
+(import tracker/sample sample-copy sample-frame sample-amplify sample-invert sample-silence sample-fade sample-mean
+  sample-centre sample-peak sample-normalise sample-reverse sample-cut sample-resample sample-peaks
+  sample-wav-header sample-write! sample-setting sample-set-setting sample-loop sample-set-loop sample-root)
 (import tracker/keys keys-read)
 (import tracker/state edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place)
 (import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)

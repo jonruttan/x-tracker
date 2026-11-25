@@ -40,12 +40,14 @@
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open player-give!
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
-  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
+  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render! player-pcm player-pcm! player-edited player-wav)
+(import tracker/sample sample-copy sample-cut sample-resample sample-reverse sample-invert sample-centre sample-normalise
+  sample-amplify sample-silence sample-fade sample-peak sample-write! sample-setting sample-set-setting sample-loop sample-set-loop)
 (import tracker/help help-index help-topic help-topics help-on)
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -414,10 +416,15 @@
 
 (def %quit!
   (fn (_ st force)
-    (if (if force #t (if (%get st %warned) #t (not (file-changed? (%get st %doc)))))
-      (%put! st %quit #t)
-      (do (%put! st %warned #t)
-          (edit-message! st "The song has changed: :w writes it, :q! leaves without.")))))
+    (def edited (List filter (fn (_ w) (List includes? (List ref 1 w) (player-edited))) (%samples st)))
+    (match
+      ((if force #t (%get st %warned)) (%put! st %quit #t))
+      ((file-changed? (%get st %doc))
+        (do (%put! st %warned #t) (edit-message! st "The song has changed: :w writes it, :q! leaves without.")))
+      ((not (null? edited))
+        (do (%put! st %warned #t)
+            (edit-message! st (Str8 append "The sound of " (%wave-name (first edited)) " is edited: Alt-O on F3 writes it, :q! leaves without."))))
+      (#t (%put! st %quit #t)))))
 
 (def %number-cmd!
   (fn (_ st args least most f)
@@ -607,6 +614,7 @@
                (#t (edit-message! st ":waves  or  :waves keep"))))
       ((str=? cmd "wave") (%wave-cmd! st args))
       ((str=? cmd "sample") (%sample-cmd! st args))
+      ((str=? cmd "sound") (%sound-cmd! st args))
       ((str=? cmd "open") (%open-cmd! st args))
       ((str=? cmd "amplify")
         (if (null? (%get st %pattern)) (edit-message! st "No pattern.")
@@ -982,7 +990,7 @@
 ; What each page's foot says when it is shown.
 (def %page-hints
   (list (pair (lit pattern) "")
-        (pair (lit samples) "Samples   up down pick   Enter or Insert: :sample NAME FILE.wav [ROOT]   Space hear   F2 the pattern")
+        (pair (lit samples) "Samples   up down pick   Tab the settings   Space or the piano hear it   Alt-G I H M B L E F edit   Alt-O write   Ctrl-Z undo")
         (pair (lit instruments) "Instruments   up down pick   Enter edit   Tab its envelope   Space or the piano hear it   F2 the pattern")
         (pair (lit orders) "Order   up down pick   left right its pattern   Insert copy   Delete drop   [ ] move   Enter edit")
         (pair (lit song) "Song   up down pick   left right change   Enter type it   F2 the pattern")))
@@ -1031,6 +1039,7 @@
       ((if (eq? key (lit ctrl-s)) #t (eq? key (lit f10))) (do (%write! st ()) #t))
       ((eq? key (lit f9)) (do (%put! st %input (pair (lit command) "open ")) #t))
       ((eq? key (lit ctrl-q)) (do (%quit! st #f) #t))
+      ((if (eq? key (lit ctrl-z)) (if (eq? (%get st %page) (lit samples)) (not (null? (%get st %sample-undo))) #f) #f) (do (%sound-undo! st) #t))
       ((eq? key (lit ctrl-z)) (do (%undo-step! st %undo %redo "undo") #t))
       ((if has-pattern (eq? key (lit alt-f9)) #f) (do (%hush! st (lit channel) (%get st %chan) #f) #t))
       ((if has-pattern (eq? key (lit alt-f10)) #f) (do (%hush! st (lit channel) (%get st %chan) #t) #t))
@@ -1219,38 +1228,369 @@
       (#t ()))))
 
 ; --- the samples page ---------------------------------------------------------------
+;
+; Schism Tracker's sample list: the samples, the settings of the one
+; picked beside them, and its sound drawn beneath.  Tab walks the
+; settings; the Alt keys edit the sound, as Schism's do, and :sound does
+; what has no key.  An edited sound is heard at once and kept until
+; Alt-O writes it to its file.
 
 ; The file's waves that are samples, (wave NAME (sample FILE ...)).
 (def %samples (fn (_ st) (List filter file-sample? (file-waves (%get st %doc)))))
+
+; The sample picked, its wave form, or nil.
+(def %picked-sample
+  (fn (_ st)
+    (def ws (%samples st))
+    (if (null? ws) () (List ref (%min (%get st %sample-at) (- (List length ws) 1)) ws))))
+
+; W's (sample FILE ...) without the head, FILE named from the directory
+; of the file edited.
+(def %sample-args (fn (_ st w) (rest (List ref 2 (file-sample-at w (if (null? (%get st %path)) () (file-dir (%get st %path))))))))
+
+; The sound of sample W as it is heard, (RATE FRAMES PCM LOOP ROOT):
+; edited, or else its file's, read once; nil when the file cannot be
+; read.
+(def %sound
+  (fn (_ st w)
+    (def kept (player-pcm (List ref 1 w)))
+    (def path (first (%sample-args st w)))
+    (def cache (%get st %sample-cache))
+    (match
+      ((not (null? kept)) kept)
+      ((if (pair? cache) (str=? (first cache) path) #f) (rest cache))
+      (#t ((fn (_ d) (%put! st %sample-cache (pair path d)) d)
+           (guard (e ()) (player-wav path)))))))
+
+; The settings the page shows, in the order Tab walks them: (LABEL KEY).
+(def %sample-fields
+  (list (list "Default volume" (lit volume)) (list "Global volume" (lit global)) (list "Default pan" (lit pan))
+        (list "C-5 speed" (lit speed)) (list "Loop start" (lit loop-start)) (list "Loop end" (lit loop-end))
+        (list "Sustain start" (lit sustain-start)) (list "Sustain end" (lit sustain-end))
+        (list "Vibrato speed" (lit vib-speed)) (list "Vibrato depth" (lit vib-depth)) (list "Vibrato rate" (lit vib-rate))
+        (list "Vibrato wave" (lit vib-wave))))
+
+(def %vib-waves (list (lit sine) (lit ramp) (lit square) (lit random)))
+
+; The loop of ARGS, else D's own, (START END), or nil.
+(def %sample-loop-of (fn (_ args d) (if (null? (sample-loop args)) (if (null? d) () (List ref 3 d)) (sample-loop args))))
+
+(def %vibrato-of
+  (fn (_ args) ((fn (_ v) (if (null? v) (list 0 0 0 (lit sine)) v)) (sample-setting args (lit vibrato)))))
+
+; Setting KEY of ARGS, the sample's form, and D, its sound: a number, a
+; wave's name, or nil for one that is off.
+(def %field-value
+  (fn (_ args d key)
+    (def one (fn (_ k least) ((fn (_ v) (if (null? v) least (first v))) (sample-setting args k))))
+    (def loop (%sample-loop-of args d))
+    (def sus (sample-setting args (lit sustain)))
+    (match
+      ((eq? key (lit volume)) (one (lit volume) 64))
+      ((eq? key (lit global)) (one (lit global) 64))
+      ((eq? key (lit pan)) (one (lit pan) ()))
+      ((eq? key (lit speed)) (one (lit speed) (if (null? d) () (first d))))
+      ((eq? key (lit loop-start)) (if (null? loop) () (first loop)))
+      ((eq? key (lit loop-end)) (if (null? loop) () (List ref 1 loop)))
+      ((eq? key (lit sustain-start)) (if (null? sus) () (first sus)))
+      ((eq? key (lit sustain-end)) (if (null? sus) () (List ref 1 sus)))
+      ((eq? key (lit vib-speed)) (first (%vibrato-of args)))
+      ((eq? key (lit vib-depth)) (List ref 1 (%vibrato-of args)))
+      ((eq? key (lit vib-rate)) (List ref 2 (%vibrato-of args)))
+      (#t (List ref 3 (%vibrato-of args))))))
+
+(def %clamped (fn (_ v least most) (%max least (%min most v))))
+
+; ARGS with setting KEY made V, held within what it can be for a sound
+; of FRAMES; nil turns off a pan, a loop or a sustain loop.
+(def %field-set
+  (fn (_ args frames key v)
+    (def loop (sample-loop args))
+    (def sus (sample-setting args (lit sustain)))
+    (def vib (%vibrato-of args))
+    (def points
+      (fn (_ pts i)
+        (match ((null? v) ())
+               ((= i 0) ((fn (_ e) (list (%clamped v 0 (- e 1)) e)) (if (null? pts) frames (List ref 1 pts))))
+               (#t ((fn (_ s) (list s (%clamped v (+ s 1) frames))) (if (null? pts) 0 (first pts)))))))
+    (match
+      ((List includes? key (list (lit volume) (lit global))) (sample-set-setting args key (list (%clamped v 0 64))))
+      ((eq? key (lit pan)) (sample-set-setting args key (if (null? v) () (list (%clamped v 0 64)))))
+      ((eq? key (lit speed)) (sample-set-setting args key (list (%clamped v 1 999999))))
+      ((eq? key (lit loop-start)) (sample-set-loop args (points loop 0)))
+      ((eq? key (lit loop-end)) (sample-set-loop args (points loop 1)))
+      ((eq? key (lit sustain-start)) (sample-set-setting args (lit sustain) (points sus 0)))
+      ((eq? key (lit sustain-end)) (sample-set-setting args (lit sustain) (points sus 1)))
+      ((eq? key (lit vib-wave)) (sample-set-setting args (lit vibrato) (List update 3 v vib)))
+      (#t (sample-set-setting args (lit vibrato)
+            (List update (List find-index (fn (_ k) (eq? k key)) (list (lit vib-speed) (lit vib-depth) (lit vib-rate)))
+              (%clamped v 0 64) vib))))))
+
+; The sample W's form made of ARGS2, its file as the form names it: the
+; document changed, and the mixer given it.
+(def %sample-form!
+  (fn (_ st w args2)
+    (def own (rest (List ref 2 w)))
+    (%doc-change! st (file-set-wave (%get st %doc) (%wave-name w) (list (pair (lit sample) (pair (first own) (rest args2))))))))
+
+; Setting KEY of the sample picked moved by DELTA: a pan, a loop or a
+; sustain loop that is off turned on, a vibrato's wave the next.
+(def %field-step!
+  (fn (_ st key delta)
+    (def w (%picked-sample st))
+    (def args (%sample-args st w))
+    (def d (%sound st w))
+    (def frames (if (null? d) 1 (List ref 1 d)))
+    (def v (%field-value args d key))
+    (%sample-form! st w
+      (match
+        ((eq? key (lit vib-wave))
+          (%field-set args frames key (List ref (int% (+ (List find-index (fn (_ x) (eq? x v)) %vib-waves) (if (< delta 0) 3 1)) 4) %vib-waves)))
+        ((null? v) (%field-set args frames key (match ((eq? key (lit pan)) 32) ((List includes? key (list (lit loop-end) (lit sustain-end))) frames) (#t 0))))
+        (#t (%field-set args frames key (+ v delta)))))))
+
+; How far left and right move setting KEY of a sound of FRAMES, and with
+; Alt.
+(def %field-steps
+  (fn (_ key frames)
+    (match ((List includes? key (list (lit loop-start) (lit loop-end) (lit sustain-start) (lit sustain-end))) (pair 1 (%max 1 (int/ frames 64))))
+           ((eq? key (lit speed)) (pair 1 100))
+           (#t (pair 1 8)))))
+
+; Edits of the sound: each (fn (_ d args from to n)) answering (D2
+; ARGS2): the sound and the sample's form after it.  FROM and TO are the
+; frames it covers, the loop's or else the whole sound's, and N the number
+; given with it.
+(def %same-length (fn (_ f) (fn (_ d args from to n) (list (%sound-with d (f (List ref 2 d) (List ref 1 d) from to n)) args))))
+
+(def %sound-with (fn (_ d pcm) (list (first d) (List ref 1 d) pcm (List ref 3 d) (List ref 4 d))))
+
+; D cut to the frames FROM up to TO kept or, when KEEP is #f, taken out;
+; the loop and sustain loop of ARGS moved with the frames, or dropped
+; when cut into.
+(def %cut-sound
+  (fn (_ d args from to keep)
+    (def frames (List ref 1 d))
+    (def c (if keep (list (sample-copy (List ref 2 d) from to) (- to from)) (sample-cut (List ref 2 d) frames from to)))
+    (def moved
+      (fn (_ pts)
+        (match ((null? pts) ())
+               (keep (if (if (<= from (first pts)) (<= (List ref 1 pts) to) #f) (list (- (first pts) from) (- (List ref 1 pts) from)) ()))
+               ((<= (List ref 1 pts) from) pts)
+               ((<= to (first pts)) (list (- (first pts) (- to from)) (- (List ref 1 pts) (- to from))))
+               (#t ()))))
+    (list (list (first d) (List ref 1 c) (first c) () (List ref 4 d))
+          (sample-set-setting (sample-set-loop args (moved (%sample-loop-of args d))) (lit sustain) (moved (sample-setting args (lit sustain)))))))
+
+; D drawn out or squeezed to N frames, read straight between its frames
+; when LERP is #t or else the nearest; the loops scaled with it, and the
+; speed too when KEEP-PITCH is #t.
+(def %resize-sound
+  (fn (_ d args n lerp keep-pitch)
+    (def frames (List ref 1 d))
+    (def r (sample-resample (List ref 2 d) frames n lerp))
+    (def scaled (fn (_ pts) (if (null? pts) () (List map (fn (_ x) (%min n (int/ (* x n) frames))) pts))))
+    (def args2 (sample-set-setting (sample-set-loop args (scaled (%sample-loop-of args d))) (lit sustain) (scaled (sample-setting args (lit sustain)))))
+    (list (list (first d) n (first r) () (List ref 4 d))
+          (if keep-pitch (sample-set-setting args2 (lit speed) (list (%max 1 (int/ (* (%field-value args d (lit speed)) n) frames)))) args2))))
+
+(def %sound-edits
+  (list (pair "reverse" (%same-length (fn (_ pcm frames from to n) (sample-reverse pcm frames))))
+        (pair "invert" (%same-length (fn (_ pcm frames from to n) (sample-invert pcm frames))))
+        (pair "centre" (%same-length (fn (_ pcm frames from to n) (sample-centre pcm frames))))
+        (pair "normalise" (%same-length (fn (_ pcm frames from to n) (sample-normalise pcm frames))))
+        (pair "amplify" (%same-length (fn (_ pcm frames from to n) (sample-amplify pcm frames from to n))))
+        (pair "silence" (%same-length (fn (_ pcm frames from to n) (sample-silence pcm frames from to))))
+        (pair "fade-in" (%same-length (fn (_ pcm frames from to n) (sample-fade pcm frames from to #t))))
+        (pair "fade-out" (%same-length (fn (_ pcm frames from to n) (sample-fade pcm frames from to #f))))
+        (pair "cut" (fn (_ d args from to n) (%cut-sound d args from to #f)))
+        (pair "crop" (fn (_ d args from to n) (%cut-sound d args from to #t)))
+        (pair "cut-before" (fn (_ d args from to n) (%cut-sound d args from (List ref 1 d) #t)))
+        (pair "cut-after" (fn (_ d args from to n) (%cut-sound d args 0 to #t)))
+        (pair "resize" (fn (_ d args from to n) (%resize-sound d args n #t #f)))
+        (pair "stretch" (fn (_ d args from to n) (%resize-sound d args n #f #f)))
+        (pair "resample" (fn (_ d args from to n) (%resize-sound d args n #t #t)))))
+
+; The edits that take a number, and the least and most it can be.
+(def %sound-numbers
+  (list (list "amplify" 0 1000) (list "resize" 1 9999999) (list "stretch" 1 9999999) (list "resample" 1 9999999)))
+
+; The sound of sample W made D2 and its form ARGS2, the sound before it
+; kept to undo to: heard at once, kept until Alt-O writes it.
+(def %sound-change!
+  (fn (_ st w d2 args2)
+    (def name (List ref 1 w))
+    (def args (%sample-args st w))
+    (%put! st %sample-undo (pair (list name (player-pcm name) args) (List take 15 (%get st %sample-undo))))
+    (%put! st %sample-peaks ())
+    (player-pcm! name args2 d2)
+    (unless (equal? args args2) (%sample-form! st w args2))))
+
+; :sound OP [N] [FROM TO]: the edit OP done to the sound of the sample
+; picked, over the frames FROM up to TO, else its loop, else all of it.
+(def %sound-cmd!
+  (fn (_ st args)
+    (def w (%picked-sample st))
+    (def op (if (null? args) () (first args)))
+    (def edit (if (null? op) () (%str-entry op %sound-edits)))
+    (def wants (if (null? op) () (List find (fn (_ e) (str=? (first e) op)) %sound-numbers)))
+    (def nums (if (null? args) () (List map %num (rest args))))
+    (def d (if (null? w) () (%sound st w)))
+    (match
+      ((null? w) (edit-message! st "No sample: F3, then Insert reads one."))
+      ((null? op) (edit-message! st (Str8 append ":sound OP [N] [FROM TO], OP one of " (Str8 join " " (List map first %sound-edits)) ", set, mono, save, undo")))
+      ((str=? op "save") (%sound-save! st w))
+      ((str=? op "undo") (%sound-undo! st))
+      ((str=? op "mono") (edit-message! st "A sample is one channel already: the WAV reader takes the mean of a file's channels."))
+      ((str=? op "set")
+        ((fn (_ key)
+           (match ((null? key) (edit-message! st (Str8 append ":sound set KEY N, KEY one of " (Str8 join " " (List map (fn (_ f) (symbol->str (List ref 1 f))) %sample-fields)))))
+                  ((eq? key (lit vib-wave))
+                    (if (if (< 2 (List length args)) (List includes? (str->sym (List ref 2 args)) %vib-waves) #f)
+                      (%sample-form! st w (%field-set (%sample-args st w) (if (null? d) 1 (List ref 1 d)) key (str->sym (List ref 2 args))))
+                      (edit-message! st ":sound set vib-wave sine|ramp|square|random")))
+                  ((if (< 2 (List length args)) (str=? (List ref 2 args) "off") #f)
+                    (%sample-form! st w (%field-set (%sample-args st w) (if (null? d) 1 (List ref 1 d)) key ())))
+                  ((if (< 2 (List length args)) (null? (%num (List ref 2 args))) #t) (edit-message! st ":sound set KEY N, or off"))
+                  (#t (%sample-form! st w (%field-set (%sample-args st w) (if (null? d) 1 (List ref 1 d)) key (%num (List ref 2 args)))))))
+         (if (< 1 (List length args))
+           ((fn (_ f) (if (null? f) () (List ref 1 f))) (List find (fn (_ f) (str=? (symbol->str (List ref 1 f)) (List ref 1 args))) %sample-fields))
+           ())))
+      ((null? edit) (edit-message! st (Str8 append "No edit " op ": :sound alone lists them.")))
+      ((null? d) (edit-message! st (Str8 append "The file " (first (%sample-args st w)) " cannot be read.")))
+      ((if (List includes? op (list "cut-before" "cut-after")) (null? (%sample-loop-of (%sample-args st w) d)) #f)
+        (edit-message! st "The sample has no loop: Tab to Loop start, then Space."))
+      ((List any? null? nums) (edit-message! st "The numbers after the edit are whole numbers."))
+      ((if (null? wants) #f (if (null? nums) #t (if (< (first nums) (List ref 1 wants)) #t (< (List ref 2 wants) (first nums)))))
+        (edit-message! st (Str8 append ":sound " op " N, N from " (Str8 str (List ref 1 wants)) " to " (Str8 str (List ref 2 wants)) ".")))
+      (#t
+        ((fn (_ range)
+           (def frames (List ref 1 d))
+           (def from (%clamped (first range) 0 frames))
+           (def to (%clamped (List ref 1 range) from frames))
+           (if (if (= from to) (List includes? op (list "silence" "fade-in" "fade-out" "cut" "crop")) #f)
+             (edit-message! st "No frames to edit: FROM is TO.")
+             ((fn (_ r)
+                (if (= (List ref 1 (first r)) 0) (edit-message! st "That would leave no sound.")
+                  (do (%sound-change! st w (first r) (List ref 1 r))
+                      (edit-message! st (Str8 append "Sound of " (%wave-name w) ": " op ", " (Str8 str (List ref 1 (first r))) " frames. Alt-O writes it.")))))
+              ((rest edit) d (%sample-args st w) from to (if (null? wants) () (first nums))))))
+         (match ((not (< (List length nums) (if (null? wants) 2 3))) (if (null? wants) nums (rest nums)))
+                ((List includes? op %loop-edits)
+                  ((fn (_ l) (if (null? l) (list 0 (List ref 1 d)) l)) (%sample-loop-of (%sample-args st w) d)))
+                (#t (list 0 (List ref 1 d)))))))))
+
+; The edits that cover the loop when no frames are given.
+(def %loop-edits (list "silence" "fade-in" "fade-out" "cut" "crop" "cut-before" "cut-after"))
+
+; The last edit of a sound undone.
+(def %sound-undo!
+  (fn (_ st)
+    (def u (%get st %sample-undo))
+    (if (null? u) (edit-message! st "No edit of a sound to undo.")
+      ((fn (_ back)
+         (def w (List find (fn (_ w) (eq? (List ref 1 w) (first back))) (%samples st)))
+         (%put! st %sample-undo (rest u))
+         (%put! st %sample-peaks ())
+         (if (null? w) (edit-message! st "That sample is gone.")
+           (do (player-pcm! (first back) (List ref 2 back) (List ref 1 back))
+               (unless (equal? (%sample-args st w) (List ref 2 back)) (%sample-form! st w (List ref 2 back)))
+               (edit-message! st (Str8 append "Undone: the sound of " (%wave-name w) ".")))))
+       (first u)))))
+
+; Sample W's sound written to its file, a WAV file of one channel at its
+; C-5 speed.
+(def %sound-save!
+  (fn (_ st w)
+    (def args (%sample-args st w))
+    (def d (%sound st w))
+    (if (null? d) (edit-message! st (Str8 append "The file " (first args) " cannot be read."))
+      (%try! st "the file cannot be written"
+        (fn (_)
+          (sample-write! (List ref 2 d) (List ref 1 d) (%field-value args d (lit speed)) (first args))
+          (%put! st %sample-cache ())
+          (%put! st %sample-undo (List filter (fn (_ u) (not (eq? (first u) (List ref 1 w)))) (%get st %sample-undo)))
+          (player-pcm! (List ref 1 w) args ())
+          (edit-message! st (Str8 append "Written: " (first args) ", " (Str8 str (List ref 1 d)) " frames."))
+          ())))))
+
+; Alt keys of the list, as Schism's: each the :sound it does, a string
+; ending in a blank for one typed on.
+(def %sample-alt-keys
+  (list (pair (lit alt-g) "reverse") (pair (lit alt-i) "invert") (pair (lit alt-h) "centre")
+        (pair (lit alt-b) "cut-before") (pair (lit alt-l) "cut-after") (pair (lit alt-D) "mono")
+        (pair (lit alt-o) "save")))
 
 (def %samples-key!
   (fn (_ st key)
     (def ws (%samples st))
     (def at (%min (%get st %sample-at) (%max 0 (- (List length ws) 1))))
     (def w (if (null? ws) () (List ref at ws)))
+    (def field (%get st %sample-field))
+    (def fkey (if (null? field) () (List ref 1 (List ref field %sample-fields))))
+    (def piano (if (str? key) (%str-entry key %piano) ()))
+    (def alt (if (symbol? key) (Assoc entry key %sample-alt-keys) ()))
+    (def frames (fn (_) ((fn (_ d) (if (null? d) 1 (List ref 1 d))) (%sound st w))))
+    (def typed (fn (_ text) (%put! st %input (pair (lit command) text))))
     (match
-      ((eq? key (lit up)) (%put! st %sample-at (%max 0 (- at 1))))
-      ((eq? key (lit down)) (%put! st %sample-at (%min (%max 0 (- (List length ws) 1)) (+ at 1))))
-      ((if (eq? key (lit insert)) #t (null? w)) (when (List includes? key (list (lit insert) (lit enter))) (%put! st %input (pair (lit command) "sample "))))
+      ((if (eq? key (lit insert)) #t (null? w)) (when (List includes? key (list (lit insert) (lit enter))) (typed "sample ")))
+      ((eq? key (lit complete)) (%put! st %sample-field (if (null? field) 0 (if (< field (- (List length %sample-fields) 1)) (+ field 1) ()))))
+      ((eq? key (lit shift-tab)) (%put! st %sample-field (if (null? field) (- (List length %sample-fields) 1) (if (< 0 field) (- field 1) ()))))
+      ((not (null? alt)) (%sound-cmd! st (list (rest alt))))
+      ((eq? key (lit alt-m))
+        ((fn (_ d)
+           (typed (Str8 append "sound amplify "
+                    (if (null? d) "100" (Str8 str (%min 1000 (int/ 3276700 (%max 1 (sample-peak (List ref 2 d) (List ref 1 d))))))))))
+         (%sound st w)))
+      ((List includes? key (list (lit alt-e) (lit alt-f) (lit alt-E) (lit alt-F)))
+        (typed (Str8 append "sound " (match ((eq? key (lit alt-e)) "resize ") ((eq? key (lit alt-f)) "stretch ") (#t "resample "))
+                 (Str8 str (frames)))))
+      ((List includes? key (list (lit alt-+) (lit alt--) (lit alt-=)))
+        ((fn (_ hz) (%sample-form! st w (%field-set (%sample-args st w) (frames) (lit speed) (if (eq? key (lit alt--)) (int/ hz 2) (* hz 2)))))
+         (%field-value (%sample-args st w) (%sound st w) (lit speed))))
+      ((if (null? field) (List includes? key (list "+" "-")) #f)
+        ((fn (_ hz) (%sample-form! st w (%field-set (%sample-args st w) (frames) (lit speed)
+                                          (if (%is? key "+") (int/ (* hz 1059463) 1000000) (int/ (* hz 1000000) 1059463)))))
+         (%field-value (%sample-args st w) (%sound st w) (lit speed))))
+      ((eq? key (lit up)) (do (%put! st %sample-at (%max 0 (- at 1))) (%put! st %sample-peaks ())))
+      ((eq? key (lit down)) (do (%put! st %sample-at (%min (%max 0 (- (List length ws) 1)) (+ at 1))) (%put! st %sample-peaks ())))
+      ((null? field)
+        (match
+          ((eq? key (lit enter))
+            (typed (Str8 append "sample " (%wave-name w) " " (Str8 join " " (List map %write-form (rest (List ref 2 w)))))))
+          ((%is? key " ") (%hear-sample! st (%wave-name w) "C4"))
+          ((not (null? piano)) (%hear-sample! st (%wave-name w) (%note-for st (rest piano))))
+          (#t ())))
+      ((List includes? key (list (lit left) (lit right) (lit alt-left) (lit alt-right)))
+        ((fn (_ steps)
+           (%field-step! st fkey (* (if (List includes? key (list (lit left) (lit alt-left))) -1 1)
+                                   (if (List includes? key (list (lit alt-left) (lit alt-right))) (rest steps) (first steps)))))
+         (%field-steps fkey (frames))))
+      ((if (%is? key " ") (List includes? fkey (list (lit pan) (lit loop-start) (lit loop-end) (lit sustain-start) (lit sustain-end))) #f)
+        (if (null? (%field-value (%sample-args st w) (%sound st w) fkey)) (%field-step! st fkey 0)
+          (%sample-form! st w (%field-set (%sample-args st w) (frames) fkey ()))))
       ((eq? key (lit enter))
-        (%put! st %input (pair (lit command) (Str8 append "sample " (%wave-name w) " " (Str8 join " " (List map %write-form (rest (List ref 2 w))))))))
-      ((%is? key " ") (%hear-sample! st (%wave-name w)))
+        ((fn (_ v) (typed (Str8 append "sound set " (symbol->str fkey) " " (if (null? v) "off" (if (symbol? v) (symbol->str v) (Str8 str v))))))
+         (%field-value (%sample-args st w) (%sound st w) fkey)))
+      ((%is? key " ") (%hear-sample! st (%wave-name w) "C4"))
+      ((not (null? piano)) (%hear-sample! st (%wave-name w) (%note-for st (rest piano))))
       (#t ()))))
 
-; Sample NAME heard at C4, as an instrument of it alone would play it.
+; Sample NAME heard at NOTE, as an instrument of it alone would play it.
 (def %hear-sample!
-  (fn (_ st name)
+  (fn (_ st name note)
     (unless (null? (%get st %player))
       (%try! st "the sample cannot be played"
         (fn (_)
           (player-preview! (%get st %player)
             (song-set-instrument (edit-song st) (Str8 append "(instrument sample-heard (wave " name ") (env (0 100) (60000 100)) (release 30))"))
-            "sample-heard" "C4")
+            "sample-heard" note)
           (edit-feed! st) ())))))
 
 ; :sample NAME FILE [ROOT] [START END]: the WAV file FILE kept as the wave
 ; NAME, read from the directory of the file edited, sounding at ROOT and
-; looping from START to END when they are given.
+; looping from START to END when they are given; the settings the page
+; gave the sample, and its sound as edited, kept.
 (def %sample-cmd!
   (fn (_ st args)
     (def name (if (null? args) () (first args)))
@@ -1258,13 +1598,21 @@
       ((< (List length args) 2) (edit-message! st ":sample NAME FILE.wav [ROOT] [START END]"))
       ((not (%name? name)) (edit-message! st "A sample's name is a word."))
       (#t ((fn (_ parts)
-             (def form (list (lit wave) (str->sym name) (pair (lit sample) parts)))
+             (def had (file-wave (%get st %doc) name))
+             (def kept (if (if (null? had) #f (file-sample? had)) (List filter pair? (rest (rest (List ref 2 had)))) ()))
+             (def parts2 (List append parts kept))
+             (def form (list (lit wave) (str->sym name) (pair (lit sample) parts2)))
              (def dir (if (null? (%get st %path)) "." (file-dir (%get st %path))))
              (%try! st "not a WAV file"
                (fn (_)
-                 ; Read once here, so a file that is not one says so now.
-                 (player-give! (file-sample-at form dir))
-                 (%doc-change! st (file-set-wave (%get st %doc) name (list (pair (lit sample) parts))))
+                 ; A new file is heard as it is; read once here, so one
+                 ; that is not a WAV file says so now.
+                 (if (if (null? had) #f (if (file-sample? had) (str=? (List ref 1 (List ref 2 had)) (first parts)) #f))
+                   (player-give! (file-sample-at form dir))
+                   (player-pcm! (str->sym name) (rest (List ref 2 (file-sample-at form dir))) ()))
+                 (%put! st %sample-cache ())
+                 (%put! st %sample-peaks ())
+                 (%doc-change! st (file-set-wave (%get st %doc) name (list (pair (lit sample) parts2))))
                  (edit-message! st (Str8 append "Sample " name ": " (List ref 1 args) ". An instrument plays it with (wave " name ")."))
                  ())))
            (pair (List ref 1 args)
@@ -1573,4 +1921,5 @@
 
 
 (provide tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!
-  %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name)
+  %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
+  %picked-sample %sample-args %sound %sample-fields %field-value)

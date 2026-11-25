@@ -397,11 +397,13 @@ The function keys go to the editor's pages, as in Impulse Tracker and
 Schism Tracker; Escape on a page goes back to the pattern.
 
 - F1 the help, F2 the pattern.
-- F3 the samples: the WAV files the file keeps as waves.
-  `:sample NAME FILE.wav [ROOT] [START END]` reads one, from the
-  directory of the file edited, as the wave NAME; an instrument plays it
-  with `(wave NAME)`.  ROOT is the note it sounds at as recorded, START
-  and END the frames it loops between.  Space hears the one picked.
+- F3 the samples: the WAV files the file keeps as waves, the settings
+  of the one picked beside them, and its sound drawn beneath, its loop
+  between `[` and `]`.  `:sample NAME FILE.wav [ROOT] [START END]`
+  reads one, from the directory of the file edited, as the wave NAME;
+  an instrument plays it with `(wave NAME)`.  ROOT is the note it
+  sounds at as recorded, START and END the frames it loops between.
+  Space or the note keys hear the one picked.  See "Editing a sample".
 - F4 the instruments, numbered as the pattern shows them, with the
   props of the one picked and its envelope drawn.  Enter edits it, Space
   or the note keys hear it.  Tab goes into its envelope: left and right
@@ -416,6 +418,46 @@ Schism Tracker; Escape on a page goes back to the pattern.
   pattern, F7 from the cursor's row; F8 stops.
 - F9 opens another file, as `:open FILE`; F10 or ctrl-s writes, as
   `:w`; ctrl-q quits, as `:q`.
+
+### Editing a sample
+
+F3's settings are Impulse Tracker's, kept in the sample's form after
+its file:
+
+    (wave kick (sample "kick.wav" 100 1900 (volume 48) (pan 20) (speed 22050)))
+
+- `(volume 0-64)` and `(global 0-64)`: the sample's default and global
+  volume, 64 as recorded.  An instrument that plays it is heard at its
+  gain times both.
+- `(pan 0-64)`: where it is heard, 32 the middle; with none, where the
+  instrument puts it.
+- `(speed HZ)`: the frames a second that sound C-5, Impulse Tracker's
+  name for x-tracker's C4.
+- START END after the file: the loop.
+- `(sustain START END)` and `(vibrato SPEED DEPTH RATE WAVE)` are kept
+  and shown, and not heard: the mixer has no sustain loop and no
+  vibrato of a sample's own.
+
+Tab walks the settings and left and right change the one picked, with
+Alt a big step; Space turns a pan, a loop or a sustain loop on or off;
+Enter types the setting as `:sound set KEY N`.
+
+The sound is edited on Schism Tracker's keys:
+
+    Alt-G  reverse          Alt-I  upside down     Alt-H  centred about 0
+    Alt-M  amplify, the loudest it can be offered
+    Alt-B  cut before the loop                    Alt-L  cut after it
+    Alt-E  resize, read between frames            Alt-F  resize, the nearest
+    Alt-Shift-E  Alt-Shift-F  resample: resized, its pitch kept
+    + -    the C-5 speed a semitone              Alt-+ Alt--  an octave
+    Alt-O  write it to its WAV file               ctrl-z  undo an edit
+
+`:sound OP [N] [FROM TO]` does those and the edits with no key:
+`silence`, `fade-in`, `fade-out`, `cut` and `crop` over the frames
+FROM to TO, else the loop, else all of the sound; `normalise`.  An
+edited sound is heard at once, marked `*` in the list, and kept until
+Alt-O writes it; `:q` says so first.  The WAV reader takes the mean of
+a file's channels, so a sample is one channel already.
 
 ### Typing notes
 

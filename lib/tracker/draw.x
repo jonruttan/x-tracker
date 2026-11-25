@@ -17,11 +17,14 @@
 (import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-name song-order song-prop song-pattern pattern-rows song-instruments)
 (import tracker/cell cell-columns)
-(import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name)
+(import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
+  %picked-sample %sample-args %sound %sample-fields %field-value)
+(import tracker/sample sample-peaks sample-setting sample-loop)
+(import tracker/player player-edited)
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed?)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -423,20 +426,93 @@
               (do (Screen put screen env-top (+ x 1) "Volume envelope" (%style st (lit heading)))
                   (%draw-envelope! st screen (+ env-top 1) (+ x 1) high (- (Screen cols screen) (+ x 2)) points env-at (%get st %env-held)))))))))
 
-; F3: the samples, the WAV files the file keeps as waves.
+; F3: the samples, the settings of the one picked beside them, and its
+; sound drawn beneath, its loop between [ and ], its sustain loop
+; between { and }.  A sample edited and not yet written is marked *.
 (def %draw-samples!
   (fn (_ st screen top bottom)
+    (def cols (Screen cols screen))
     (def ws (%samples st))
     (Screen put screen top 1 "Sample list" (%style st (lit heading)))
     (if (null? ws)
       (Screen put screen (+ top 2) 2 "No samples yet: Insert, or :sample NAME FILE.wav [ROOT] [START END], reads one." 0)
-      (%draw-list! screen (+ top 2) bottom 1
-        (List map (fn (_ w)
-                    (def args (rest (List ref 2 w)))
-                    (Str8 append " " (%pad 14 (%wave-name w)) " " (%pad 32 (first args)) " "
-                      (Str8 join " " (List map %write-form (rest args)))))
-          ws)
-        (%min (%get st %sample-at) (- (List length ws) 1)) (%style st (lit cursor))))))
+      (do (def w (%picked-sample st))
+          (def args (%sample-args st w))
+          (def d (%sound st w))
+          (def edited (player-edited))
+          (def high (List length %sample-fields))
+          (%draw-list! screen (+ top 2) (+ (+ top 2) high) 1
+            (List map (fn (_ x)
+                        (Str8 append (if (List includes? (List ref 1 x) edited) "*" " ") (%pad 14 (%wave-name x)) " "
+                          (%pad 24 (first (rest (List ref 2 x))))))
+              ws)
+            (%min (%get st %sample-at) (- (List length ws) 1))
+            (if (null? (%get st %sample-field)) (%style st (lit cursor)) (%style st (lit heading))))
+          (def x 44)
+          (Screen put screen top x (Str8 append "Settings of " (%wave-name w)) (%style st (lit heading)))
+          (List fold
+            (fn (_ i f)
+              (def v (%field-value args d (List ref 1 f)))
+              (def text (match ((null? v) "off")
+                               ((symbol? v) (symbol->str v))
+                               ((eq? (List ref 1 f) (lit speed)) (Str8 append (Str8 str v) " Hz"))
+                               (#t (Str8 str v))))
+              (%put-text! screen cols (+ (+ top 2) i) x (%pad 16 (first f)) 0)
+              (%put-text! screen cols (+ (+ top 2) i) (+ x 16) (%pad 10 text)
+                (if (%same? i (%get st %sample-field)) (%style st (lit cursor)) (%style st (lit volume))))
+              (+ i 1))
+            0 %sample-fields)
+          (def wtop (+ (+ top 3) high))
+          (if (null? d)
+            (%put-text! screen cols wtop 2 (Str8 append "The file " (first args) " cannot be read.") 0)
+            (do (%put-text! screen cols wtop 1
+                  (Str8 append "Sound   " (Str8 str (List ref 1 d)) " frames, "
+                    (%seconds (List ref 1 d) (%field-value args d (lit speed))) " s at C-5   Alt-O writes it to " (first (rest (List ref 2 w))))
+                  (%style st (lit empty)))
+                (when (< 3 (- bottom (+ wtop 2)))
+                  (%draw-sound! st screen (+ wtop 1) 1 (- (- bottom wtop) 2) (- cols 2) d
+                    (%sample-loop-of-args args d) (sample-setting args (lit sustain))))))
+          (when (if (not (null? (sample-setting args (lit sustain)))) #t
+                  (not (null? (sample-setting args (lit vibrato)))))
+            (%put-text! screen cols (- bottom 1) 1 "Sustain loops and vibrato are kept, and not heard: the mixer has neither." (%style st (lit empty))))))))
+
+(def %sample-loop-of-args
+  (fn (_ args d) (if (null? (sample-loop args)) (List ref 3 d) (sample-loop args))))
+
+; FRAMES at RATE frames a second, in seconds to the hundredth.
+(def %seconds
+  (fn (_ frames rate)
+    (def c (int/ (* frames 100) (%max 1 rate)))
+    (Str8 append (Str8 str (int/ c 100)) "." (Str8 pad-left 2 #\0 (Str8 str (int% c 100))))))
+
+; Sound D drawn on SCREEN from row TOP, HIGH rows of WIDE columns from X:
+; each column the least to the most of its frames, the middle 0, and a
+; row beneath with LOOP's [ ] and SUSTAIN's { }.
+(def %draw-sound!
+  (fn (_ st screen top x high wide d loop sustain)
+    (def cols (Screen cols screen))
+    (def h (- high 1))
+    (def frames (List ref 1 d))
+    (def cache (%get st %sample-peaks))
+    (def peaks
+      (if (if (pair? cache) (if (eq? (first cache) (List ref 2 d)) (= (List ref 1 cache) wide) #f) #f) (List ref 2 cache)
+        ((fn (_ ps) (%put! st %sample-peaks (list (List ref 2 d) wide ps)) ps) (sample-peaks (List ref 2 d) frames wide))))
+    (def row-of (fn (_ v) (%min (- h 1) (%max 0 (int/ (* (- 32767 v) (- h 1)) 65535)))))
+    (def style (%style st (lit volume)))
+    (List fold
+      (fn (_ c pk)
+        (def a (row-of (rest pk)))
+        (def b (row-of (first pk)))
+        (List for-each (fn (_ r) (%put-text! screen cols (+ top r) (+ x c) "|" style)) (List range a (+ b 1)))
+        (+ c 1))
+      0 peaks)
+    (def col-of (fn (_ f) (%min (- wide 1) (int/ (* f wide) (%max 1 frames)))))
+    (def marks (fn (_ pts open close)
+                 (unless (null? pts)
+                   (do (%put-text! screen cols (+ top h) (+ x (col-of (first pts))) open (%style st (lit heading)))
+                       (%put-text! screen cols (+ top h) (+ x (col-of (- (List ref 1 pts) 1))) close (%style st (lit heading)))))))
+    (marks loop "[" "]")
+    (marks sustain "{" "}")))
 (def edit-draw!
   (fn (_ st screen)
     (Screen clear screen)

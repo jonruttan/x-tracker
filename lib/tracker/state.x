@@ -56,7 +56,11 @@
 (def %env-held 36)  ; whether that point is picked up, its arrows moving it
 (def %setting-at 37) ; the line picked on the song page
 (def %sample-at 38) ; the sample picked on the samples page
-(def %slots 39)
+(def %sample-field 39) ; the setting picked on the samples page, or nil while the list has the keys
+(def %sample-undo 40) ; the sounds before their edits, ((NAME SOUND ARGS) ...), the last first
+(def %sample-cache 41) ; (PATH . SOUND): the file of the sample last drawn, read
+(def %sample-peaks 42) ; (PCM COLS PEAKS): its sound drawn, or nil
+(def %slots 43)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -112,4 +116,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
