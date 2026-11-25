@@ -134,6 +134,18 @@ The blocks, on Impulse Tracker's keys:
     V  Y X P        mark from the cursor; copy, cut, paste
     Delete          clear the block marked
 
+F3's samples, on Schism Tracker's keys: Tab walks a sample's settings
+(volume, global volume, pan, C-5 speed, loop, sustain loop, vibrato),
+left and right change one, and the sound is drawn beneath.
+
+    Alt-G Alt-I Alt-H                    reverse, upside down, centre the sound
+    Alt-M           amplify; the loudest it can be is offered
+    Alt-B Alt-L     cut before the loop, after it
+    Alt-E Alt-F     resize, read between frames, at the nearest
+    Alt-Shift-E     resample, its pitch kept
+    + -  Alt-+ Alt--                     the C-5 speed a semitone, an octave
+    Alt-O  ctrl-z   write the sound to its WAV file; undo an edit of it
+
 `:` takes a command, as vi does:
 
     :w [FILE]   :q   :q!   :wq       write, quit
@@ -163,6 +175,10 @@ The blocks, on Impulse Tracker's keys:
                                       into this file
     :wave NAME [AMP ...]              show a wave, or make or change it
     :sample NAME FILE [ROOT] [START END]  keep a WAV file as the wave NAME
+    :sound OP [N] [FROM TO]           edit the sound of the sample picked
+                                      on F3: reverse invert centre amplify
+                                      normalise silence fade-in fade-out cut
+                                      crop resize stretch resample; save
     :open FILE                        edit another file
     :amplify PCT                      the block's gains taken up or down
     :effects                          list the effects over the whole mix

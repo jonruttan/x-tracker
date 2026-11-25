@@ -61,6 +61,7 @@
 (import x/audio/tracker)
 (import x/codec/wav)
 (import tracker/file file-sample?)
+(import tracker/sample sample-setting sample-loop sample-root)
 (import x/core/doors int/ int%)
 (import tracker/song song-note-name song-form song-order song-set-pattern song-prop song-instruments song-pattern song-patterns
   pattern-rows)
@@ -99,20 +100,82 @@
       ((pair? (List ref 2 w)) (Mixer shape! (List ref 1 w) (rest (rest w))))
       (#t (Mixer wave! (List ref 1 w) (rest (rest w)))))))
 
+; Sounds edited and not yet written, by name: ((NAME RATE FRAMES PCM
+; LOOP ROOT) ...), each as (Wav decode) answers a file's.
+(def %pl-edited (Vector make 1 ()))
+
+; The sound of the sample NAME, a symbol, as edited, or nil when it is
+; its file's.
+(def player-pcm
+  (fn (_ name) ((fn (_ e) (if (null? e) () (rest e))) (Assoc entry name (Vector ref 0 %pl-edited)))))
+
+; The sample NAME heard as D, (RATE FRAMES PCM LOOP ROOT), in place of
+; its file, ARGS its (sample FILE ...) without the head; or as its file
+; again when D is nil.
+(def player-pcm!
+  (fn (_ name args d)
+    (Vector set! 0 (List append (List filter (fn (_ e) (not (eq? (first e) name))) (Vector ref 0 %pl-edited))
+                               (if (null? d) () (list (pair name d))))
+      %pl-edited)
+    (%pl-sample! name args)))
+
+; The names of the samples edited and not yet written.
+(def player-edited (fn (_) (List map first (Vector ref 0 %pl-edited))))
+
+; The WAV file at PATH, as (Wav decode) answers it.
+(def player-wav
+  (fn (_ path) (Wav decode (File read-all path) 0 (Assoc get (lit size) (File stat path)))))
+
+; The sample NAME given to the mixer from ARGS, (FILE [ROOT] [START END]
+; SETTING ...): its sound as edited, or else its file's.  (speed HZ)
+; sounds C4 at HZ, before ROOT and the file's root; a loop not within
+; the sound is left out.
 (def %pl-sample!
   (fn (_ name args)
-    (def path (first args))
-    (def root (if (if (pair? (rest args)) (str? (List ref 1 args)) #f) (List ref 1 args) ()))
-    (def nums (List filter number? (rest args)))
-    (def bytes (File read-all path))
-    (def d (Wav decode bytes 0 (Assoc get (lit size) (File stat path))))
-    (def loop (if (= (List length nums) 2) nums (List ref 3 d)))
-    (def note (match ((not (null? root)) root)
+    (def kept (player-pcm name))
+    (def d (if (null? kept) (player-wav (first args)) kept))
+    (def frames (List ref 1 d))
+    (def speed (sample-setting args (lit speed)))
+    (def root (sample-root args))
+    (def given (if (null? (sample-loop args)) (List ref 3 d) (sample-loop args)))
+    (def loop (if (if (pair? given) (if (< -1 (first given)) (if (< (first given) (List ref 1 given)) (not (< frames (List ref 1 given))) #f) #f) #f)
+                given ()))
+    (def note (match ((not (null? speed)) "C4")
+                     ((not (null? root)) root)
                      ((not (null? (List ref 4 d))) (song-note-name (- (List ref 4 d) 12)))
                      (#t "C4")))
+    (def rate (if (null? speed) (first d) (first speed)))
     (if (null? loop)
-      (Mixer sample! name (List ref 2 d) (List ref 1 d) (first d) note)
-      (Mixer sample! name (List ref 2 d) (List ref 1 d) (first d) note (first loop) (List ref 1 loop)))))
+      (Mixer sample! name (List ref 2 d) frames rate note)
+      (Mixer sample! name (List ref 2 d) frames rate note (first loop) (List ref 1 loop)))))
+
+; Song form F with each instrument that plays a sample of WAVES heard as
+; the sample's settings say: its gain times the sample's volume and
+; global volume, each of 64, and at the sample's pan when it has one.
+(def player-sampled
+  (fn (_ f waves)
+    (pair (first f) (pair (List ref 1 f)
+      (List map (fn (_ x) (if (if (pair? x) (eq? (first x) (lit instrument)) #f) (%pl-inst-sampled x waves) x)) (rest (rest f)))))))
+
+(def %pl-inst-sampled
+  (fn (_ x waves)
+    (def props (rest (rest x)))
+    (def named (List find (fn (_ prop) (if (pair? prop) (if (eq? (first prop) (lit wave)) (pair? (rest prop)) #f) #f)) props))
+    (def w (if (null? named) () (List find (fn (_ w) (if (file-sample? w) (eq? (List ref 1 w) (List ref 1 named)) #f)) waves)))
+    (if (null? w) x
+      ((fn (_ args)
+         (def one (fn (_ key) ((fn (_ v) (if (null? v) 64 (first v))) (sample-setting args key))))
+         (def scale (* (one (lit volume)) (one (lit global))))
+         (def pan (sample-setting args (lit pan)))
+         (def had (List find (fn (_ prop) (if (pair? prop) (eq? (first prop) (lit gain)) #f)) props))
+         (def gain (if (null? had) 100 (List ref 1 had)))
+         (def drop (if (null? pan) (list (lit gain)) (list (lit gain) (lit pan))))
+         (if (if (= scale 4096) (null? pan) #f) x
+           (pair (first x) (pair (List ref 1 x)
+             (List append (List filter (fn (_ prop) (not (if (pair? prop) (List includes? (first prop) drop) #f))) props)
+               (list (list (lit gain) (int/ (* gain scale) 4096)))
+               (if (null? pan) () (list (list (lit pan) (int/ (* (- (first pan) 32) 100) 32)))))))))
+       (rest (List ref 2 w))))))
 
 ; A player playing through FRONT, nothing yet; WAVES the (wave ...)
 ; forms its songs' instruments may name.  Raises what FRONT raises
@@ -224,7 +287,7 @@
     (%pl-put! p 6 (+ (%pl-get p 6) 1))
     (def name (Str8 append "x-tracker " (Str8 str (%pl-get p 6))))
     (%pl-put! p 5 (pair (list name turn offset) (List take 8 (%pl-get p 5))))
-    ((fn (_ f) (pair (first f) (pair name (rest (rest f))))) (song-form (%pl-hushed p s) order))))
+    ((fn (_ f) (pair (first f) (pair name (rest (rest f))))) (player-sampled (song-form (%pl-hushed p s) order) (%pl-get p 8)))))
 
 ; S with a pattern NAME of rows FROM up to TO of its pattern PAT: a
 ; channel shorter held to TO.
@@ -568,11 +631,11 @@
 ; cannot read.
 (def player-preview!
   (fn (_ p s inst note)
-    (def t (Tracker make (%pl-waves-known
+    (def t (Tracker make (player-sampled (%pl-waves-known
                            (%pl-preview-form
                              (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
                                         (list %pl-preview-pattern))
-                             inst))))
+                             inst)) (%pl-get p 8))))
     (unless (null? (%pl-get p 14)) (Tracker stop! (%pl-get p 14)))
     ((%pl-get p 0) audio-clear! (%pl-get p 12))
     (Tracker play! t (%pl-get p 13))
@@ -623,4 +686,5 @@
 (provide tracker/player player-open player-playing? player-mode player-start! player-start-at! player-stop! player-update!
   player-give! player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-tension player-pace player-volume player-volume! player-hears?
-  player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!)
+  player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!
+  player-pcm player-pcm! player-edited player-wav player-sampled)

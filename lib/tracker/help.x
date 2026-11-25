@@ -26,7 +26,7 @@
   (list "Pages"
         (list () "F1" "this help")
         (list () "F2" "the pattern editor")
-        (list () "F3" "the samples: the WAV files the file keeps as waves")
+        (list () "F3" "the samples: their settings, and their sound drawn and edited")
         (list () "F4" "the instruments, and an instrument's envelope drawn and edited")
         (list () "F11" "the order list")
         (list () "F12" "the song's settings")
@@ -90,6 +90,20 @@
         (list (list (lit pace-down) (lit pace-up)) "_ +" "the pace down, up: the whole song slower, faster")
         (list (list (lit volume-down) (lit volume-up)) "9 0" "the volume down, up")
         (list (list (lit follow)) "F" "follow the playing: the pattern and row heard shown")
+        "Samples (F3)"
+        (list () "up down" "pick a sample; Enter its :sample, Insert a new one")
+        (list () "Tab Shift-Tab" "the next setting, the one before; past the last, the list again")
+        (list () "left right  Alt-left Alt-right" "the setting down, up; a step at a time, with Alt a big step")
+        (list () "Space" "on a pan, a loop or a sustain loop, turn it on or off; else hear the sample")
+        (list () "z s x ... q 2 w ..." "hear the sample at the note, in the octave")
+        (list () "Alt-G Alt-I Alt-H" "the sound reversed, upside down, centred about 0")
+        (list () "Alt-M" "the sound amplified, :sound amplify PCT, the loudest it can be offered")
+        (list () "Alt-B Alt-L" "the sound before the loop cut away, after it")
+        (list () "Alt-E Alt-F" "the sound resized to N frames, read between its frames; read at the nearest")
+        (list () "Alt-Shift-E Alt-Shift-F" "the sound resampled to N frames, its pitch kept")
+        (list () "+ -  Alt-+ Alt--" "the C-5 speed a semitone up, down; an octave")
+        (list () "Alt-O" "write the sound edited to its WAV file")
+        (list () "ctrl-z" "undo the last edit of a sound")
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
@@ -142,6 +156,9 @@
         (list "wave" ":wave NAME [AMP ...]" "show a wave, or make or change it: the strengths of its harmonics")
         (list "sample" ":sample NAME FILE [ROOT] [START END]" "keep the WAV file FILE as the wave NAME: heard at ROOT, looped from START to END"
               "  (sample frames); FILE named from the directory of the file edited")
+        (list "sound" ":sound OP [N] [FROM TO]" "edit the sound of the sample picked on F3: reverse invert centre normalise amplify PCT silence"
+              "  fade-in fade-out cut crop cut-before cut-after resize N stretch N resample N; save, undo;"
+              "  :sound set KEY N sets a setting. FROM TO are frames: else the loop for silence, fades and cuts, else all")
         "Playing"
         (list "tension" ":tension N" "the tension heard, 0-100: the tension layer in, the calm out, the tempo up")
         (list "pace" ":pace N" "the pace, 10-400 percent: the whole song slower or faster")
@@ -299,7 +316,11 @@
         "pulse is the saw at (width (0 50)); give it a width of its own, or sweep one."
         "An instrument names a wave with (wave NAME)."
         "A file keeps its waves as (wave ...) forms beside its songs; -w FILE reads another's."
-        ":waves lists them, :waves keep copies the borrowed in, :wave NAME AMP ... makes one."))
+        ":waves lists them, :waves keep copies the borrowed in, :wave NAME AMP ... makes one."
+        "A sample is a WAV file, (wave NAME (sample FILE [ROOT] [START END] SETTING ...)), its settings"
+        "  as Impulse Tracker keeps them: (volume 0-64) (global 0-64) (pan 0-64) (speed HZ, C-5)"
+        "  (sustain START END) (vibrato SPEED DEPTH RATE sine|ramp|square|random).  F3 edits them."
+        "  The sustain loop and the vibrato are kept, and not heard: the mixer has neither."))
 
 ; The topics, (NAME SUMMARY LINES-FN).
 (def %hp-topics

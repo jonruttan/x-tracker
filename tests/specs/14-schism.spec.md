@@ -194,4 +194,4 @@ function keys, over x-tracker's own song.
 (write (list said (Str8 trim-right (Screen row-text screen 5)) (file-wave (edit-doc st) "click") (player-wave? "click")))
 ```
 ---
-    ("Sample click: click.wav. An instrument plays it with (wave click)." "  click          click.wav                        \"C4\"" ('wave 'click ('sample "click.wav" "C4")) #t)
+    ("Sample click: click.wav. An instrument plays it with (wave click)." "  click          click.wav                  Default volume  64" ('wave 'click ('sample "click.wav" "C4")) #t)
