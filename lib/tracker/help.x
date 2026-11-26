@@ -28,7 +28,7 @@
         (list () "F2" "the pattern editor")
         (list () "F3" "the samples: their settings, and their sound drawn and edited")
         (list () "F4" "the instruments, and an instrument's envelope drawn and edited")
-        (list () "F11" "the order list")
+        (list () "F11" "the order list: L on a first place and L on a last loops them; L again stops")
         (list () "F12" "the song's settings")
         (list () "F9" "open a file, as :open")
         (list () "F10 ctrl-s" "write the file, as :w")
@@ -187,6 +187,7 @@
         (list "solo" ":solo [INSTRUMENT]" "hear only an instrument; alone, say what is muted and soloed")
         (list "unmute" ":unmute" "hear every channel and instrument again")
         (list "loop" ":loop [FROM TO]" "loop rows FROM to TO of the pattern; alone, the whole pattern")
+        (list "loop" ":loop order [FROM TO]" "loop places FROM to TO of the order, as F11 counts them; alone, stop")
         (list "render" ":render FILE" "the song played once, to a WAV file")
         "The editor"
         (list "octave" ":octave N" "the octave notes are typed in, 0-8")

@@ -40,7 +40,7 @@
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open player-give!
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
-  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render! player-pcm player-pcm! player-edited player-wav
+  player-muted? player-soloed? player-unmute! player-loop! player-loop player-order-loop! player-render! player-pcm player-pcm! player-edited player-wav
   player-pattern)
 (import tracker/sample sample-copy sample-cut sample-resample sample-reverse sample-invert sample-centre sample-normalise
   sample-amplify sample-silence sample-fade sample-peak sample-write! sample-setting sample-set-setting sample-loop sample-set-loop)
@@ -48,7 +48,7 @@
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -249,9 +249,10 @@
 ; The song (MODE song) or the pattern edited (pattern) played from ROW,
 ; the pattern looping RANGE, (FROM . TO) or nil for all its rows; when
 ; TOGGLE, the same mode playing is stopped instead.  The message is
-; DONE, or why it cannot be played.
+; DONE, or why it cannot be played.  The song plays from PLACE when given,
+; else from the place edited.
 (def %start!
-  (fn (_ st mode row range toggle done)
+  (fn (_ st mode row range toggle done . place)
     (def p (%get st %player))
     (match
       ((null? p) (edit-message! st %no-sound))
@@ -263,10 +264,17 @@
            (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
              (do (%put! st %stale #f)
                  (player-loop! p range)
-                 (player-start-at! p (edit-song st) mode (if (null? (%get st %at)) 0 (%get st %at)) (%get st %pattern) row)
+                 (player-order-loop! p (%get st %order-loop))
+                 (player-start-at! p (edit-song st) mode (if (pair? place) (first place) (if (null? (%get st %at)) 0 (%get st %at))) (%get st %pattern) row)
                  ())))))))
 
-(def %play! (fn (_ st mode) (%start! st mode 0 () #t "")))
+; The song from the loop's first place when the order is looped, else
+; from the place edited; or the pattern edited.
+(def %play!
+  (fn (_ st mode)
+    (if (if (eq? mode (lit song)) (pair? (%get st %order-loop)) #f)
+      (%start! st mode 0 () #t "" (first (%get st %order-loop)))
+      (%start! st mode 0 () #t ""))))
 
 ; The song played from the cursor's row: the pattern alone when it is
 ; not in the order.
@@ -292,6 +300,42 @@
       (do (%put! st %loop-at (%get st %row))
           (edit-message! st (Str8 append "Loop from row " (Str8 str (%get st %row)) ": L on its last row plays it, Escape forgets.")))
       (%loop! st (%get st %loop-at) (%get st %row)))))
+
+; Places A to B of the order, either way round, played over and over
+; from the first.
+(def %order-loop!
+  (fn (_ st a b)
+    (def n (List length (song-order (edit-song st))))
+    (def from (%min (%min a b) (- n 1)))
+    (def to (%min (%max a b) (- n 1)))
+    (%put! st %order-loop (pair from to))
+    (%put! st %order-loop-at ())
+    (%start! st (lit song) 0 () #f
+      (Str8 append "Looping places " (Str8 str from) " to " (Str8 str to) " of the order: L on F11 or :loop order stops it.")
+      from)))
+
+; The order played through again; a song playing plays on from where it
+; is heard.
+(def %order-loop-off!
+  (fn (_ st)
+    (def p (%get st %player))
+    (%put! st %order-loop ())
+    (%put! st %order-loop-at ())
+    (if (if (null? p) #f (if (player-playing? p) (eq? (player-mode p) (lit song)) #f))
+      ((fn (_ heard) (%start! st (lit song) (rest heard) () #f "The whole order is played." (first heard))) (player-place p))
+      (edit-message! st "The whole order is played."))))
+
+; L on F11: the order loop stopped, or the place picked marked as its
+; first, or with a place marked, the places from it to the one picked
+; looped.
+(def %order-loop-key!
+  (fn (_ st)
+    (match
+      ((pair? (%get st %order-loop)) (%order-loop-off! st))
+      ((null? (%get st %order-loop-at))
+        (do (%put! st %order-loop-at (%get st %order-at))
+            (edit-message! st (Str8 append "Loop from place " (Str8 str (%get st %order-at)) ": L on its last place plays it, Escape forgets."))))
+      (#t (%order-loop! st (%get st %order-loop-at) (%get st %order-at))))))
 
 ; Tension (WHAT tension), pace or volume moved by BY, kept from LEAST
 ; to MOST, and heard at once.
@@ -556,6 +600,13 @@
       ((str=? cmd "unmute")
         (if (null? (%get st %player)) (edit-message! st %no-sound)
           (do (player-unmute! (%get st %player)) (edit-message! st "Every channel and instrument heard."))))
+      ((if (str=? cmd "loop") (if (pair? args) (str=? (first args) "order") #f) #f)
+        (match ((null? (rest args)) (%order-loop-off! st))
+               ((not (= (List length args) 3)) (edit-message! st ":loop order FROM TO   places of the order, played over and over"))
+               ((if (null? (%num (List ref 1 args))) #t (if (null? (%num (List ref 2 args))) #t (< (%min (%num (List ref 1 args)) (%num (List ref 2 args))) 0)))
+                 (edit-message! st "Places are numbers from 0, as F11 shows them."))
+               ((null? (song-order s)) (edit-message! st "The song has no order: :order NAME ..."))
+               (#t (%order-loop! st (%num (List ref 1 args)) (%num (List ref 2 args))))))
       ((str=? cmd "loop")
         (match ((null? args) (if (null? (%get st %player)) (edit-message! st %no-sound) (%start! st (lit pattern) 0 () #f "Looping the whole pattern.")))
                ((not (= (List length args) 2)) (edit-message! st ":loop FROM TO   rows of the pattern, played over and over"))
@@ -1082,6 +1133,8 @@
       ((eq? key (lit enter))
         (do (%order-key! st key) (%show-page! st (lit pattern))))
       ((%is? key " ") (%play! st (lit song)))
+      ((%is? key "L") (%order-loop-key! st))
+      ((if (eq? key (lit escape)) (not (null? (%get st %order-loop-at))) #f) (do (%put! st %order-loop-at ()) (edit-message! st "")))
       (#t (%order-key! st key)))
     (when (if (null? (%get st %order-at)) (eq? (%get st %page) (lit orders)) #f) (%put! st %order-at 0))))
 

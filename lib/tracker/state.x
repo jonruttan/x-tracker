@@ -65,7 +65,9 @@
 (def %drag 45) ; what a mouse button pressed holds while it is dragged, or nil
 (def %input-at 46) ; (TEXT . AT): the cursor in the line typed, AT characters into TEXT; at its end when TEXT is not the line
 (def %midi-held 47) ; the MIDI keyboard's keys held down, their note numbers
-(def %slots 48)
+(def %order-loop 48) ; the places of the order looped, (FROM . TO), or nil
+(def %order-loop-at 49) ; the place L marked on F11 as a loop's first, or nil
+(def %slots 50)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -134,4 +136,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )

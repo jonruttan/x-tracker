@@ -418,7 +418,7 @@ Schism Tracker; Escape on a page goes back to the pattern.
   time) and puts it down, Insert adds a point after it, Delete drops it.
 - F11 the order list: up and down pick a place, left and right change
   its pattern, Insert copies it, Delete drops it, Enter edits its
-  pattern.
+  pattern, L loops places (below).
 - F12 the song's settings: up and down pick one, left and right change
   it, Enter types it.
 - F5 plays the song and shows what plays, as Schism Tracker's info
@@ -636,6 +636,15 @@ file.
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 5  step 8   > rows 0-7  tension 60
 ```
 
+- `L` on F11 loops places of the order, to practise a section of several
+  patterns: `L` on the first place marks it, `L` on the last plays the
+  places between over and over from the first, and `L` again plays the
+  whole order on from where it is heard.  Escape forgets a first place
+  marked.  `:loop order FROM TO` does the same by number, places counted
+  from 0 as F11 shows them, and `:loop order` alone stops it.  The
+  places looped are drawn in the block's colour on the order line and
+  on F11, the top line says `> loop 1-2` while they play and `loop 1-2`
+  while they do not, and Space plays from the loop's first place.
 - `M` mutes the cursor's channel and `S` solos it; again, it is heard as
   before.  The channels are counted from 0 at the left, so `M` on the
   bell's channel says `Channel 4 muted.`, and again,

@@ -84,6 +84,9 @@ and heard as they are typed.  The function keys go to the pages:
     F5 play, and what plays   F6 the pattern   F7 from the row   F8 stop
     Ctrl-F5 play   Shift-F8 pause   ctrl-q quit
 
+On F11, L on a first place and L on a last loops those places of the
+order, to practise a section; L again plays the whole order.
+
 The pattern's other keys:
 
     .  or Delete    hold                 - or `  let go    1  cut
@@ -178,6 +181,8 @@ Home and End move, as a text field's does:
     :unmute                           hear every channel and instrument
     :loop [FROM TO]                   play rows FROM to TO of the pattern
                                       over and over; alone, all of it
+    :loop order [FROM TO]             play places FROM to TO of the order
+                                      over and over; alone, stop it
     :render FILE                      write the song played once to a WAV
                                       file, as it is heard
     :waves                            list the waves the songs name, and
