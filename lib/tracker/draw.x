@@ -17,14 +17,15 @@
 (import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-name song-order song-prop song-pattern pattern-rows song-instruments)
 (import tracker/cell cell-columns)
-(import tracker/edit %page-hints %props-lacking %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-cursor)
+(import tracker/field field-draw!)
+(import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
+  %props-lacking %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-field)
 (import tracker/sample sample-peaks sample-setting sample-loop)
 (import tracker/player player-edited)
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed? player-muted? player-voices)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %prop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %history %history-path %prop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -111,6 +112,44 @@
                            (List reverse parts)))
             width)
       parts)))
+
+; --- the line typed's colours ----------------------------------------------------
+
+; The style each class x/tool/syntax answers is drawn in, as the pattern
+; draws its columns: names as instruments, numbers as effects, strings
+; as volumes, comments as an empty cell, the brackets as a let-go.
+(def %class-styles
+  (list (pair (lit name) (lit instrument)) (pair (lit keyword) (lit heading)) (pair (lit number) (lit effect))
+        (pair (lit constant) (lit effect)) (pair (lit string) (lit volume)) (pair (lit char) (lit volume))
+        (pair (lit comment) (lit empty)) (pair (lit punct) (lit off)) (pair (lit operator) (lit off))))
+
+; The spans of a cell's text, (OFFSET LENGTH STYLE): its volume from :
+; in the volume's colour, its effects from / in the effect's.  A line of
+; effects alone is all effects.
+(def %cell-spans
+  (fn (_ st text effects)
+    (def n (Str8 length text))
+    (def slash (if effects 0 ((fn (_ i) (if (null? i) n i)) (Str8 index-of "/" text))))
+    (def colon ((fn (_ i) (if (if (null? i) #t (< slash i)) slash i)) (if effects () (Str8 index-of ":" text))))
+    (List filter (fn (_ sp) (< 0 (List ref 1 sp)))
+      (list (list colon (- slash colon) (%style st (lit volume)))
+            (list slash (- n slash) (%style st (lit effect)))))))
+
+; The spans the line typed of KIND is coloured by: a cell's columns, and
+; a command's or an instrument's text as x/tool/syntax reads x-lang's,
+; in the pattern's colours.  x/tool/syntax is read the first time a
+; line is coloured.
+(def %input-spans
+  (fn (_ st kind)
+    (match
+      ((eq? kind (lit cell)) (fn (_ text) (%cell-spans st text #f)))
+      ((eq? kind (lit effects)) (fn (_ text) (%cell-spans st text #t)))
+      (#t (fn (_ text)
+            (import x/tool/syntax)
+            (List flat-map
+              (fn (_ sp) ((fn (_ e) (if (null? e) () (list (list (first sp) (List ref 1 sp) (%style st (rest e))))))
+                          (List find (fn (_ e) (eq? (first e) (List ref 2 sp))) %class-styles)))
+              (guard (e ()) ((Syntax x) spans text))))))))
 
 ; The places of the order looped, PREFIX "loop FROM-TO", or "" for none.
 (def %order-loop-text
@@ -694,28 +733,18 @@
              (if (str=? (%get st %msg) "") (Str8 append " " (if (str=? hint "") "? help   Space play   p pattern   : command" hint)) (Str8 append " " (%get st %msg)))
              (if (str=? (%get st %msg) "") (%style st (lit empty)) 0)))
          (rest (List find (fn (_ h) (eq? (first h) (%get st %page))) %page-hints))))
-      (#t ((fn (_ prompt)
-             ; The prompt in the heading's colour, the character at the
-             ; cursor in the cursor's, and the terminal's cursor there.  A
-             ; line too long for the screen shows the part about the
-             ; cursor, ... for what is before it.
-             (def text (rest input))
-             (def n (Str8 length text))
-             (def at (%input-cursor st))
-             (def room (%max 4 (- (- cols 1) (Str8 length prompt))))
-             (def from (if (< at (- room 1)) 0 (- at (- room 4))))
-             (def shown (if (= from 0) (Str8 sub 0 (%min n room) text)
-                          (Str8 append "..." (Str8 sub from (%min (- n from) (- room 3)) text))))
-             (def col (+ (Str8 length prompt) (if (= from 0) at (+ 3 (- at from)))))
-             (Screen put screen (- rows 1) 0 prompt (%style st (lit heading)))
-             (%put-text! screen cols (- rows 1) (Str8 length prompt) shown 0)
-             (%put-text! screen cols (- rows 1) col (if (< at n) (Str8 sub at 1 text) " ") (%style st (lit cursor)))
-             (Screen cursor screen (- rows 1) (%min (- cols 1) col)))
-           (match ((eq? (first input) (lit command)) ":")
-                  ((eq? (first input) (lit cell)) "cell: ")
-                  ((eq? (first input) (lit effects)) "effects: ")
-                  ((if (pair? (first input)) (eq? (first (first input)) (lit prop)) #f) (Str8 append (symbol->str (List ref 2 (first input))) ": "))
-                  (#t "instrument: ")))))
+      ; The line typed (tracker/field): its prompt in the heading's
+      ; colour, its text in its kind's colours, the character at the
+      ; cursor in the cursor's, and the terminal's cursor there.
+      (#t (Screen cursor screen (- rows 1)
+            (field-draw! (%input-field st) screen (- rows 1) cols
+              (match ((eq? (first input) (lit command)) ":")
+                     ((eq? (first input) (lit cell)) "cell: ")
+                     ((eq? (first input) (lit effects)) "effects: ")
+                     ((if (pair? (first input)) (eq? (first (first input)) (lit prop)) #f) (Str8 append (symbol->str (List ref 2 (first input))) ": "))
+                     ((pair? (first input)) (Str8 append "effect " (Str8 str (+ (rest (first input)) 1)) ": "))
+                     (#t "instrument: "))
+              (%style st (lit heading)) (%input-spans st (first input)) (%style st (lit cursor))))))
     st))
 
 

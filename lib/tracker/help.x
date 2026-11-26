@@ -127,8 +127,10 @@
         (list () "wheel" "scroll the pattern three rows, a list a line, a setting of F3 up or down, the help")
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
-        (list () "left right Home End" "in a line typed, move the cursor; with Ctrl, a word; text goes in at it"
-              "  Backspace Delete, ctrl-u ctrl-k ctrl-w: the character before, at it, all before, after, the word before")
+        (list () "left right Home End" "in a line typed, move the cursor; with Ctrl or Alt b, f, a word; text goes in at it"
+              "  Backspace Delete, ctrl-u ctrl-k ctrl-w: the character before, at it, all before, after, the word before; ctrl-y puts it back")
+        (list () "up down  ctrl-r ctrl-s" "in a line typed, the lines of its kind typed before; search them back, forward as you type"
+              "  kept in ~/.local/state/x/tracker-history, each kind its own: commands, cells, effects, instruments")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
         (list (list (lit quit)) "ctrl-c  ctrl-q" "quit, as :q")))
 
@@ -214,7 +216,8 @@
         (list "y" "/yC" "sync: the note hard-synced to a modulator C cents from its pitch")
         (list "c" "/cN" "cut: let go N ticks into the row")
         (list "d" "/dN" "delay: start N ticks into the row, on the note's own cell")
-        (list "r" "/rN" "retrigger: start again every N ticks")))
+        (list "r" "/rN" "retrigger: start again every N ticks")
+        (list "e" "/eMS,P,N" "echo: the note again MS ms later at P percent (50), N times (1), each at P percent of the one before")))
 
 ; A song's items: its props and the effects over its mix.
 (def %hp-song

@@ -210,15 +210,15 @@ function keys, over x-tracker's own song.
 (spec-draw! st screen)
 (def adding (List map (fn (_ r) (Str8 trim-right (Str8 sub 26 40 (Screen row-text screen r)))) (list 3 5 6 9)))
 (spec-keys! st (list 'enter))
-(def added (list (text) (Vector ref 49 st)))
+(def added (list (text) (Vector ref 51 st)))
 (spec-keys! st (list 'enter 'backspace "25" 'enter))
 (def typed (text))
 (spec-keys! st (list 'ctrl-z))
 (def undone (text))
 (spec-keys! st (list 'insert 'escape))
-(def back (list (Vector ref 49 st) (Vector ref 30 st)))
+(def back (list (Vector ref 51 st) (Vector ref 30 st)))
 (spec-keys! st (list 'complete))
-(write (list stepped adding added typed undone back (Vector ref 49 st)))
+(write (list stepped adding added typed undone back (Vector ref 51 st)))
 ```
 ---
     ("(instrument b (wave metal) (gain 91) (pan -100) (layer tension) (env (0 100) (100 0)))" ("Add to b" " (release 200)" " (pan 0)" " (width (0 50))") ("(instrument b (wave metal) (gain 91) (layer tension) (pan 0) (env (0 100) (100 0)))" 3) "(instrument b (wave metal) (gain 91) (layer tension) (pan 25) (env (0 100) (100 0)))" "(instrument b (wave metal) (gain 91) (layer tension) (pan 0) (env (0 100) (100 0)))" (3 'instruments) ())

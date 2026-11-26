@@ -166,8 +166,12 @@ A MIDI keyboard, `(midi on)`: a note played is heard, and on the
 pattern put at the cursor, its velocity the gain, the cursor moved on
 by the step; `(midi-off on)` puts a let-go as the keys are let go.
 
-`:` takes a command, as vi does; the line has a cursor that the arrows,
-Home and End move, as a text field's does:
+`:` takes a command, as vi does.  A line typed edits as x-lang's own
+do: the arrows, Home and End move its cursor, ctrl-k, ctrl-u and ctrl-w
+kill and ctrl-y puts back, Up and Down walk the lines of its kind typed
+before and ctrl-r searches them, kept in
+`~/.local/state/x/tracker-history`; a command is coloured as x-lang
+text is:
     :w [FILE]   :q   :q!   :wq       write, quit
     :song [NAME]                      edit or make a song; alone, list
                                       them to pick one with up, down, Enter
@@ -229,7 +233,7 @@ soloed one's green.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):
 `a` arpeggio, `v` vibrato, `s` slide, `p` portamento, `t` tremolo, `f`
 fade, `l` low-pass, `w` width, `o` cut-off, `x` ring, `y` sync, `c` cut,
-`d` delay, `r` retrigger; `C4:60/v20,4`
+`d` delay, `r` retrigger, `e` echo; `C4:60/v20,4`
 is C4 at 60 percent with a vibrato.
 
 Written back, a file keeps everything the editor did not change as it
