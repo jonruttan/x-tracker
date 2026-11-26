@@ -288,7 +288,7 @@ Songs   up, down: pick   Enter: edit it   Escape: close   :song NAME makes one
 (write (list short long (last-row)))
 ```
 ---
-    (":instrument kick (wave sine)" ":...700) (45 0)) (release 30) (gain 60)" ":...0 700) (45 0)) (release 30) (gain 6")
+    (":instrument kick (wave sine)" ":...00) (45 0)) (release 30) (gain 60)" ":... 700) (45 0)) (release 30) (gain 6")
 
 ### a title wider than the screen leaves out rows and ticks first, then octave and step, then bpm
 

@@ -120,6 +120,8 @@
         (list () "wheel" "scroll the pattern three rows, a list a line, a setting of F3 up or down, the help")
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
+        (list () "left right Home End" "in a line typed, move the cursor; with Ctrl, a word; text goes in at it"
+              "  Backspace Delete, ctrl-u ctrl-k ctrl-w: the character before, at it, all before, after, the word before")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
         (list (list (lit quit)) "ctrl-c  ctrl-q" "quit, as :q")))
 

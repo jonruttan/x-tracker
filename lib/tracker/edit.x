@@ -48,7 +48,7 @@
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -2012,17 +2012,62 @@
            (guard (e (if (Err err? e) (e msg) "not an instrument"))
              (do (%change! st (song-set-instrument (edit-song st) text)) ())))))))
 
+; The cursor in the line typed, a character count from its start: where
+; it was put, or the end of a line it was not put in.
+(def %input-cursor
+  (fn (_ st)
+    (def t (%input-text st))
+    (def c (%get st %input-at))
+    (if (if (pair? c) (same? (first c) t) #f) (%min (rest c) (Str8 length t)) (Str8 length t))))
+
+; The line typed made TEXT, the cursor AT in it.
+(def %input-set!
+  (fn (_ st text at)
+    (%put! st %input (pair (first (%get st %input)) text))
+    (%put! st %input-at (pair text (%max 0 (%min at (Str8 length text)))))))
+
+(def %input-close! (fn (_ st) (%put! st %input ()) (%put! st %input-at ())))
+
+; Where a word before or after AT starts or ends in TEXT, DIR -1 or 1:
+; the blanks next to AT passed over, then the word.
+(def %word-edge
+  (fn (_ text at dir)
+    (def n (Str8 length text))
+    (def ch (fn (_ i) (Str8 sub i 1 text)))
+    (def blank? (fn (_ i) (str=? (ch (if (< dir 0) (- i 1) i)) " ")))
+    (def more? (fn (_ i) (if (< dir 0) (< 0 i) (< i n))))
+    (def skip (fn (self i word) (if (if (more? i) (if word (not (blank? i)) (blank? i)) #f) (self (+ i dir) word) i)))
+    (skip (skip at #f) #t)))
+
+; A key while a line is typed, as a text field takes it: the cursor
+; moved by left and right, Home and End, a word at a time with Ctrl;
+; Backspace and Delete take the character before it and under it,
+; ctrl-u and ctrl-k all before it and after it, ctrl-w the word before;
+; text goes in at it.  Backspace on an empty line, or Escape, leaves it.
 (def %input-key!
   (fn (_ st key)
+    (def t (%input-text st))
+    (def at (%input-cursor st))
+    (def n (Str8 length t))
     (match
-      ((eq? key (lit enter)) (%input-done! st))
-      ((if (eq? key (lit escape)) #t (eq? key (lit interrupt))) (%put! st %input ()))
+      ((eq? key (lit enter)) (do (%put! st %input-at ()) (%input-done! st)))
+      ((if (eq? key (lit escape)) #t (eq? key (lit interrupt))) (%input-close! st))
       ((eq? key (lit backspace))
-        ((fn (_ t) (if (str=? t "") (%put! st %input ())
-                     (%put! st %input (pair (first (%get st %input)) (Str8 sub 0 (- (Str8 length t) 1) t)))))
-         (%input-text st)))
-      ((eq? key (lit kill-bol)) (%put! st %input (pair (first (%get st %input)) "")))
-      ((str? key) (%put! st %input (pair (first (%get st %input)) (Str8 append (%input-text st) key))))
+        (match ((str=? t "") (%input-close! st))
+               ((= at 0) ())
+               (#t (%input-set! st (Str8 append (Str8 sub 0 (- at 1) t) (Str8 sub at (- n at) t)) (- at 1)))))
+      ((eq? key (lit delete)) (when (< at n) (%input-set! st (Str8 append (Str8 sub 0 at t) (Str8 sub (+ at 1) (- n (+ at 1)) t)) at)))
+      ((eq? key (lit left)) (%input-set! st t (- at 1)))
+      ((eq? key (lit right)) (%input-set! st t (+ at 1)))
+      ((eq? key (lit home)) (%input-set! st t 0))
+      ((eq? key (lit end)) (%input-set! st t n))
+      ((List includes? key (list (lit word-left) (lit ctrl-left) (lit alt-b))) (%input-set! st t (%word-edge t at -1)))
+      ((List includes? key (list (lit word-right) (lit ctrl-right) (lit alt-f))) (%input-set! st t (%word-edge t at 1)))
+      ((eq? key (lit kill-bol)) (%input-set! st (Str8 sub at (- n at) t) 0))
+      ((eq? key (lit kill-eol)) (%input-set! st (Str8 sub 0 at t) at))
+      ((eq? key (lit kill-word))
+        ((fn (_ w) (%input-set! st (Str8 append (Str8 sub 0 w t) (Str8 sub at (- n at) t)) w)) (%word-edge t at -1)))
+      ((str? key) (%input-set! st (Str8 append (Str8 sub 0 at t) key (Str8 sub at (- n at) t)) (+ at (Str8 length key))))
       (#t ()))))
 
 ; An instrument's text on one line, for editing.
@@ -2235,4 +2280,4 @@
 
 (provide tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!
   %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck)
+  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-cursor)

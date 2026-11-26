@@ -18,13 +18,13 @@
 (import tracker/song song-name song-order song-prop song-pattern pattern-rows song-instruments)
 (import tracker/cell cell-columns)
 (import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck)
+  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-cursor)
 (import tracker/sample sample-peaks sample-setting sample-loop)
 (import tracker/player player-edited)
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed? player-muted? player-voices)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -641,14 +641,22 @@
              (if (str=? (%get st %msg) "") (%style st (lit empty)) 0)))
          (rest (List find (fn (_ h) (eq? (first h) (%get st %page))) %page-hints))))
       (#t ((fn (_ prompt)
-             ; The cursor is at the end: a line too long for the screen
-             ; shows its end, ... for the rest.
+             ; The prompt in the heading's colour, the character at the
+             ; cursor in the cursor's, and the terminal's cursor there.  A
+             ; line too long for the screen shows the part about the
+             ; cursor, ... for what is before it.
              (def text (rest input))
-             (def room (- (- cols 1) (Str8 length prompt)))
-             (def shown (if (< (Str8 length text) room) text
-                          (Str8 append "..." (Str8 sub (- (Str8 length text) (%max 0 (- room 3))) (%max 0 (- room 3)) text))))
-             (Screen put screen (- rows 1) 0 (Str8 append prompt shown) 0)
-             (Screen cursor screen (- rows 1) (%min (- cols 1) (+ (Str8 length prompt) (Str8 length shown)))))
+             (def n (Str8 length text))
+             (def at (%input-cursor st))
+             (def room (%max 4 (- (- cols 1) (Str8 length prompt))))
+             (def from (if (< at (- room 1)) 0 (- at (- room 4))))
+             (def shown (if (= from 0) (Str8 sub 0 (%min n room) text)
+                          (Str8 append "..." (Str8 sub from (%min (- n from) (- room 3)) text))))
+             (def col (+ (Str8 length prompt) (if (= from 0) at (+ 3 (- at from)))))
+             (Screen put screen (- rows 1) 0 prompt (%style st (lit heading)))
+             (%put-text! screen cols (- rows 1) (Str8 length prompt) shown 0)
+             (%put-text! screen cols (- rows 1) col (if (< at n) (Str8 sub at 1 text) " ") (%style st (lit cursor)))
+             (Screen cursor screen (- rows 1) (%min (- cols 1) col)))
            (match ((eq? (first input) (lit command)) ":")
                   ((eq? (first input) (lit cell)) "cell: ")
                   ((eq? (first input) (lit effects)) "effects: ")

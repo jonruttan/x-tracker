@@ -80,11 +80,16 @@ them: the note (`C-4`, `C#4`; `===` a let-go, `^^^` a cut, `...` a
 hold), the instrument's number, the volume (the note's gain in
 percent) and the first effect, `+` after it when there are more.  The
 rows on the beat are drawn in a colour of their own.  The cursor is
-the column drawn reversed.  The last line shows the keys to start with, a command being
-typed (its end, after `...`, when it is longer than the screen), or a
-message.  `?` shows every key and command; any key closes
-it.  A list too wide for the screen, such as `:patterns` in a song of
-many, pages the way `?` does.
+the column drawn reversed.  The last line shows the keys to start
+with, a line being typed, or a message.  A line being typed has its
+prompt in bold and a cursor, drawn reversed, that left and right, Home
+and End move (Ctrl and left or right, a word); text goes in at the
+cursor, Backspace and Delete take the character before it and under
+it, and ctrl-u, ctrl-k and ctrl-w all before it, all after it and the
+word before.  A line longer than the screen shows the part about the
+cursor, `...` for what is before it.  `?` shows every key and command;
+any key closes it.  A list too wide for the screen, such as
+`:patterns` in a song of many, pages the way `?` does.
 
 The new song has one instrument, `lead`, a sine, and one pattern, `a`,
 of sixteen rows, with the lead's channel in it.  At 4 rows a beat,

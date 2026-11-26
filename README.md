@@ -153,7 +153,8 @@ pages under it, and a click on the line picked is Enter; a drag marks a
 block, moves an envelope's point on F4 or the loop's end on F3's sound;
 the wheel scrolls.  `(mouse off)` gives the terminal its own selection.
 
-`:` takes a command, as vi does:
+`:` takes a command, as vi does; the line has a cursor that the arrows,
+Home and End move, as a text field's does:
 
     :w [FILE]   :q   :q!   :wq       write, quit
     :song [NAME]                      edit or make a song; alone, list
