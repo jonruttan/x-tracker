@@ -18,13 +18,13 @@
 (import tracker/song song-name song-order song-prop song-pattern pattern-rows song-instruments)
 (import tracker/cell cell-columns)
 (import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value)
+  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck)
 (import tracker/sample sample-peaks sample-setting sample-loop)
 (import tracker/player player-edited)
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
-  player-hears? player-soloed?)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+  player-hears? player-soloed? player-muted? player-voices)
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -513,6 +513,64 @@
                        (%put-text! screen cols (+ top h) (+ x (col-of (- (List ref 1 pts) 1))) close (%style st (lit heading)))))))
     (marks loop "[" "]")
     (marks sustain "{" "}")))
+; F5: the song as it is heard: where it is, each channel's last note,
+; and the rows about the one heard, a channel's notes a column, the row
+; heard marked >.
+(def %draw-info!
+  (fn (_ st screen top bottom)
+    (def cols (Screen cols screen))
+    (def p (%get st %player))
+    (def s (edit-song st))
+    (def hp (%heard-pattern st))
+    (Screen put screen top 1 "Info" (%style st (lit heading)))
+    (if (null? hp)
+      (Screen put screen (+ top 2) 2
+        (if (null? (%get st %paused)) "Nothing is playing: F5 plays the song, F6 the pattern." "Paused: Shift-F8 plays on.") 0)
+      (do (def pat (song-pattern s (first hp)))
+          (def row (rest hp))
+          (def rows (pattern-rows pat))
+          (def order (song-order s))
+          (%put-text! screen cols top 8
+            (Str8 append
+              (if (eq? (player-mode p) (lit pattern)) (Str8 append "pattern " (first hp) " alone")
+                (Str8 append "place " (Str8 str (+ (first (%get st %heard)) 1)) " of " (Str8 str (List length order)) ", pattern " (first hp)))
+              ", row " (Str8 str row) " of " (Str8 str rows)
+              "   voices " (Str8 str (player-voices p))
+              "   tension " (Str8 str (player-tension p)) "   pace " (Str8 str (player-pace p)) "%   volume " (Str8 str (player-volume p)) "%")
+            0)
+          (def n (List length pat))
+          (def chan-high (%min n (%max 1 (int/ (- bottom (+ top 2)) 2))))
+          (%put-text! screen cols (+ top 1) 1 "Ch  Instrument    Note  Gain  Rows ago" (%style st (lit empty)))
+          (List for-each
+            (fn (_ i)
+              (def ch (List ref i pat))
+              (def hit (%struck ch row))
+              (def hushed (if (player-hears? p i (first ch)) "" (if (if (player-muted? p (lit channel) i) #t (player-muted? p (lit instrument) (first ch))) "muted" "not soloed")))
+              (%put-text! screen cols (+ (+ top 2) i) 1
+                (Str8 append (Str8 pad-left 2 #\space (Str8 str (+ i 1))) "  " (%pad 12 (first ch)) "  "
+                  (if (null? hit) "...   ...   ...     "
+                    (Str8 append (%pad 4 (first (cell-columns (Str8 append (first hit) (if (= 100 (List ref 1 hit)) "" (Str8 append ":" (Str8 str (List ref 1 hit))))) "" 0))) "  "
+                      (Str8 pad-left 4 #\space (Str8 str (List ref 1 hit))) "  " (Str8 pad-left 8 #\space (Str8 str (List ref 2 hit))) "  "))
+                  hushed)
+                (if (= i (%get st %chan)) (%style st (lit cursor)) 0)))
+            (List range 0 chan-high))
+          (def ttop (+ (+ top 3) chan-high))
+          (def thigh (- bottom ttop))
+          (when (< 2 thigh)
+            (do (%put-text! screen cols ttop 1 "Rows" (%style st (lit heading)))
+                (def half (int/ (- thigh 1) 2))
+                (def shown (%min n (int/ (- cols 6) 4)))
+                (List for-each
+                  (fn (_ k)
+                    (def r (+ (- row half) k))
+                    (when (if (<= 0 r) (< r rows) #f)
+                      (%put-text! screen cols (+ (+ ttop 1) k) 1
+                        (Str8 append (if (= r row) ">" " ") (Str8 pad-left 3 #\space (Str8 str r))
+                          (Str8 join "" (List map (fn (_ i) (Str8 append " " (first (cell-columns (List ref r (rest (List ref i pat))) "" 0))))
+                                          (List range 0 shown))))
+                        (if (= r row) (%style st (lit heading)) 0))))
+                  (List range 0 (- thigh 1)))))))))
+
 (def edit-draw!
   (fn (_ st screen)
     (Screen clear screen)
@@ -533,6 +591,7 @@
       ((eq? (%get st %page) (lit song)) (%draw-song-page! st screen 3 (- rows 2)))
       ((eq? (%get st %page) (lit instruments)) (%draw-instruments! st screen 3 (- rows 2)))
       ((eq? (%get st %page) (lit samples)) (%draw-samples! st screen 3 (- rows 2)))
+      ((eq? (%get st %page) (lit info)) (%draw-info! st screen 3 (- rows 2)))
       ((null? (%get st %pattern)) (Screen put screen 3 1 "The song has no pattern: :pattern NAME makes one." 0))
       (#t (%draw-grid! st screen 3 (- rows 2))))
     (def input (%get st %input))

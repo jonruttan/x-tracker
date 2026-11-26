@@ -40,14 +40,15 @@
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open player-give!
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
-  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render! player-pcm player-pcm! player-edited player-wav)
+  player-muted? player-soloed? player-unmute! player-loop! player-loop player-render! player-pcm player-pcm! player-edited player-wav
+  player-pattern)
 (import tracker/sample sample-copy sample-cut sample-resample sample-reverse sample-invert sample-centre sample-normalise
   sample-amplify sample-silence sample-fade sample-peak sample-write! sample-setting sample-set-setting sample-loop sample-set-loop)
 (import tracker/help help-index help-topic help-topics help-on)
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -992,6 +993,7 @@
   (list (pair (lit pattern) "")
         (pair (lit samples) "Samples   up down pick   Tab the settings   Space or the piano hear it   Alt-G I H M B L E F edit   Alt-O write   Ctrl-Z undo")
         (pair (lit instruments) "Instruments   up down pick   Enter edit   Tab its envelope   Space or the piano hear it   F2 the pattern")
+        (pair (lit info) "Playing   up down a channel   M S mute, solo it   Enter or G edit the pattern heard   + - the next, previous place   F8 stop")
         (pair (lit orders) "Order   up down pick   left right its pattern   Insert copy   Delete drop   [ ] move   Enter edit")
         (pair (lit song) "Song   up down pick   left right change   Enter type it   F2 the pattern")))
 
@@ -1015,6 +1017,7 @@
     (def p (%get st %player))
     (unless (null? p) (when (player-playing? p) (player-stop! p)))
     (%put! st %heard ())
+    (%put! st %paused ())
     (edit-message! st "")))
 
 ; The keys every page takes, Impulse Tracker's: the pages on F1 to F4,
@@ -1031,7 +1034,9 @@
       ((eq? key (lit f4)) (%show-page! st (lit instruments)))
       ((eq? key (lit f11)) (%show-page! st (lit orders)))
       ((eq? key (lit f12)) (%show-page! st (lit song)))
-      ((eq? key (lit f5)) (do (%play-start! st) #t))
+      ((eq? key (lit f5)) (do (%play-start! st) (%show-page! st (lit info)) #t))
+      ((eq? key (lit ctrl-f5)) (do (%play-start! st) #t))
+      ((eq? key (lit shift-f8)) (do (%pause! st) #t))
       ((eq? key (lit f6)) (do (%start! st (lit pattern) 0 () #f "") #t))
       ((eq? key (lit shift-f6)) (do (%start! st (lit song) 0 () #f "") #t))
       ((eq? key (lit f7)) (do (if has-pattern (%play-here! st) (edit-message! st "The song has no pattern to play.")) #t))
@@ -1061,6 +1066,7 @@
       ((eq? page (lit song)) (%song-page-key! st key))
       ((eq? page (lit instruments)) (%instruments-key! st key))
       ((eq? page (lit samples)) (%samples-key! st key))
+      ((eq? page (lit info)) (%info-key! st key))
       (#t ()))))
 
 ; The order list: up and down a place, left and right its pattern, the
@@ -1226,6 +1232,78 @@
         (if (< n 2) (edit-message! st "An envelope keeps one point.")
           (do (%set-envelope! st name (List remove (%min at (- n 1)) 1 points)) (%put! st %env-at (%max 0 (- (%min at (- n 1)) 1))))))
       (#t ()))))
+
+; --- the info page ------------------------------------------------------------------
+;
+; Schism Tracker's info page, F5: what is playing, channel by channel, and
+; the rows about the one heard.  Up and down pick a channel; M and S mute
+; and solo it, as on the pattern; Enter or G edits the pattern heard at
+; its row; + and - play the place after or before in the order.
+
+; The pattern heard and its row, (NAME . ROW), or nil while nothing plays.
+(def %heard-pattern
+  (fn (_ st)
+    (def p (%get st %player))
+    (def heard (%get st %heard))
+    (if (if (null? p) #t (if (null? heard) #t (not (player-playing? p)))) ()
+      ((fn (_ name) (if (null? name) () (pair name (rest heard))))
+       (if (eq? (player-mode p) (lit pattern)) (player-pattern p)
+         ((fn (_ order) (if (< (first heard) (List length order)) (List ref (first heard) order) ())) (song-order (edit-song st))))))))
+
+; Channel CH of pattern PAT at ROW: (NOTE GAIN AGO), the last note
+; struck at or before ROW, its gain in percent, and the rows since it;
+; nil when none has been.
+(def %struck
+  (fn (_ ch row)
+    (def cells (rest ch))
+    ((fn (self i)
+       (match ((< i 0) ())
+              ((cell-note? (first (cell-parts (List ref i cells))))
+                ((fn (_ parts) (list (first parts) (if (null? (List ref 1 parts)) 100 (List ref 1 parts)) (- row i)))
+                 (cell-parts (List ref i cells))))
+              (#t (self (- i 1)))))
+     (%min row (- (List length cells) 1)))))
+
+(def %info-key!
+  (fn (_ st key)
+    (def hp (%heard-pattern st))
+    (def n (if (null? hp) (List length (%channels st)) (List length (song-pattern (edit-song st) (first hp)))))
+    (def p (%get st %player))
+    (match
+      ((eq? key (lit up)) (%put! st %chan (%max 0 (- (%get st %chan) 1))))
+      ((eq? key (lit down)) (%put! st %chan (%min (%max 0 (- n 1)) (+ (%get st %chan) 1))))
+      ((if (%is? key "m") #t (%is? key "q")) (%hush! st (lit channel) (%get st %chan) #f))
+      ((%is? key "s") (%hush! st (lit channel) (%get st %chan) #t))
+      ((if (eq? key (lit enter)) #t (%is? key "g"))
+        (if (null? hp) (edit-message! st "Nothing is playing: F5 plays the song.")
+          (do (if (eq? (player-mode p) (lit pattern)) (%goto-pattern! st (first hp)) (%goto-at! st (first (%get st %heard))))
+              (%put! st %row (%min (rest hp) (- (%rows st) 1)))
+              (%show-page! st (lit pattern)))))
+      ((if (%is? key "+") #t (%is? key "-"))
+        (if (if (null? hp) #t (eq? (player-mode p) (lit pattern))) (edit-message! st "+ and - move the song played through its order.")
+          (do (%goto-at! st (+ (first (%get st %heard)) (if (%is? key "+") 1 -1)))
+              (%put! st %row 0)
+              (%start! st (lit song) 0 () #f ""))))
+      (#t ()))))
+
+; Shift-F8: the song stopped where it is heard, or played on from there.
+(def %pause!
+  (fn (_ st)
+    (def p (%get st %player))
+    (def held (%get st %paused))
+    (match
+      ((null? p) (edit-message! st %no-sound))
+      ((player-playing? p)
+        ((fn (_ heard)
+           (%put! st %paused (list (player-mode p) (first heard) (if (null? (player-pattern p)) (%get st %pattern) (player-pattern p)) (rest heard)))
+           (player-stop! p)
+           (%put! st %heard ())
+           (edit-message! st (Str8 append "Paused at row " (Str8 str (rest heard)) ": Shift-F8 plays on.")))
+         (player-place p)))
+      ((null? held) (edit-message! st "Nothing is paused."))
+      (#t ((fn (_ e) (%put! st %paused ()) (edit-message! st (if (null? e) "" e)))
+           (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
+             (do (player-start-at! p (edit-song st) (first held) (List ref 1 held) (List ref 2 held) (List ref 3 held)) ())))))))
 
 ; --- the samples page ---------------------------------------------------------------
 ;
@@ -1922,4 +2000,4 @@
 
 (provide tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!
   %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value)
+  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck)

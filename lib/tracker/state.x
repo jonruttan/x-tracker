@@ -60,7 +60,8 @@
 (def %sample-undo 40) ; the sounds before their edits, ((NAME SOUND ARGS) ...), the last first
 (def %sample-cache 41) ; (PATH . SOUND): the file of the sample last drawn, read
 (def %sample-peaks 42) ; (PCM COLS PEAKS): its sound drawn, or nil
-(def %slots 43)
+(def %paused 43) ; (MODE AT PATTERN ROW) where Shift-F8 stopped the playing, or nil
+(def %slots 44)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -116,4 +117,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
