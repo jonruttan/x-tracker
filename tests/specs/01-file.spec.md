@@ -38,6 +38,28 @@ document and written back, and the songs in it.
 ---
     ("; w\n(wave hollow 4 0 1)\n\n(song \"s\" (instrument a (wave hollow)) (instrument b (wave thin)) (pattern p (a \"C3\")) (order p))\n" "; w\n(wave hollow 6 0 2)\n(wave thin 2 0 3)\n\n(song \"s\" (instrument a (wave hollow)) (instrument b (wave thin)) (pattern p (a \"C3\")) (order p))\n" "(wave reed 6 4)\n\n(song \"s\" (pattern p (a \"C3\")) (order p))\n" #t #f ('wave 'thin 2 0 3) ("hollow" "thin"))
 
+### an instrument's (wave NAME AMP ...) makes the wave, kept where it is written
+
+```tracker
+(def made "(wave thin 2 0 3)\n(song \"s\" (instrument bell (wave glass 5 0 0 2) (gain 80)) (instrument a (wave thin)) (pattern p (bell \"C3\")) (order p))\n")
+(def twice "(wave glass 5 0 0 2)\n(song \"s\" (instrument bell (wave glass 5 0 0 2)) (pattern p (bell \"C3\")) (order p))\n")
+(def set (file-set-wave (file-parse made) "glass" (list 4 1)))
+(write (list (file-waves (file-parse made)) (file-wave-clash (file-parse made))
+             (file-waves (file-parse twice)) (file-wave-clash (file-parse twice))
+             (file-text set) (file-changed? set) (file-waves set)))
+```
+---
+    ((('wave 'thin 2 0 3) ('wave 'glass 5 0 0 2)) () (('wave 'glass 5 0 0 2)) () "(wave thin 2 0 3)\n(song \"s\" (instrument bell (wave glass 4 1) (gain 80)) (instrument a (wave thin))\n  (pattern p\n    (bell \"C3\"))\n  (order p))\n" #t (('wave 'thin 2 0 3) ('wave 'glass 4 1)))
+
+### two waves that make one name differently are named, and where each is
+
+```tracker
+(def two "(wave glass 5 0 0 2)\n(song \"s\" (instrument bell (wave glass 4 1)) (pattern p (bell \"C3\")) (order p))\n")
+(write (list (file-wave-clash (file-parse two)) (file-waves (file-parse two))))
+```
+---
+    ("x-tracker: two waves named glass differ: (wave glass 5 0 0 2) beside the songs, and (wave glass 4 1) in instrument bell of song \"s\"" (('wave 'glass 5 0 0 2)))
+
 ### a song is read into its name, its props, its patterns and its order
 
 ```tracker

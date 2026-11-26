@@ -22,7 +22,7 @@
 (import x/codec/xon)
 (import x/sys/file)
 (import tracker/node node-read node-form? node-text node-head)
-(import tracker/song song-from-node song-text)
+(import tracker/song song-from-node song-text song-name song-wave-forms song-set-wave-form)
 
 ; TEXT as a document.  Raises a label 'value for text that is not forms,
 ; or a song that is not one.
@@ -111,13 +111,44 @@
 
 (def %fl-wave? (fn (_ p) (if (eq? (first p) (lit form)) (str=? (List ref 2 p) "wave") #f)))
 
-; The (wave NAME ...) forms of DOC; with DIR, the directory DOC was read
-; from, each sample's file (wave NAME (sample FILE ...)) named from it
-; when FILE is not a path from the root.
+; Each wave DOC makes, as (WHERE . FORM): a (wave NAME ...) form beside
+; the songs, then each an instrument makes with a (wave NAME ...) prop of
+; more than its name; WHERE as a message names it.
+(def %fl-wave-defs
+  (fn (_ doc)
+    (List append
+      (List map (fn (_ p) (pair "beside the songs" (first (Xon parse (List ref 1 p))))) (List filter %fl-wave? doc))
+      (List flat-map
+        (fn (_ s)
+          (List map (fn (_ d) (pair (Str8 append "in instrument " (first d) " of song " (%fl-write (song-name s))) (rest d)))
+            (song-wave-forms s)))
+        (file-songs doc)))))
+
+(def %fl-same-name? (fn (_ a b) (eq? (List ref 1 (rest a)) (List ref 1 (rest b)))))
+
+; The (wave NAME ...) forms of DOC, each name once, the first that makes
+; it; with DIR, the directory DOC was read from, each sample's file (wave
+; NAME (sample FILE ...)) named from it when FILE is not a path from the
+; root.
 (def file-waves
   (fn (_ doc . dir)
     (def at (if (null? dir) () (first dir)))
-    (List map (fn (_ p) (file-sample-at (first (Xon parse (List ref 1 p))) at)) (List filter %fl-wave? doc))))
+    (List map (fn (_ d) (file-sample-at (rest d) at))
+      (List fold (fn (_ acc d) (if (List any? (fn (_ k) (%fl-same-name? k d)) acc) acc (List append acc (list d))))
+        () (%fl-wave-defs doc)))))
+
+; A message naming the first two waves of DOC that make one name
+; differently, and where each is; nil when there are none.
+(def file-wave-clash
+  (fn (_ doc)
+    ((fn (self ds)
+       (if (null? ds) ()
+         ((fn (_ other)
+            (if (null? other) (self (rest ds))
+              (Str8 append "x-tracker: two waves named " (symbol->str (List ref 1 (rest other))) " differ: "
+                (file-form-text (rest (first ds))) " " (first (first ds)) ", and " (file-form-text (rest other)) " " (first other))))
+          (List find (fn (_ d) (if (%fl-same-name? d (first ds)) (not (equal? (rest d) (rest (first ds)))) #f)) (rest ds)))))
+     (%fl-wave-defs doc))))
 
 ; Whether wave form W is a sample's, (wave NAME (sample FILE ...)).
 (def file-sample?
@@ -144,15 +175,23 @@
 
 ; DOC with the wave NAME made of AMPS, the harmonics' strengths, its
 ; points, or its (sample FILE ...): in place of its form when it has one,
-; or else on a line after its last wave, or else before its first song.
+; in each instrument that makes it when no form does; or else on a line
+; after its last wave, or else before its first song.
 (def file-set-wave
   (fn (_ doc name amps)
     (def piece (list (lit form) (Str8 append "(wave " name (Str8 join "" (List map (fn (_ a) (Str8 append " " (file-form-text a))) amps)) ")") "wave" #t))
     (def named? (fn (_ p) (if (%fl-wave? p) (str=? (symbol->str (List ref 1 (first (Xon parse (List ref 1 p))))) name) #f)))
+    (def made? (fn (_ p) (if (eq? (first p) (lit song)) (List any? (fn (_ d) (str=? (symbol->str (List ref 1 (rest d))) name)) (song-wave-forms (List ref 2 p))) #f)))
     (def last-wave (List fold (fn (_ at i) (if (%fl-wave? (List ref i doc)) i at)) () (List range 0 (List length doc))))
     (def first-song (List find-index (fn (_ p) (eq? (first p) (lit song))) doc))
     (match
-      ((List any? named? doc) (List map (fn (_ p) (if (named? p) piece p)) doc))
+      ((List any? (fn (_ p) (if (named? p) #t (made? p))) doc)
+        ((fn (_ w)
+           (List map (fn (_ p) (match ((named? p) piece)
+                                      ((made? p) (list (lit song) (List ref 1 p) (song-set-wave-form (List ref 2 p) name w) #t))
+                                      (#t p)))
+             doc))
+         (first (Xon parse (List ref 1 piece)))))
       ((not (null? last-wave))
         (List append (List take (+ last-wave 1) doc) (list (list (lit gap) "\n") piece) (List drop (+ last-wave 1) doc)))
       ((not (null? first-song))
@@ -172,4 +211,4 @@
     (file-written doc)))
 
 (provide tracker/file file-form-text file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
-  file-waves file-wave file-set-wave file-read file-write! file-sample? file-sample-at file-dir)
+  file-waves file-wave-clash file-wave file-set-wave file-read file-write! file-sample? file-sample-at file-dir)

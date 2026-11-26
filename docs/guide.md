@@ -619,11 +619,12 @@ set its timing.
 
 ### Waves
 
-`:wave NAME AMP ...` makes or changes a wave, kept in the file;
+`:wave NAME AMP ...` makes or changes a wave, kept in the file where it
+is made: a form beside the songs, or the instruments that make it;
 `:wave NAME` shows one.  `:waves` lists the waves the songs name and
-where each comes from.  A file opened with `-w SONGS.xon` borrows the waves
-of that file: `:waves keep` copies them into this one, so it needs no
-other.
+where each comes from.  A file opened with `-w SONGS.xon` borrows the
+waves of that file: `:waves keep` copies them into this one, so it
+needs no other.
 
 ### Hearing it
 

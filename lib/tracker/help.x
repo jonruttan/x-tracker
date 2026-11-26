@@ -337,9 +337,11 @@
         ":order NAME ... sets the whole order at once."))
 
 (def %hp-wave-lines
-  (list "A wave is made once, beside the songs, and an instrument names it with (wave NAME):"
-        "  (wave glass 5 0 0 2 0 0 0 1)                   ; beside the songs, not in an instrument"
-        "  (song \"s\" (instrument bell (wave glass)) ...)  ; the instrument names it"
+  (list "A wave is made once, beside the songs or in the instrument that plays it:"
+        "  (wave glass 5 0 0 2 0 0 0 1)                   ; beside the songs, for any instrument"
+        "  (song \"s\" (instrument bell (wave glass)) ...)  ; an instrument names it"
+        "  (song \"s\" (instrument bell (wave glass 5 0 0 2 0 0 0 1)) ...)  ; or makes it there"
+        "Two that make one name differently are an error naming both."
         "In the editor :wave NAME AMP ... makes one or changes it, and :waves lists them."
         "Its numbers are the strengths of its harmonics, the fundamental first:"
         "  (wave hollow 6 0 2 0 1)     odd harmonics: hollow, like a clarinet"

@@ -166,6 +166,39 @@
           acc (rest (rest (List ref 3 i)))))
       () (List filter (fn (_ i) (str=? (List ref 4 i) "instrument")) (%sg-of s (lit text))))))
 
+; The waves S's instruments make: each (wave NAME ...) prop with more
+; than its name, as (INSTRUMENT . FORM), INSTRUMENT a string.
+(def song-wave-forms
+  (fn (_ s)
+    (def made? (fn (_ prop) (if (pair? prop) (if (eq? (first prop) (lit wave)) (if (pair? (rest prop)) (if (symbol? (List ref 1 prop)) (pair? (rest (rest prop))) #f) #f) #f) #f)))
+    (List flat-map
+      (fn (_ i)
+        (List map (fn (_ prop) (pair (Str8 str (List ref 1 (List ref 3 i))) prop))
+          (List filter made? (rest (rest (List ref 3 i))))))
+      (List filter (fn (_ i) (str=? (List ref 4 i) "instrument")) (%sg-of s (lit text))))))
+
+; S with each instrument's (wave NAME ...) prop that makes the wave named
+; NAME, a string, made W: each such instrument written again from its form.
+(def song-set-wave-form
+  (fn (_ s name w)
+    (def made? (fn (_ prop) (if (pair? prop) (if (eq? (first prop) (lit wave)) (if (pair? (rest prop)) (if (eq? (List ref 1 prop) (List ref 1 w)) (pair? (rest (rest prop))) #f) #f) #f) #f)))
+    (%sg-make (song-name s)
+      (List map
+        (fn (_ i)
+          (if (if (eq? (first i) (lit text)) (if (str=? (List ref 4 i) "instrument") (List any? made? (rest (rest (List ref 3 i)))) #f) #f)
+            ((fn (_ f) (list (lit text) (List ref 1 i) (%sg-form-text f) f "instrument"))
+             (pair (first (List ref 3 i)) (pair (List ref 1 (List ref 3 i)) (List map (fn (_ prop) (if (made? prop) w prop)) (rest (rest (List ref 3 i)))))))
+            i))
+        (song-items s)))))
+
+; FORM as text: a symbol bare, a string in quotes, a list in parentheses.
+(def %sg-form-text
+  (fn (self v)
+    (match ((symbol? v) (symbol->str v))
+           ((null? v) "()")
+           ((pair? v) (Str8 append "(" (Str8 join " " (List map self v)) ")"))
+           (#t (%sg-write v)))))
+
 ; --- changes ---------------------------------------------------------------
 
 ; S with the item FIND finds put as ITEM, or ITEM put in after the last
@@ -580,7 +613,7 @@
                  (List append (List repeat (- (List length block) (List length made)) ".") (List drop (+ r1 1) cells))))
     (List update c (pair (first (List ref c chs)) (List take rows (List append (List take r0 cells) made after))) chs)))
 (provide tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
-  song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
+  song-order song-prop song-instruments song-instrument-text song-waves song-wave-forms song-set-wave-form song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
   pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem
   song-effects song-set-effect song-drop-effect song-copy-instrument song-rename-instrument song-drop-instrument

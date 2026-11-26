@@ -28,7 +28,7 @@
 (import x/audio/tracker)
 (import x/core/doors int/ int%)
 (import tracker/song song-name song-order song-pattern song-patterns song-form pattern-rows)
-(import tracker/file file-read file-songs file-waves file-dir)
+(import tracker/file file-read file-songs file-waves file-wave-clash file-dir)
 (import tracker/player player-open player-render!)
 (import tracker/app app-edit app-play)
 (import tracker/config config-load config-get config-problems)
@@ -86,6 +86,13 @@
   (fn (_ doc name)
     (if (null? name) (if (null? (file-songs doc)) () 0)
       (List find-index (fn (_ s) (str=? (song-name s) name)) (file-songs doc)))))
+
+; DOC, when no two of its waves make one name differently.  Raises a
+; label 'value naming both when two do.
+(def %cl-clash!
+  (fn (_ doc)
+    ((fn (_ m) (unless (null? m) (Err raise (lit value) m ()))) (file-wave-clash doc))
+    doc))
 
 ; The waves of DOC, then of each -w file, then of each the settings name.
 (def %cl-waves
@@ -160,19 +167,21 @@
               ((if (str=? word "edit") #f (null? i))
                 (do (%cl-say 2 (Str8 append "x-tracker: no song " (if (null? (Opts value opts "-s")) "in the file" (Opts value opts "-s")) "\n")) 1))
               ((str=? word "play")
-                (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves doc path opts (%cl-config))) (Opts on? opts "-l")))
+                (app-play (List ref i (file-songs doc)) (player-open Sdl (%cl-waves (%cl-clash! doc) path opts (%cl-config))) (Opts on? opts "-l")))
               ((str=? word "render")
                 ((fn (_ out frames)
                    (%cl-say 1 (Str8 append "Rendered " out ": " (%cl-clock (int/ frames 44100)) "\n"))
                    0)
                  (Opts value opts "-o")
-                 (player-render! (player-open () (%cl-waves doc path opts (%cl-config))) (List ref i (file-songs doc)) (Opts value opts "-o"))))
+                 (player-render! (player-open () (%cl-waves (%cl-clash! doc) path opts (%cl-config))) (List ref i (file-songs doc)) (Opts value opts "-o"))))
               (#t
                 (do (def cfg (%cl-config))
                     ((fn (_ sound)
                        (app-edit doc path (first sound)
-                         (if (if (str=? (rest sound) "") (not (null? (config-problems cfg))) #f)
-                           (first (config-problems cfg)) (rest sound))
+                         (match ((not (null? (file-wave-clash doc))) (file-wave-clash doc))
+                                ((if (str=? (rest sound) "") (not (null? (config-problems cfg))) #f)
+                                  (first (config-problems cfg)))
+                                (#t (rest sound)))
                          cfg))
                      (if (if (Opts on? opts "-n") #t (not (config-get cfg (lit sound)))) (pair () "")
                        (guard (e (pair () (Str8 append "No sound: " (%cl-err-text e))))

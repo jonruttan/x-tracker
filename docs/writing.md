@@ -193,10 +193,13 @@ soft.
   (order a))
 ```
 
-A wave is named by an instrument as `(wave NAME)`.  A file can keep its
-waves at its top, before its songs, so it needs no other file; one
-whose waves are in another file is read with `-w SONGS.xon` (and `:waves
-keep` in the editor copies them in).
+A wave is named by an instrument as `(wave NAME)`, or made in the
+instrument that plays it, `(instrument bell (wave glass 5 0 0 2))`, as
+a form beside the songs would make it; two that make one name
+differently are an error naming both.  A file can keep its waves at its
+top, before its songs, so it needs no other file; one whose waves are
+in another file is read with `-w SONGS.xon` (and `:waves keep` in the
+editor copies them in).
 
 ```xon
 (wave hollow 6 0 2 0 1)
