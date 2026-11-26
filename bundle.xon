@@ -15,6 +15,8 @@
 ; X_COMPILED_REPORT, which tests/spec-gate.sh sets (x-lang#1409).
 ; v0.62.0: `Lexer make` refuses an end text (node.x passes none), and
 ; `min`/`max` replace `least`/`greatest` (the tracker's are local names).
-(requires-release "v0.62.0")
+; v0.63.0: (Term mouse! fd on) and (mouse ...) from Term key (x-lang#1479); x/sys/midi,
+; MIDI input from a device (x-lang#1481): the mouse and MIDI keyboard.
+(requires-release "v0.63.0")
 
 (entry run)
