@@ -42,8 +42,8 @@
 ; was cut from, 6 the songs handed over so far, 7 the order's length, 8
 ; the waves, 9 whether it is playing, 10 the tension, 11 the pace, and
 ; for a note heard as it is typed (player-preview!), 12 a stream, 13 a
-; mixer of their own and 14 the tracker that starts it, stopped once it
-; has; 15 the rows of the tail a song played once rings out over, 16
+; mixer of their own and 14 the trackers that start them, stopped once they
+; have; 15 the rows of the tail a song played once rings out over, 16
 ; where the tracker stood after each block rendered (%pl-mark!), 17 the
 ; rows of each place in the order played (the song's own order, or the
 ; one pattern), 18 the channels muted, 19 the instruments muted, 20 the
@@ -633,20 +633,28 @@
 ; NOTE played on instrument INST of S, as a cell of four rows would
 ; play it, over whatever is playing.  The note typed before is cut off
 ; where it was heard: its stream is cleared, so this one is heard at
-; once.  Raises a label 'value for a note or an instrument the tracker
-; cannot read.
+; once.  With CHORD, as a MIDI keyboard's notes are, a note typed before
+; and not yet started is started too, so the notes of a chord all sound.
+; Raises a label 'value for a note or an instrument the tracker cannot
+; read.
 (def player-preview!
-  (fn (_ p s inst note)
+  (fn (_ p s inst note . chord)
     (def t (Tracker make (player-sampled (%pl-waves-known
                            (%pl-preview-form
                              (song-form (song-set-pattern s %pl-preview-pattern (list (list inst note "." "." ".")))
                                         (list %pl-preview-pattern))
                              inst)) (%pl-get p 8))))
-    (unless (null? (%pl-get p 14)) (Tracker stop! (%pl-get p 14)))
+    (unless (if (pair? chord) (first chord) #f) (%pl-stop-previews! p))
     ((%pl-get p 0) audio-clear! (%pl-get p 12))
     (Tracker play! t (%pl-get p 13))
-    (%pl-put! p 14 t)
+    (%pl-put! p 14 (pair t (%pl-get p 14)))
     p))
+
+; The trackers of the notes heard stopped: each has started its note.
+(def %pl-stop-previews!
+  (fn (_ p)
+    (List for-each (fn (_ t) (Tracker stop! t)) (%pl-get p 14))
+    (%pl-put! p 14 ())))
 
 ; Blocks of mixer M rendered onto STREAM until it is AHEAD bytes ahead
 ; of the speaker; after the first, AFTER is called.  Answers how many.
@@ -667,7 +675,7 @@
     (+ (if (%pl-get p 9) (%pl-feed! p (%pl-get p 1) (%pl-get p 2) %pl-ahead (fn (_) (%pl-mark! p))) 0)
        (if (if (null? (%pl-get p 14)) (= 0 (Mixer playing (%pl-get p 13))) #f) 0
          (%pl-feed! p (%pl-get p 12) (%pl-get p 13) %pl-ahead
-           (fn (_) (unless (null? (%pl-get p 14)) (do (Tracker stop! (%pl-get p 14)) (%pl-put! p 14 ())))))))))
+           (fn (_) (%pl-stop-previews! p)))))))
 
 (def player-tension!
   (fn (_ p pct)

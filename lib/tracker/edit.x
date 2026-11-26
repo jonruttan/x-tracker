@@ -48,7 +48,7 @@
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -1664,13 +1664,13 @@
 
 ; Sample NAME heard at NOTE, as an instrument of it alone would play it.
 (def %hear-sample!
-  (fn (_ st name note)
+  (fn (_ st name note . chord)
     (unless (null? (%get st %player))
       (%try! st "the sample cannot be played"
         (fn (_)
           (player-preview! (%get st %player)
             (song-set-instrument (edit-song st) (Str8 append "(instrument sample-heard (wave " name ") (env (0 100) (60000 100)) (release 30))"))
-            "sample-heard" note)
+            "sample-heard" note (if (pair? chord) (first chord) #f))
           (edit-feed! st) ())))))
 
 ; :sample NAME FILE [ROOT] [START END]: the WAV file FILE kept as the wave
@@ -1762,6 +1762,73 @@
     (def p (cell-parts cell))
     (if (not (cell-note? (first p))) cell
       (cell-join (first p) (%min 400 (int/ (+ 50 (* pct (if (null? (List ref 1 p)) 100 (List ref 1 p)))) 100)) (List ref 2 p)))))
+; --- a MIDI keyboard ---------------------------------------------------------------
+;
+; A note played on a MIDI keyboard (tracker/app reads it, (midi on)) is
+; heard as a typed one is: the channel's instrument on the pattern, the
+; instrument or the sample picked on F4 and F3, a chord's notes together.
+; On the pattern it goes in the cursor's cell as a typed note does, its
+; velocity the volume column's gain, and the cursor moves on by the step.
+; Middle C is C of the octave, so < and > move the keyboard.  With
+; (midi-off on) a key let go when no other is held puts a let-go.
+
+; The name of note N, middle C 60, with the octave over 4 added; nil past
+; octaves 0 to 8.
+(def %midi-name
+  (fn (_ st n)
+    (def k (+ n (* 12 (- (%get st %octave) 4))))
+    (if (if (< k 12) #t (< 119 k)) ()
+      (Str8 append (List ref (int% k 12) %note-names) (Str8 str (- (int/ k 12) 1))))))
+
+; Whether the pattern has the keys: its page, no line typed and nothing
+; over it.
+(def %pattern-keyed?
+  (fn (_ st)
+    (if (if (eq? (%get st %page) (lit pattern)) (null? (%get st %input)) #f)
+      (if (null? (%get st %pattern)) #f
+        (if (%get st %help) #f (if (null? (%get st %browse)) (null? (%get st %order-at)) #f)))
+      #f)))
+
+(def %midi-on!
+  (fn (_ st n vel)
+    (def name (%midi-name st n))
+    (def gain (%max 1 (int/ (+ (* vel 100) 63) 127)))
+    (def note (if (null? name) () (if (<= 100 gain) name (Str8 append name ":" (Str8 str gain)))))
+    (def p (%get st %player))
+    (def hear! (fn (_ s inst) (unless (null? p) (%try! st "the note cannot be played" (fn (_) (player-preview! p s inst note #t) (edit-feed! st) ())))))
+    (%put! st %midi-held (pair n (List filter (fn (_ k) (not (= k n))) (%get st %midi-held))))
+    (match
+      ((null? note) ())
+      ((eq? (%get st %page) (lit samples))
+        (unless (null? (%samples st)) (%hear-sample! st (%wave-name (%picked-sample st)) note #t)))
+      ((eq? (%get st %page) (lit instruments))
+        (unless (null? (%picked-instrument st)) (hear! (edit-song st) (%picked-instrument st))))
+      ((null? (%get st %pattern)) ())
+      (#t (do (hear! (edit-song st) (first (List ref (%get st %chan) (%channels st))))
+              (when (%pattern-keyed? st)
+                ((fn (_ old)
+                   (def slash (List find (fn (_ i) (str=? (Str8 sub i 1 old) "/")) (List range 0 (Str8 length old))))
+                   (%put-cell! st (Str8 append note (if (null? slash) "" (Str8 sub slash (- (Str8 length old) slash) old)))))
+                 (%cell st))))))))
+
+(def %midi-off!
+  (fn (_ st n)
+    (%put! st %midi-held (List filter (fn (_ k) (not (= k n))) (%get st %midi-held)))
+    (when (if (null? (%get st %midi-held)) (if (config-get (%get st %config) (lit midi-off)) (%pattern-keyed? st) #f) #f)
+      (%put-cell! st "-"))))
+
+; A message of the MIDI keyboard, (midi note-on CH NOTE VEL) and the
+; rest x/sys/midi decodes; a note-on of velocity 0 is a note-off.  While
+; a line is typed the keyboard is heard only.
+(def %midi!
+  (fn (_ st m)
+    (def kind (List ref 1 m))
+    (match
+      ((not (List includes? kind (list (lit note-on) (lit note-off)))) ())
+      ((if (eq? kind (lit note-on)) (< 0 (List ref 4 m)) #f)
+        (%midi-on! st (List ref 3 m) (List ref 4 m)))
+      (#t (%midi-off! st (List ref 3 m))))))
+
 ; --- the mouse --------------------------------------------------------------------
 ;
 ; Schism Tracker's mouse: a click picks what is under it, a drag marks a
@@ -2081,7 +2148,7 @@
     (def key (match ((pair? typed) typed) ((null? (%get st %input)) (config-key (%get st %config) typed)) (#t typed)))
     (match
       ((null? key) ())
-      ((pair? key) (when (eq? (first key) (lit mouse)) (%mouse! st key)))
+      ((pair? key) (match ((eq? (first key) (lit mouse)) (%mouse! st key)) ((eq? (first key) (lit midi)) (%midi! st key)) (#t ())))
       ((not (null? (%get st %input))) (%input-key! st key))
       ((not (null? (%get st %pick))) (%pick-key! st key))
       ((not (null? (%get st %browse))) (%browse-key! st key))

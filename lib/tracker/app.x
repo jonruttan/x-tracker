@@ -29,7 +29,7 @@
 (import x/tui/screen)
 (import x/tool/fn-compile compile-module!)
 (import tracker/keys keys-read)
-(import tracker/state edit-quit? edit-player edit-message! edit-mouse? edit-typing?)
+(import tracker/state edit-quit? edit-player edit-message! edit-mouse? edit-typing? edit-setting)
 (import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)
 (import tracker/draw edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
@@ -44,21 +44,57 @@
 ; out one by one.  After an Escape with none in hand it waits thirty
 ; milliseconds for more, and answers nil when none come, which the
 ; decoder takes as a bare Escape rather than the start of a sequence.
-; Asked (lit wait) and MS, whether a byte is in hand or comes within MS.
+; Asked (lit wait) and MS, whether a byte is in hand or comes within MS:
+; (lit midi) when a message of the MIDI input MIDI (nil for none) is
+; first, which asked (lit midi) it answers, as (midi MESSAGE ...).
 (def %ap-reader
-  (fn (_)
-    (def box (Vector of () #f))
+  (fn (_ midi)
+    (def box (Vector of () #f ()))
     (def poll? (fn (_ ms) (not (null? (Sys poll (list (pair 0 (list (lit in)))) ms)))))
+    (def fds (if (null? midi) (list (pair 0 (list (lit in)))) (list (pair 0 (list (lit in))) (pair (midi fd) (list (lit in))))))
+    ; Either waited for: the MIDI input's messages taken as they come,
+    ; and whether the keyboard has bytes.
+    (def wait (fn (_ ms)
+                (def ready (Sys poll fds ms))
+                (when (if (null? midi) #f (List any? (fn (_ r) (= (first r) (midi fd))) ready))
+                  (Vector set! 2 (List append (Vector ref 2 box) (midi messages)) box))
+                (match ((pair? (Vector ref 2 box)) (lit midi))
+                       ((List any? (fn (_ r) (= (first r) 0)) ready) #t)
+                       (#t #f))))
+    (def read-byte
+      (fn (_)
+        (when (if (null? (Vector ref 0 box)) (if (Vector ref 1 box) (poll? 30) #t) #f)
+          (Vector set! 0 (Sys fd-read 0 64) box))
+        (def b (if (null? (Vector ref 0 box)) () (first (Vector ref 0 box))))
+        (unless (null? b) (Vector set! 0 (rest (Vector ref 0 box)) box))
+        (Vector set! 1 (if (null? b) #f (= b 27)) box)
+        b))
     (fn (self . ask)
-      (if (not (null? ask)) (if (null? (Vector ref 0 box)) (poll? (List ref 1 ask)) #t)
-        (do (when (if (null? (Vector ref 0 box)) (if (Vector ref 1 box) (poll? 30) #t) #f)
-              (Vector set! 0 (Sys fd-read 0 64) box))
-            (def b (if (null? (Vector ref 0 box)) () (first (Vector ref 0 box))))
-            (unless (null? b) (Vector set! 0 (rest (Vector ref 0 box)) box))
-            (Vector set! 1 (if (null? b) #f (= b 27)) box)
-            b)))))
+      (match
+        ((null? ask) (read-byte))
+        ((eq? (first ask) (lit midi))
+          ((fn (_ q) (Vector set! 2 (rest q) box) (pair (lit midi) (first q))) (Vector ref 2 box)))
+        ((pair? (Vector ref 2 box)) (lit midi))
+        ((null? (Vector ref 0 box)) (wait (List ref 1 ask)))
+        (#t #t)))))
 
 (def %ap-waiting? (fn (_ reader ms) (reader (lit wait) ms)))
+
+; The MIDI input (midi ...) names: the first there is for on, the one
+; named, or nil for off, for none there, or for one that cannot be
+; opened, which is said.  x/sys/midi is read only when it is wanted.
+(def %ap-midi-open
+  (fn (_ st)
+    (def want (edit-setting st (lit midi)))
+    (if (eq? want #f) ()
+      (do (import x/sys/midi)
+          (def names (guard (e ()) (Midi devices)))
+          (def name (if (str? want) want (if (null? names) () (first names))))
+          (if (null? name) ()
+            (guard (e (do (edit-message! st (Str8 append "MIDI: " name " cannot be opened"
+                                              (if (null? names) "; there is no MIDI input" (Str8 append "; there are " (Str8 join ", " names)))))
+                          ()))
+              (Midi open name)))))))
 
 ; The screen drawn and sent, the stream topped up first: the drawing
 ; keeps the loop from coming round, and the music plays on what is
@@ -120,9 +156,10 @@
 ; quiet round, so it never stands between a key and its screen.
 (def app-loop
   (fn (self st reader term rounds dirty keys)
+    (def waiting (if (edit-quit? st) #f (%ap-waiting? reader (if (%ap-playing? st) 20 250))))
     (match
       ((edit-quit? st) ())
-      ((%ap-waiting? reader (if (%ap-playing? st) 20 250))
+      (waiting
         ((fn (_ key)
            (match
              ((null? key) ())
@@ -135,7 +172,7 @@
                                (if (< dirty %ap-collect-keys)
                                  (self st reader term rounds (+ dirty 1) 0)
                                  (do (term (lit collect)) (self st reader term 0 0 0))))))))))
-         (keys-read reader)))
+         (if (eq? waiting (lit midi)) (reader (lit midi)) (keys-read reader))))
       (#t (do (edit-settle! st)
               ((fn (_ drew)
                  (when drew (term (lit draw)))
@@ -157,14 +194,16 @@
     (def token (Term raw! 0))
     (Term emit 1 (Str8 append (%ap-esc "[?1049h") (%ap-esc "[?25l")))
     (def mouse (Vector of #f))
+    (def midi (%ap-midi-open st))
     (def failed
       (guard (e e)
         (do (%ap-mouse! st mouse)
             (%ap-show! st screen)
             (compile-module! (lit x/tui/screen))
             (%ap-collect! st)
-            (app-loop st (%ap-reader) (%ap-term st screen mouse) 0 0 0)
+            (app-loop st (%ap-reader midi) (%ap-term st screen mouse) 0 0 0)
             ())))
+    (unless (null? midi) (midi close!))
     (when (Vector ref 0 mouse) (Term mouse! 1 #f))
     (Term emit 1 (Str8 append (%ap-esc "[0m") (%ap-esc "[?25h") (%ap-esc "[?1049l")))
     (Term restore! 0 token)
