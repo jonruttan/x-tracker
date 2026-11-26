@@ -28,8 +28,9 @@
   sample-centre sample-peak sample-normalise sample-reverse sample-cut sample-resample sample-peaks
   sample-wav-header sample-write! sample-setting sample-set-setting sample-loop sample-set-loop sample-root)
 (import tracker/keys keys-read)
+(import tracker/field field-make field-kind field-line field-text field-point field-history field-key! history-path history-read history-add!)
 (import tracker/state edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place)
-(import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)
+(import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key! edit-history-open!)
 (import tracker/draw edit-draw!)
 (import tracker/app app-edit app-play app-loop)
 (import tracker/score score-song)
