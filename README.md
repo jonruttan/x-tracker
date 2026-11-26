@@ -120,7 +120,8 @@ The pattern's other keys:
                     down change its pattern, i copy it, d drop it, [ ] move
                     it, Enter edit its pattern, Escape done
     ( )             move the channel left, right
-    U R  ctrl-z     undo, redo
+    U R             undo, redo: every edit on every page, one history
+    ctrl-z ctrl-y   undo, redo, as U and R
     ?               the help: n p turn the topic, the arrows scroll
     ctrl-c          quit
 

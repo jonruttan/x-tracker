@@ -48,7 +48,7 @@
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -143,8 +143,15 @@
              (guard (e (if (Err err? e) (e msg) "the song cannot be played"))
                (do (player-update! p (edit-song st) (%get st %pattern)) ()))))))))
 
-; Where the editor is, to undo to: (DOC SONG PATTERN).
-(def %here (fn (_ st) (list (%get st %doc) (%get st %song) (%get st %pattern))))
+; Where the editor is, to undo to: (DOC SONG PATTERN SOUNDS), SOUNDS the
+; sounds an edit of them changed, ((NAME SOUND) ...), each as it was.
+(def %here (fn (_ st . sounds) (list (%get st %doc) (%get st %song) (%get st %pattern) (if (null? sounds) () (first sounds)))))
+
+; ENTRY the newest step of undo, as deep as (undo N), and nothing to redo.
+(def %remember!
+  (fn (_ st entry)
+    (%put! st %undo (pair entry (List take (- (config-get (%get st %config) (lit undo)) 1) (%get st %undo))))
+    (%put! st %redo ())))
 
 ; The document's waves, each sample's file named from the file's directory.
 (def %doc-waves
@@ -164,8 +171,7 @@
 ; The document made DOC: the old one kept to undo to.
 (def %doc-change!
   (fn (_ st doc)
-    (%put! st %undo (pair (%here st) (List take (- (config-get (%get st %config) (lit undo)) 1) (%get st %undo))))
-    (%put! st %redo ())
+    (%remember! st (%here st))
     (%put! st %doc doc)
     (%put! st %warned #f)
     (%sync-waves! st)
@@ -179,19 +185,38 @@
 (def %set-channels!
   (fn (_ st chs) (%change! st (song-set-pattern (edit-song st) (%get st %pattern) chs))))
 
+; The sample named NAME of the song, or nil.
+(def %sample-named (fn (_ st name) (List find (fn (_ w) (eq? (List ref 1 w) name)) (%samples st))))
+
+; The sounds named in SOUNDS, ((NAME SOUND) ...), as they are now.
+(def %sounds-now
+  (fn (_ st sounds)
+    (List map (fn (_ e) (list (first e) ((fn (_ w) (if (null? w) () (%sound st w))) (%sample-named st (first e))))) sounds)))
+
 ; One step of undo, FROM the list taken from and TO the list given to:
-; back in the song the step was made in.
+; back in the song the step was made in, and the sounds it changed
+; heard as they were.
 (def %undo-step!
   (fn (_ st from to what)
     (if (null? (%get st from)) (edit-message! st (Str8 append "Nothing to " what "."))
       (do (def back (first (%get st from)))
-          (%put! st to (pair (%here st) (%get st to)))
+          (def sounds (List ref 3 back))
+          (%put! st to (pair (%here st (%sounds-now st sounds)) (%get st to)))
           (%put! st %doc (first back))
           (unless (= (List ref 1 back) (%get st %song)) (%go-song! st (List ref 1 back)))
           (%put! st %pattern (List ref 2 back))
           (%put! st from (rest (%get st from)))
           (edit-message! st "")
           (%sync-waves! st)
+          (List for-each
+            (fn (_ e)
+              ((fn (_ w)
+                 (unless (if (null? w) #t (null? (List ref 1 e)))
+                   (do (player-pcm! (first e) (%sample-args st w) (List ref 1 e))
+                       (%put! st %sample-peaks ())
+                       (edit-message! st (Str8 append (if (str=? what "undo") "Undone" "Redone") ": the sound of " (%wave-name w) ".")))))
+               (%sample-named st (first e))))
+            sounds)
           (%heard-change! st)
           (%clamp! st)))))
 
@@ -654,7 +679,7 @@
         (if (null? args) (do (%put! st %pick (%get st %song)) (%put! st %help (%song-lines st)))
           ((fn (_ name i)
              (if (null? i)
-               (do (%put! st %undo (pair (%here st) (%get st %undo)))
+               (do (%remember! st (%here st))
                    (%put! st %doc (file-add-song (%get st %doc) (song-new name)))
                    (%go-song! st (- (List length (file-songs (%get st %doc))) 1))
                    (edit-message! st (Str8 append "New song " name ".")))
@@ -822,7 +847,7 @@
           ((fn (_ name)
              (if (List any? (fn (_ s2) (str=? (song-name s2) name)) (file-songs (%get st %doc)))
                (edit-message! st (Str8 append "There is a song " name " already."))
-               (do (%put! st %undo (pair (%here st) (%get st %undo)))
+               (do (%remember! st (%here st))
                    (%put! st %doc (file-add-song (%get st %doc) (song-rename s name)))
                    (%go-song! st (- (List length (file-songs (%get st %doc))) 1))
                    (edit-message! st (Str8 append "Copied to " name ".")))))
@@ -830,7 +855,7 @@
       ((str=? cmd "drop-song")
         (if (< (List length (file-songs (%get st %doc))) 2) (edit-message! st "A file keeps one song.")
           ((fn (_ name)
-             (%put! st %undo (pair (%here st) (%get st %undo)))
+             (%remember! st (%here st))
              (%put! st %doc (file-drop-song (%get st %doc) (%get st %song)))
              (%go-song! st (%max 0 (- (%get st %song) 1)))
              (edit-message! st (Str8 append "Dropped " name ": U brings it back.")))
@@ -1095,8 +1120,8 @@
       ((if (eq? key (lit ctrl-s)) #t (eq? key (lit f10))) (do (%write! st ()) #t))
       ((eq? key (lit f9)) (do (%put! st %input (pair (lit command) "open ")) #t))
       ((eq? key (lit ctrl-q)) (do (%quit! st #f) #t))
-      ((if (eq? key (lit ctrl-z)) (if (eq? (%get st %page) (lit samples)) (not (null? (%get st %sample-undo))) #f) #f) (do (%sound-undo! st) #t))
       ((eq? key (lit ctrl-z)) (do (%undo-step! st %undo %redo "undo") #t))
+      ((eq? key (lit ctrl-y)) (do (%undo-step! st %redo %undo "redo") #t))
       ((if has-pattern (eq? key (lit alt-f9)) #f) (do (%hush! st (lit channel) (%get st %chan) #f) #t))
       ((if has-pattern (eq? key (lit alt-f10)) #f) (do (%hush! st (lit channel) (%get st %chan) #t) #t))
       (#t #f))))
@@ -1560,10 +1585,14 @@
   (fn (_ st w d2 args2)
     (def name (List ref 1 w))
     (def args (%sample-args st w))
-    (%put! st %sample-undo (pair (list name (player-pcm name) args) (List take 15 (%get st %sample-undo))))
+    (def entry (%here st (list (list name (%sound st w)))))
+    (def before (%get st %undo))
     (%put! st %sample-peaks ())
     (player-pcm! name args2 d2)
-    (unless (equal? args args2) (%sample-form! st w args2))))
+    (unless (equal? args args2) (%sample-form! st w args2))
+    ; One step for the sound and its form: the form's own step taken
+    ; back into this one.
+    (if (same? before (%get st %undo)) (%remember! st entry) (%put! st %undo (pair entry (rest (%get st %undo)))))))
 
 ; :sound OP [N] [FROM TO]: the edit OP done to the sound of the sample
 ; picked, over the frames FROM up to TO, else its loop, else all of it.
@@ -1579,7 +1608,7 @@
       ((null? w) (edit-message! st "No sample: F3, then Insert reads one."))
       ((null? op) (edit-message! st (Str8 append ":sound OP [N] [FROM TO], OP one of " (Str8 join " " (List map first %sound-edits)) ", set, mono, save, undo")))
       ((str=? op "save") (%sound-save! st w))
-      ((str=? op "undo") (%sound-undo! st))
+      ((str=? op "undo") (%undo-step! st %undo %redo "undo"))
       ((str=? op "mono") (edit-message! st "A sample is one channel already: the WAV reader takes the mean of a file's channels."))
       ((str=? op "set")
         ((fn (_ key)
@@ -1622,21 +1651,6 @@
 ; The edits that cover the loop when no frames are given.
 (def %loop-edits (list "silence" "fade-in" "fade-out" "cut" "crop" "cut-before" "cut-after"))
 
-; The last edit of a sound undone.
-(def %sound-undo!
-  (fn (_ st)
-    (def u (%get st %sample-undo))
-    (if (null? u) (edit-message! st "No edit of a sound to undo.")
-      ((fn (_ back)
-         (def w (List find (fn (_ w) (eq? (List ref 1 w) (first back))) (%samples st)))
-         (%put! st %sample-undo (rest u))
-         (%put! st %sample-peaks ())
-         (if (null? w) (edit-message! st "That sample is gone.")
-           (do (player-pcm! (first back) (List ref 2 back) (List ref 1 back))
-               (unless (equal? (%sample-args st w) (List ref 2 back)) (%sample-form! st w (List ref 2 back)))
-               (edit-message! st (Str8 append "Undone: the sound of " (%wave-name w) ".")))))
-       (first u)))))
-
 ; Sample W's sound written to its file, a WAV file of one channel at its
 ; C-5 speed.
 (def %sound-save!
@@ -1648,7 +1662,6 @@
         (fn (_)
           (sample-write! (List ref 2 d) (List ref 1 d) (%field-value args d (lit speed)) (first args))
           (%put! st %sample-cache ())
-          (%put! st %sample-undo (List filter (fn (_ u) (not (eq? (first u) (List ref 1 w)))) (%get st %sample-undo)))
           (player-pcm! (List ref 1 w) args ())
           (edit-message! st (Str8 append "Written: " (first args) ", " (Str8 str (List ref 1 d)) " frames."))
           ())))))

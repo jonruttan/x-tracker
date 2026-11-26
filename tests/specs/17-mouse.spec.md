@@ -80,7 +80,7 @@ the pages are a row of their names, each clicked to show it.
 
 ```tracker
 (def m (fn (_ a b r c) (list 'mouse a b r c ())))
-(def target (fn (_ st kind) (List find (fn (_ t) (eq? (first t) kind)) (Vector ref 44 st))))
+(def target (fn (_ st kind) (List find (fn (_ t) (eq? (first t) kind)) (Vector ref 43 st))))
 (def dir (Str8 append ((fn (_ d) (if (null? d) "/tmp" d)) (Sys getenv "TMPDIR")) "/x-tracker-spec-mouse"))
 (unless (File exists? dir) (File mkdir dir))
 (sample-write! (first (sample-resample (first (Bytes of-hex "00000040ff7f0040000000c00180ffbf")) 8 2000 #t)) 2000 8000 (Str8 append dir "/s.wav"))

@@ -60,7 +60,7 @@
         (list (list (lit insert-row) (lit delete-row)) "I D  Alt-Insert Alt-Delete" "insert a row, delete one, in every channel")
         (list (list (lit channel-left) (lit channel-right)) "( )" "move the channel left, right")
         (list (list (lit order)) "O" "edit the order in place (:help order)")
-        (list (list (lit undo) (lit redo)) "U R  ctrl-z" "undo, redo")
+        (list (list (lit undo) (lit redo)) "U R  ctrl-z ctrl-y" "undo, redo: every edit on every page, one history")
         "Blocks"
         (list () "Alt-B Alt-E" "mark where the block begins, where it ends")
         (list () "Shift-arrows" "mark a block from the cursor as it moves")
@@ -109,7 +109,7 @@
         (list () "Alt-Shift-E Alt-Shift-F" "the sound resampled to N frames, its pitch kept")
         (list () "+ -  Alt-+ Alt--" "the C-5 speed a semitone up, down; an octave")
         (list () "Alt-O" "write the sound edited to its WAV file")
-        (list () "ctrl-z" "undo the last edit of a sound")
+        (list () "ctrl-z ctrl-y" "undo, redo an edit of the sound, in the one history")
         "A MIDI keyboard (midi on)"
         (list () "a note" "heard; on the pattern put at the cursor, the velocity its gain, its effects kept; moves by the step")
         (list () "a chord" "its notes heard together, put in the rows one after another")

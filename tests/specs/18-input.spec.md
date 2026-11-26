@@ -10,7 +10,7 @@ a text field takes it: a cursor that shows and moves, and edits at it.
 
 ```tracker
 (def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") () ()))
-(def line (fn (_) (list (rest (Vector ref 12 st)) (rest (Vector ref 46 st)))))
+(def line (fn (_) (list (rest (Vector ref 12 st)) (rest (Vector ref 45 st)))))
 (spec-keys! st (list ":" "bpm 12"))
 (def a (line))
 (spec-keys! st (list 'home 'right 'right 'right "x"))
