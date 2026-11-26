@@ -25,7 +25,7 @@ x -l tracker -- help /v | head -1 -> cell effect  /vD,P
 | Option               | Does                                               |
 |----------------------|----------------------------------------------------|
 | `-s`, `--song NAME`  | the song to edit, play or render; import's name    |
-| `-w`, `--waves FILE` | read FILE's `(wave ...)` forms too; may repeat     |
+| `-w`, `--waves SONGS.xon` | read the `(wave ...)` forms of another song file; may repeat |
 | `-l`, `--loop`       | play the song over and over, until q               |
 | `-o`, `--output FILE` | the WAV file render writes; the file import adds to |
 | `-r`, `--rows N`     | rows a beat for an imported MIDI file, 1-64 (4)    |

@@ -253,7 +253,7 @@
     ((fn (_ w)
        (unless (null? w)
          (Err raise (lit value)
-           (Str8 append "x-tracker: no wave named " (symbol->str w) ": read the file its (wave ...) form is in with -w FILE") ())))
+           ((fn (_ n) (Str8 append "x-tracker: no wave named " n ": make it with :wave " n " AMP ..., or a (wave " n " AMP ...) form beside the songs; -w SONGS.xon borrows the waves of another song file")) (symbol->str w)) ())))
      (%pl-missing-wave f))
     f))
 

@@ -621,7 +621,7 @@ set its timing.
 
 `:wave NAME AMP ...` makes or changes a wave, kept in the file;
 `:wave NAME` shows one.  `:waves` lists the waves the songs name and
-where each comes from.  A file opened with `-w FILE` borrows the waves
+where each comes from.  A file opened with `-w SONGS.xon` borrows the waves
 of that file: `:waves keep` copies them into this one, so it needs no
 other.
 

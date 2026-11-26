@@ -14,7 +14,7 @@ terminal and heard through SDL's audio.
     x -l tracker -- help [WORD]
 
       -s, --song NAME    the song to edit or play (the file's first); the name import gives
-      -w, --waves FILE   read the (wave ...) forms of FILE too; again for another
+      -w, --waves SONGS.xon  read the (wave ...) forms of another song file; again for another
       -l, --loop         play the song over and over, until q
       -o, --output FILE  the WAV file render writes, the song file import adds to
       -r, --rows N       rows a beat import places a MIDI file's notes on (4)

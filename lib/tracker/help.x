@@ -282,12 +282,12 @@
 ; The command line's words.
 (def %hp-words
   (list (list "edit" "x -l tracker -- [OPTIONS] [edit] [FILE]" "the editor; with no FILE, a new song to write with :w FILE"
-              "  -s NAME the song to edit, -w FILE waves to read, -n no sound")
+              "  -s NAME the song to edit, -w SONGS.xon waves to read, -n no sound")
         (list "play" "x -l tracker -- [OPTIONS] play FILE" "play a song, the pattern heard written to standard error; q stops"
-              "  -s NAME the song (the file's first), -l loop it, -w FILE waves to read")
+              "  -s NAME the song (the file's first), -l loop it, -w SONGS.xon waves to read")
         (list "list" "x -l tracker -- list FILE" "each song of FILE: how long it lasts, its patterns and its order")
         (list "render" "x -l tracker -- render FILE -o OUT.wav" "a song played once, to a WAV file"
-              "  -s NAME the song (the file's first), -w FILE waves to read")
+              "  -s NAME the song (the file's first), -w SONGS.xon waves to read")
         (list "import" "x -l tracker -- import FILE -o OUT.xon" "a MIDI (.mid) or SID (.sid) file read into a song, added to OUT.xon"
               "  -s NAME the song's name (the file's); MIDI: -r N rows a beat (4);"
               "  SID: -u N the tune (its first), -t SECS how long it is played (HVSC's length, or 60)")
@@ -337,19 +337,21 @@
         ":order NAME ... sets the whole order at once."))
 
 (def %hp-wave-lines
-  (list "A wave is the strengths of its harmonics, the fundamental first:"
+  (list "A wave is made once, beside the songs, and an instrument names it with (wave NAME):"
+        "  (wave glass 5 0 0 2 0 0 0 1)                   ; beside the songs, not in an instrument"
+        "  (song \"s\" (instrument bell (wave glass)) ...)  ; the instrument names it"
+        "In the editor :wave NAME AMP ... makes one or changes it, and :waves lists them."
+        "Its numbers are the strengths of its harmonics, the fundamental first:"
         "  (wave hollow 6 0 2 0 1)     odd harmonics: hollow, like a clarinet"
         "  (wave reed 6 4 3 2 1 1)     every harmonic, falling: bright, like a saw"
         "  (wave glass 5 0 0 2 0 0 0 1)"
         "Or the points it is drawn through, (POSITION LEVEL), straight lines between:"
         "  (wave stair (0 100) (1 100) (1 0) (2 0) (2 -100) (3 -100))"
-        "The mixer's own: sine, square, triangle, saw, inverse-saw, pulse, noise, metal."
+        "The mixer's own need no making: sine, square, triangle, saw, inverse-saw, pulse, noise, metal."
         "pulse is the saw at (width (0 50)); give it a width of its own, or sweep one."
-        "An instrument names a wave with (wave NAME)."
-        "A file keeps its waves as (wave ...) forms beside its songs; -w FILE reads another's."
-        ":waves lists them, :waves keep copies the borrowed in, :wave NAME AMP ... makes one."
-        "A sample is a WAV file, (wave NAME (sample FILE [ROOT] [START END] SETTING ...)), its settings"
-        "  as Impulse Tracker keeps them: (volume 0-64) (global 0-64) (pan 0-64) (speed HZ, C-5)"
+        "-w SONGS.xon borrows the waves another song file makes; :waves keep copies the borrowed in."
+        "A sample is not a made wave: a WAV file, (wave NAME (sample FILE [ROOT] [START END] SETTING ...)),"
+        "  its settings as Impulse Tracker keeps them: (volume 0-64) (global 0-64) (pan 0-64) (speed HZ, C-5)"
         "  (sustain START END) (vibrato SPEED DEPTH RATE sine|ramp|square|random).  F3 edits them."
         "  The sustain loop and the vibrato are kept, and not heard: the mixer has neither."))
 

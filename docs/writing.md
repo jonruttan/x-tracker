@@ -195,7 +195,7 @@ soft.
 
 A wave is named by an instrument as `(wave NAME)`.  A file can keep its
 waves at its top, before its songs, so it needs no other file; one
-whose waves are in another file is read with `-w FILE` (and `:waves
+whose waves are in another file is read with `-w SONGS.xon` (and `:waves
 keep` in the editor copies them in).
 
 ```xon

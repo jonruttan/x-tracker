@@ -43,7 +43,7 @@
   (Opts declare "x -l tracker --" "[OPTIONS] [edit] [FILE] | play FILE | list FILE | render FILE -o OUT.wav | import FILE -o OUT.xon | help [WORD]"
     "A music tracker: songs of patterns and instruments, edited on the terminal and heard through SDL.\nWith no word, or edit, the editor (? in it lists the keys); play plays a song, list lists a file's songs,\nrender writes a song played once to a WAV file, import reads a MIDI or SID file into a song.\nSettings are read from $X_TRACKER_CONFIG, else ~/.config/x/tracker.xon; :set in the editor lists them."
     (list (Opts arg "-s" "--song" "NAME" "The song to edit or play (the file's first); the name import gives")
-          (Opts arg "-w" "--waves" "FILE" "Read the (wave ...) forms of FILE too; again for another")
+          (Opts arg "-w" "--waves" "SONGS.xon" "Read the (wave ...) forms of SONGS.xon too; again for another")
           (Opts flag "-l" "--loop" "Play the song over and over, until q")
           (Opts arg "-o" "--output" "FILE" "The WAV file render writes, the song file import adds to")
           (Opts arg "-r" "--rows" "N" "Rows a beat import places a MIDI file's notes on, 1-64 (4)")
