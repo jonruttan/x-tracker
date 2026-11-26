@@ -1798,7 +1798,7 @@
 ; --- the pattern editor's columns ---------------------------------------------------
 
 (def %digits (list "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-(def %effect-letters (list "a" "v" "s" "p" "t" "f" "l" "w" "o" "x" "y" "c" "d" "r"))
+(def %effect-letters (list "a" "v" "s" "p" "t" "f" "l" "w" "o" "x" "y" "c" "d" "r" "e"))
 
 ; A key in the instrument, volume or effect column: digits make the
 ; instrument or the volume, . clears the volume or the effects, a

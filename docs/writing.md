@@ -566,6 +566,22 @@ On a pitched note it is a stutter.
   (order a))
 ```
 
+### e: echo
+
+`eMS,P,N` plays the note again MS ms later at P percent of its level
+(50), N times (1), each repeat at P percent of the one before.  Only
+that note echoes; a song's `(echo ...)` is over the whole mix.  A repeat
+a whole number of rows on stays in time: at 100 bpm and 4 rows a row is
+150 ms, so `C4/e300,60,2` comes back two rows on and four.
+
+```xon
+(song "answer" (bpm 100) (rows 4) (ticks 6)
+  (instrument pluck (wave triangle) (env (0 0) (2 90) (120 30) (300 0)) (release 60))
+  (pattern a
+    (pluck "C4/e300,60,2 . . . . . . . G4 . . . . . . ."))
+  (order a))
+```
+
 ## The order
 
 `(order intro verse verse chorus verse chorus outro)` plays the patterns

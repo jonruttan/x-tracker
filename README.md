@@ -233,7 +233,7 @@ soloed one's green.  A cell's
 effects are x/audio/tracker's (its module notes say what each does):
 `a` arpeggio, `v` vibrato, `s` slide, `p` portamento, `t` tremolo, `f`
 fade, `l` low-pass, `w` width, `o` cut-off, `x` ring, `y` sync, `c` cut,
-`d` delay, `r` retrigger; `C4:60/v20,4`
+`d` delay, `r` retrigger, `e` echo; `C4:60/v20,4`
 is C4 at 60 percent with a vibrato.
 
 Written back, a file keeps everything the editor did not change as it

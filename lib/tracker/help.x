@@ -215,7 +215,8 @@
         (list "y" "/yC" "sync: the note hard-synced to a modulator C cents from its pitch")
         (list "c" "/cN" "cut: let go N ticks into the row")
         (list "d" "/dN" "delay: start N ticks into the row, on the note's own cell")
-        (list "r" "/rN" "retrigger: start again every N ticks")))
+        (list "r" "/rN" "retrigger: start again every N ticks")
+        (list "e" "/eMS,P,N" "echo: the note again MS ms later at P percent (50), N times (1), each at P percent of the one before")))
 
 ; A song's items: its props and the effects over its mix.
 (def %hp-song
