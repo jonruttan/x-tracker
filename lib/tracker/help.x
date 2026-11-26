@@ -110,6 +110,10 @@
         (list () "+ -  Alt-+ Alt--" "the C-5 speed a semitone up, down; an octave")
         (list () "Alt-O" "write the sound edited to its WAV file")
         (list () "ctrl-z" "undo the last edit of a sound")
+        "A MIDI keyboard (midi on)"
+        (list () "a note" "heard; on the pattern put at the cursor, the velocity its gain, its effects kept; moves by the step")
+        (list () "a chord" "its notes heard together, put in the rows one after another")
+        (list () "a note let go" "with (midi-off on), a let-go - at the cursor once no key is held")
         "The mouse (mouse on)"
         (list () "click a page" "on the row of pages under the order, show it; F1 the help")
         (list () "click a place" "on the order, edit its pattern")
@@ -258,6 +262,9 @@
         (list "undo" "(undo N)" "how many changes are kept to undo (200)")
         (list "sound" "(sound on|off)" "open the audio as the editor starts (on)")
         (list "mouse" "(mouse on|off)" "take the mouse: clicks, drags and the wheel (on); off, the terminal selects text with it again")
+        (list "midi" "(midi on|off|\"DEVICE\")" "take notes from a MIDI keyboard: the first there (on), the one named, or none;"
+              "  read as the editor starts")
+        (list "midi-off" "(midi-off on|off)" "a MIDI note let go puts a let-go - in the pattern (off)")
         (list "waves" "(waves FILE ...)" "files whose (wave ...) forms are read, as -w")
         (list "colour" "(colour NAME ATTRIBUTES FG BG)" "how NAME is drawn: title empty heading beat off instrument volume"
               "  effect cursor playing block; ATTRIBUTES a list of bold dim italic underline reverse"

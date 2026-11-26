@@ -13,6 +13,7 @@
 ; NAME VALUE ... in the editor is the same form typed:
 ;
 ;   (octave 4)  (step 1)  (follow on)  (backup on)  (undo 200)  (sound on)  (mouse on)
+;   (midi on|off|"DEVICE")  (midi-off off)
 ;   (waves "sounds.xon" ...)
 ;   (colour NAME ATTRIBUTES FOREGROUND BACKGROUND)
 ;   (key ACTION KEY ...)
@@ -46,7 +47,8 @@
 ; --- what there is to set ------------------------------------------------------
 
 ; Each setting of one value: (NAME KIND DEFAULT LEAST MOST), KIND number,
-; switch or files; START when it is read only as the editor starts.
+; switch, files or device (on, off or a name); START when it is read only as
+; the editor starts.
 (def %cf-settings
   (list (list (lit octave) (lit number) 4 0 8)
         (list (lit step) (lit number) 1 0 64)
@@ -55,6 +57,8 @@
         (list (lit undo) (lit number) 200 1 10000)
         (list (lit sound) (lit start-switch) #t)
         (list (lit mouse) (lit switch) #t)
+        (list (lit midi) (lit start-device) #t)
+        (list (lit midi-off) (lit switch) #f)
         (list (lit waves) (lit files) ())))
 
 ; The colours the editor draws with, (NAME ATTRIBUTES FOREGROUND
@@ -221,9 +225,13 @@
                               (%cf-get cfg %cf-keys)))))
                        ()))))
       ((null? s) (Str8 append "no setting " (symbol->str name)))
-      ((if live (List includes? (List ref 1 s) (list (lit start-switch) (lit files))) #f)
+      ((if live (List includes? (List ref 1 s) (list (lit start-switch) (lit start-device) (lit files))) #f)
         (Str8 append (symbol->str name) " is read as the editor starts: the config file"
-          (if (eq? name (lit waves)) " or -w" " or -n")))
+          (match ((eq? name (lit waves)) " or -w") ((eq? name (lit sound)) " or -n") (#t ""))))
+      ((eq? (List ref 1 s) (lit start-device))
+        ((fn (_ v) (if (if (= (List length args) 1) (not (eq? v (lit bad))) #f) (do (%cf-set-value! cfg name v) ())
+                     (Str8 append (symbol->str name) " on, off, or a device's name, \"Keystation 49\"")))
+         (match ((null? args) (lit bad)) ((str? (first args)) (first args)) (#t (%cf-switch (first args))))))
       ((List includes? (List ref 1 s) (list (lit switch) (lit start-switch)))
         ((fn (_ v) (if (if (= (List length args) 1) (not (eq? v (lit bad))) #f) (do (%cf-set-value! cfg name v) ())
                      (Str8 append (symbol->str name) " on, or off")))

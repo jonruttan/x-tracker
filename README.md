@@ -153,9 +153,12 @@ pages under it, and a click on the line picked is Enter; a drag marks a
 block, moves an envelope's point on F4 or the loop's end on F3's sound;
 the wheel scrolls.  `(mouse off)` gives the terminal its own selection.
 
+A MIDI keyboard, `(midi on)`: a note played is heard, and on the
+pattern put at the cursor, its velocity the gain, the cursor moved on
+by the step; `(midi-off on)` puts a let-go as the keys are let go.
+
 `:` takes a command, as vi does; the line has a cursor that the arrows,
 Home and End move, as a text field's does:
-
     :w [FILE]   :q   :q!   :wq       write, quit
     :song [NAME]                      edit or make a song; alone, list
                                       them to pick one with up, down, Enter
@@ -313,6 +316,8 @@ its value.
     (undo 200)                 ; changes kept to undo, 1-10000 (200)
     (sound on)                 ; off edits without the audio, as -n does (on)
     (mouse on)                 ; take the mouse: clicks, drags, the wheel (on)
+    (midi on)                  ; a MIDI keyboard: on, off, or "DEVICE", read as the editor starts (on)
+    (midi-off off)             ; a note let go puts a let-go - (off)
     (waves "sounds.xon")       ; wave files read as -w reads them, from this file's directory
     (colour beat (bold) yellow ())
     (key undo "u")

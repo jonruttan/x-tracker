@@ -453,6 +453,20 @@ scrolls the pattern three rows, a list a line, a setting on F3 up or
 down, and the help.  While the editor has the mouse the terminal
 cannot select text with it; `:set mouse off` gives it back.
 
+### A MIDI keyboard
+
+With `(midi on)`, the first MIDI input there, or `(midi "DEVICE")`,
+the one named, is read as the editor starts.  A note played is heard
+on every page, the instrument or the sample picked sounding it, and
+the notes of a chord are heard together.  On the pattern, with no
+line typed, it is put in the cursor's cell as a typed note is: in the
+octave set, the cell's effects kept, the cursor moved on by the step.
+The velocity is the gain in the volume column, `:79` for 100, none
+for 127; a chord goes into the rows one after another.  With
+`(midi-off on)`, a note let go puts a let-go `-` at the cursor once
+no key is held.  A note is heard for four rows, however long it is
+held.
+
 ### Editing a sample
 
 F3's settings are Impulse Tracker's, kept in the sample's form after
@@ -647,7 +661,7 @@ unless the settings say otherwise), a dropped song included.
 
 ### Settings
 
-The octave, the step, following, the backup, undo, the mouse, the
+The octave, the step, following, the backup, undo, the mouse, MIDI, the
 colours and the keys can be set in `~/.config/x/tracker.xon`, and for
 a session with `:set NAME VALUE`; `:set` alone lists them.  The README
 has the file's forms and every key's action name, to bind it to
