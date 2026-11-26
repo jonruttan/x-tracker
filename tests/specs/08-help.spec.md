@@ -75,6 +75,8 @@ line's help word, and a check that it leaves nothing out.
 ```output
 command  :loop [FROM TO]
   loop rows FROM to TO of the pattern; alone, the whole pattern
+command  :loop order [FROM TO]
+  loop places FROM to TO of the order, as F11 counts them; alone, stop
 cell effect  /vD,P
   vibrato: D cents either way, a cycle every P ticks
 command  :gain PCT

@@ -24,7 +24,7 @@
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed? player-muted? player-voices)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -112,6 +112,17 @@
             width)
       parts)))
 
+; The places of the order looped, PREFIX "loop FROM-TO", or "" for none.
+(def %order-loop-text
+  (fn (_ st prefix)
+    ((fn (_ l) (if (null? l) "" (Str8 append prefix "loop " (Str8 str (first l)) "-" (Str8 str (rest l)))))
+     (%get st %order-loop))))
+
+; Whether place I of the order is looped.
+(def %order-looped?
+  (fn (_ st i)
+    ((fn (_ l) (if (null? l) #f (if (< i (first l)) #f (not (< (rest l) i))))) (%get st %order-loop))))
+
 ; The title bar, COLS wide: the file, the song, its settings, the
 ; editor's, and what plays.  On a narrow screen the least needed go
 ; first: rows and ticks, octave and step, bpm and the player's
@@ -132,9 +143,9 @@
             (pair 5 (Str8 append "  ticks " (Str8 str (song-prop s "ticks" 6))))
             (pair 4 (Str8 append "   octave " (Str8 str (%get st %octave))))
             (pair 4 (Str8 append "  step " (Str8 str (%get st %step))))
-            (pair 0 (match ((null? p) "   (no sound)")
-                           ((not (player-playing? p)) "")
-                           ((eq? (player-mode p) (lit song)) "   > song")
+            (pair 0 (match ((null? p) (Str8 append "   (no sound)" (%order-loop-text st "   ")))
+                           ((not (player-playing? p)) (%order-loop-text st "   "))
+                           ((eq? (player-mode p) (lit song)) (if (null? (%get st %order-loop)) "   > song" (%order-loop-text st "   > ")))
                            ((null? (player-loop p)) "   > pattern")
                            (#t (Str8 append "   > rows " (Str8 str (first (player-loop p))) "-" (Str8 str (rest (player-loop p)))))))
             (pair 3 (if (if (null? p) #t (= 0 (player-tension p))) "" (Str8 append "  tension " (Str8 str (player-tension p)))))
@@ -192,6 +203,21 @@
           (fn (_ i from to) (%target! st (lit order) 1 2 (+ 8 from) (+ 8 to) i))))
       tail)))
 
+
+; The places of the order looped drawn again on the order line, in the
+; block's colour: where the order targets the line just drawn says.
+(def %draw-order-loop!
+  (fn (_ st screen)
+    (unless (null? (%get st %order-loop))
+      ((fn (_ text style)
+         (List for-each
+           (fn (_ t)
+             (def left (List ref 3 t))
+             (def right (List ref 4 t))
+             (when (if (eq? (first t) (lit order)) (%order-looped? st (rest (rest (rest (rest (rest t)))))) #f)
+               (Screen put screen 1 left (Str8 sub left (- right left) text) style)))
+           (%get st %targets)))
+       (Screen row-text screen 1) (%style st (lit block))))))
 
 ; Channel I's heading, of instrument INST: in the empty cell's colour
 ; when it is not heard, the row playing's when it or its instrument is
@@ -338,8 +364,8 @@
       0 lines)))
 
 ; F11: the order, a place a line: its number, its pattern and the
-; pattern's rows; the place picked in the cursor's colour, the place
-; heard marked >.
+; pattern's rows; the place picked in the cursor's colour, the places
+; looped and the one L marked in the block's, the place heard marked >.
 (def %draw-orders!
   (fn (_ st screen top bottom)
     (def s (edit-song st))
@@ -350,8 +376,9 @@
     (if (null? order) (Screen put screen (+ top 2) 2 "No order yet: Insert puts the first pattern in it." 0)
       (%draw-list! st (lit orders) screen (+ top 2) bottom 1
         (List map (fn (_ i)
-                    (Str8 append (if (if playing (%same? i heard) #f) ">" " ") (Str8 pad-left 3 #\0 (Str8 str i)) "  "
-                      (%pad 16 (List ref i order)) " " (Str8 str (pattern-rows (song-pattern s (List ref i order)))) " rows"))
+                    ((fn (_ line) (if (if (%order-looped? st i) #t (%same? i (%get st %order-loop-at))) (pair line (%style st (lit block))) line))
+                     (Str8 append (if (if playing (%same? i heard) #f) ">" " ") (Str8 pad-left 3 #\0 (Str8 str i)) "  "
+                       (%pad 16 (List ref i order)) " " (Str8 str (pattern-rows (song-pattern s (List ref i order)))) " rows")))
           (List range 0 (List length order)))
         (%get st %order-at) (%style st (lit cursor))))))
 
@@ -614,6 +641,7 @@
     (Screen put screen 0 0 (%title st cols) (%style st (lit title)))
     (%put! st %targets ())
     (Screen put screen 1 0 (%order-line st cols) 0)
+    (%draw-order-loop! st screen)
     (if (if (%get st %help) #t (not (null? (%get st %browse))))
       (%target! st (lit help) 2 rows 0 cols ())
       (%draw-pages! st screen 2 cols))

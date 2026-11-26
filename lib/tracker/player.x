@@ -48,8 +48,9 @@
 ; rows of each place in the order played (the song's own order, or the
 ; one pattern), 18 the channels muted, 19 the instruments muted, 20 the
 ; channels soloed, 21 the instruments soloed, 22 the volume, 23 the rows
-; looped, (FROM . TO), or nil, 24 the song playing, and 25 its pattern
-; played alone.
+; looped, (FROM . TO), or nil, 24 the song playing, 25 its pattern
+; played alone, 26 the places of the order looped, (FROM . TO), or nil,
+; and 27 the first of the places a song playing plays.
 
 (module tracker/player)
 
@@ -185,7 +186,7 @@
   (fn (_ front waves)
     (Mixer jit!)
     (List for-each player-give! waves)
-    (def p (Vector make 26 ()))
+    (def p (Vector make 28 ()))
     (%pl-put! p 0 front)
     (unless (null? front) (%pl-put! p 1 (front audio-open %pl-rate 2)))
     (%pl-put! p 6 0)
@@ -374,15 +375,23 @@
               (%pl-rows! p s (song-order s))
               (list (%pl-form p (%pl-with-tail s (%pl-tail-rows s)) (List append (song-order s) (list %pl-tail-pattern)) 0 0) () 0 0)))
         ((eq? mode (lit song))
-          (do (def order (song-order s))
+          (do (def span (%pl-span p (song-order s)))
+              (def order (List take (+ 1 (- (rest span) (first span))) (List drop (first span) (song-order s))))
               (def n (List length order))
-              (def name (if (< at n) (List ref at order) ()))
+              (def inside (if (< at (first span)) #f (not (< (rest span) at))))
+              (%pl-put! p 7 n)
+              (%pl-put! p 27 (first span))
               (%pl-rows! p s order)
-              (if (if (null? name) #t (not (if (< 0 row) (< row (pattern-rows (song-pattern s name))) #f)))
-                (list (%pl-form p s (%pl-turn order at) at 0) () at 0)
-                (list (%pl-form p (%pl-slice s %pl-from-pattern name row (pattern-rows (song-pattern s name))) (list %pl-from-pattern) at row)
-                      (%pl-form p s (%pl-turn order (int% (+ at 1) n)) (int% (+ at 1) n) 0)
-                      at row))))
+              ; AT and ROW within the places played; the loop's first
+              ; for a place outside it.
+              ((fn (_ at row)
+                 (def name (if (< at n) (List ref at order) ()))
+                 (if (if (null? name) #t (not (if (< 0 row) (< row (pattern-rows (song-pattern s name))) #f)))
+                   (list (%pl-form p s (%pl-turn order at) at 0) () at 0)
+                   (list (%pl-form p (%pl-slice s %pl-from-pattern name row (pattern-rows (song-pattern s name))) (list %pl-from-pattern) at row)
+                         (%pl-form p s (%pl-turn order (int% (+ at 1) n)) (int% (+ at 1) n) 0)
+                         at row)))
+               (if inside (- at (first span)) 0) (if inside row 0))))
         (#t
           ((fn (_ b)
              (def s2 (first b))
@@ -424,14 +433,14 @@
     (%pl-put! p 16 (pair (list (Mixer clock (%pl-get p 2)) (first place) (rest place) (List ref 1 e) (List ref 2 e))
                          (List take 95 (%pl-get p 16))))))
 
-; Where the song is being heard: (AT . ROW), AT a place in the song's
-; own order and ROW a row of the pattern there.  The frame at the speaker
-; is the frames rendered less those queued; the tracker stood at the
-; place last marked by then, and the row before its next one is
+; Where the song is being heard: (AT . ROW), AT a place in the order
+; played (the loop's) and ROW a row of the pattern there.  The frame at
+; the speaker is the frames rendered less those queued; the tracker stood
+; at the place last marked by then, and the row before its next one is
 ; sounding: when the next is a pattern's first, the last row of the
 ; pattern before it in the order.  A row of a pattern cut from another
 ; is moved by the row it was cut from.
-(def player-place
+(def %pl-place
   (fn (_ p)
     (if (not (%pl-get p 9)) (pair 0 0)
       (do (def heard (- (Mixer clock (%pl-get p 2)) (int/ ((%pl-get p 0) audio-queued (%pl-get p 1)) 4)))
@@ -453,6 +462,15 @@
                  ((null? rows) (pair place off))
                  (#t ((fn (_ before) (pair before (- (List ref (if (eq? mode (lit pattern)) 0 before) rows) 1)))
                       (if (eq? mode (lit pattern)) at (int% (+ (- place 1) size) size)))))))))
+
+; Where the playing is heard, (AT . ROW), AT a place in the song's order.
+(def player-place
+  (fn (_ p)
+    ((fn (_ place)
+       (if (if (%pl-get p 9) (eq? (%pl-get p 4) (lit song)) #f)
+         (pair (+ (first place) (%pl-get p 27)) (rest place))
+         place))
+     (%pl-place p))))
 
 ; Whether a song played once has rung out: every row of its tail
 ; started.  Its last frames may still be queued (player-queued).
@@ -508,7 +526,7 @@
                  (def rows (pattern-rows (song-pattern s (List ref at order))))
                  (if (< (+ (rest heard) 1) rows)
                    (player-start-at! p s (lit song) at pattern (+ (rest heard) 1))
-                   (player-start-at! p s (lit song) (int% (+ at 1) (List length order)) pattern 0)))
+                   (player-start-at! p s (lit song) (%pl-next p order at) pattern 0)))
                (song-order s)))
             ((eq? (%pl-get p 4) (lit pattern)) (player-start-at! p s (lit pattern) 0 pattern (+ (rest heard) 1)))
             (#t (player-update! p s pattern)))))
@@ -549,6 +567,27 @@
 ; them.  Heard when the pattern is next started.
 (def player-loop! (fn (_ p range) (%pl-put! p 23 range) p))
 (def player-loop (fn (_ p) (%pl-get p 23)))
+
+; The places of the order a song plays over and over: (FROM . TO), or
+; nil for all of them.  Heard when the song is next started.
+(def player-order-loop! (fn (_ p range) (%pl-put! p 26 range) p))
+(def player-order-loop (fn (_ p) (%pl-get p 26)))
+
+; The places of ORDER P plays in a song: (FROM . TO), the order loop
+; held within ORDER, or all of it.
+(def %pl-span
+  (fn (_ p order)
+    (def n (List length order))
+    (def range (%pl-get p 26))
+    (if (if (null? range) #t (= n 0)) (pair 0 (- n 1))
+      ((fn (_ from) (pair from (%pl-clamp (rest range) from (- n 1)))) (%pl-clamp (first range) 0 (- n 1))))))
+
+; The place after AT in ORDER as P plays it: round to the loop's first
+; after its last.
+(def %pl-next
+  (fn (_ p order at)
+    (def span (%pl-span p order))
+    (if (< at (rest span)) (+ at 1) (first span))))
 
 (def player-tension (fn (_ p) (%pl-get p 10)))
 (def player-pace (fn (_ p) (%pl-get p 11)))
@@ -701,4 +740,4 @@
   player-give! player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-tension player-pace player-volume player-volume! player-hears?
   player-mute! player-solo! player-muted? player-soloed? player-unmute! player-loop! player-loop player-render!
-  player-pcm player-pcm! player-edited player-wav player-sampled player-pattern player-voices)
+  player-pcm player-pcm! player-edited player-wav player-sampled player-pattern player-voices player-order-loop! player-order-loop)

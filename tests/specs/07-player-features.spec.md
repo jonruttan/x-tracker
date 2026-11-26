@@ -248,3 +248,52 @@ SDL's audio (spec-front), and the editor's keys and commands for them.
 Rendered /tmp/x-tracker-spec-render.wav: 0:14
 (0 #t 2 1)
 ```
+
+### a loop over places of the order plays only those, round and round
+
+```tracker
+(def s (song-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (pattern p (a \"C4 . . .\"))\n  (pattern q (a \"E4 . . .\"))\n  (pattern r (a \"G4 . . .\"))\n  (order p q r p))"))
+(def pl (player-open (spec-front) ()))
+(player-order-loop! pl (pair 1 2))
+(player-start! pl s 'song 0 ())
+(def first-heard (player-place pl))
+(def places ())
+(def spin (fn (self n) (when (< 0 n) (do (spec-play! 4096) (player-pump! pl) (set! places (pair (first (player-place pl)) places)) (self (- n 1))))))
+(spin 200)
+(player-order-loop! pl (pair 2 9))
+(player-start! pl s 'song 0 ())
+(def held (player-place pl))
+(write (list first-heard (List includes? 0 places) (List includes? 1 places) (List includes? 2 places) (List includes? 3 places) held))
+```
+---
+    ((1 . 0) #f #t #t #f (2 . 0))
+
+### on F11, L marks a place and L again loops to the one picked; L once more plays the whole order
+
+```tracker
+(def s (song-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument a (wave sine))\n  (pattern aa (a \"C4 . . .\"))\n  (pattern bb (a \"E4 . . .\"))\n  (pattern cc (a \"G4 . . .\"))\n  (order aa bb cc aa))"))
+(def st (edit-make (file-parse (song-text s)) () (player-open (spec-front) ())))
+(def screen (Screen make 12 120))
+(def heard (fn (_) (first (player-place (edit-player st)))))
+(spec-keys! st (list 'f11 'down "L"))
+(def marked (edit-message st))
+(spec-keys! st (list 'down "L"))
+(def looped (list (edit-message st) (player-mode (edit-player st)) (heard)))
+(spec-draw! st screen)
+(def title (Str8 includes? "> loop 1-2" (Screen row-text screen 0)))
+(def line (Screen row-text screen 1))
+(def style (fn (_ name) (Screen style-at screen 1 (Str8 index-of name line))))
+(def block (list (= (style "bb") (style "cc")) (= (style "bb") (style "aa"))))
+(spec-keys! st (list " " " "))
+(def again (heard))
+(spec-keys! st (list "L"))
+(def off (list (edit-message st) (player-mode (edit-player st))))
+(spec-keys! st (list "L" 'escape))
+(def forgot (edit-message st))
+(spec-keys! st (list ":loop order 3 0" 'enter))
+(def typed (edit-message st))
+(spec-keys! st (list ":loop order" 'enter))
+(write (list marked looped title block again off forgot typed (edit-message st)))
+```
+---
+    ("Loop from place 1: L on its last place plays it, Escape forgets." ("Looping places 1 to 2 of the order: L on F11 or :loop order stops it." 'song 1) #t (#t #f) 1 ("The whole order is played." 'song) "" "Looping places 0 to 3 of the order: L on F11 or :loop order stops it." "The whole order is played.")
