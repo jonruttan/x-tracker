@@ -183,11 +183,11 @@ function keys, over x-tracker's own song.
 ---
     (('orders 'song 'instruments 'samples 'pattern) ('orders 'instruments 'song 'pattern) ":page help pattern samples instruments info order song" 'orders " F1/Alt-1 Help  F2/Alt-2 Pattern  F3/Alt-3 Samples  F4/Alt-4 Instruments  F5/Alt-5 Info  F11/Alt-6 Order  F12/Alt-7 Song" " F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song")
 
-### F4 lists the instruments; Tab picks their envelope's points, Enter picks one up for the arrows
+### F4 lists the instruments; Tab and down pick their envelope, left and right its points, Enter picks one up for the arrows
 
 ```tracker
 (def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (instrument b (wave noise) (env (0 0) (10 80) (200 0))) (pattern p (a \"C4\")) (order p))") () ()))
-(spec-keys! st (list 'f4 'down 'complete 'right 'enter 'up 'up 'alt-right 'enter 'insert 'left 'left 'delete))
+(spec-keys! st (list 'f4 'down 'complete 'down 'right 'enter 'up 'up 'alt-right 'enter 'insert 'left 'left 'delete))
 (write (song-instrument-text (edit-song st) "b"))
 (def screen (Screen make 30 100))
 (spec-draw! st screen)
@@ -195,6 +195,33 @@ function keys, over x-tracker's own song.
 ```
 ---
     "(instrument b (wave noise) (env (20 82) (110 41) (200 0)))"("  01 a                     (wave noise)" "  02 b                     (env (20 82) (110 41) (200 0))")
+
+### On F4 Tab gives the keys to the props: left and right change one, Space turns a layer, Enter types its value, Delete drops it and Insert adds one it lacks
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (instrument b (wave noise) (gain 80) (pan 0) (layer calm) (env (0 100) (100 0))) (pattern p (a \"C4\")) (order p))") () ()))
+(def text (fn (_) (song-instrument-text (edit-song st) "b")))
+(spec-keys! st (list 'f4 'down 'complete 'right 'down 'right 'alt-right 'down))
+(spec-keys! st (List repeat 11 'alt-left))
+(spec-keys! st (list 'down " "))
+(def stepped (text))
+(spec-keys! st (list 'up 'delete 'insert 'down))
+(def screen (Screen make 24 100))
+(spec-draw! st screen)
+(def adding (List map (fn (_ r) (Str8 trim-right (Str8 sub 26 40 (Screen row-text screen r)))) (list 3 5 6 9)))
+(spec-keys! st (list 'enter))
+(def added (list (text) (Vector ref 49 st)))
+(spec-keys! st (list 'enter 'backspace "25" 'enter))
+(def typed (text))
+(spec-keys! st (list 'ctrl-z))
+(def undone (text))
+(spec-keys! st (list 'insert 'escape))
+(def back (list (Vector ref 49 st) (Vector ref 30 st)))
+(spec-keys! st (list 'complete))
+(write (list stepped adding added typed undone back (Vector ref 49 st)))
+```
+---
+    ("(instrument b (wave metal) (gain 91) (pan -100) (layer tension) (env (0 100) (100 0)))" ("Add to b" " (release 200)" " (pan 0)" " (width (0 50))") ("(instrument b (wave metal) (gain 91) (layer tension) (pan 0) (env (0 100) (100 0)))" 3) "(instrument b (wave metal) (gain 91) (layer tension) (pan 25) (env (0 100) (100 0)))" "(instrument b (wave metal) (gain 91) (layer tension) (pan 0) (env (0 100) (100 0)))" (3 'instruments) ())
 
 ### F3 lists the samples; :sample keeps a WAV file as a wave an instrument can play
 

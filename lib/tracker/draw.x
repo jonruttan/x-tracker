@@ -17,14 +17,14 @@
 (import x/core/doors int/ int% int+ int- int< int= str-byte-len str-byte-ref str-byte-sub)
 (import tracker/song song-name song-order song-prop song-pattern pattern-rows song-instruments)
 (import tracker/cell cell-columns)
-(import tracker/edit %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
+(import tracker/edit %page-hints %props-lacking %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
   %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-cursor)
 (import tracker/sample sample-peaks sample-setting sample-loop)
 (import tracker/player player-edited)
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed? player-muted? player-voices)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %prop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -440,30 +440,52 @@
        (List ref (%min at (- (List length points) 1)) points)))))
 
 ; F4: the instruments, numbered as the pattern shows them; the one
-; picked's props, and its envelope drawn.
+; picked's props, the one of them picked in the cursor's colour, or
+; while one is picked to add the props it lacks; and its envelope drawn.
 (def %draw-instruments!
   (fn (_ st screen top bottom)
+    (def cols (Screen cols screen))
     (def names (song-instruments (edit-song st)))
     (def name (%picked-instrument st))
     (def env-at (%get st %env-at))
+    (def pa (%get st %prop-at))
     (Screen put screen top 1 "Instrument list" (%style st (lit heading)))
     (%draw-list! st (lit instruments) screen (+ top 2) bottom 1
       (List map (fn (_ i) (Str8 append " " (Str8 pad-left 2 #\0 (Str8 str (+ i 1))) " " (%pad 18 (List ref i names)))) (List range 0 (List length names)))
       (if (null? names) () (%min (%get st %inst-at) (- (List length names) 1)))
-      (if (null? env-at) (%style st (lit cursor)) (%style st (lit block))))
+      (if (null? pa) (%style st (lit cursor)) (%style st (lit block))))
     (unless (null? name)
       (do (def form (%instrument-form st name))
           (def x 26)
-          (def props (List map %write-form (rest (rest form))))
-          (Screen put screen top x name (%style st (lit heading)))
-          (List fold (fn (_ y p) (when (< y (- bottom 1)) (%put-text! screen (Screen cols screen) y (+ x 1) p 0)) (+ y 1)) (+ top 2) props)
+          (def forms (rest (rest form)))
+          (def lines (if (pair? pa) (%props-lacking forms) (List map %write-form forms)))
+          (def picked (match ((pair? pa) (%min (first (rest pa)) (- (List length lines) 1)))
+                             ((if (number? pa) (pair? lines) #f) (%min pa (- (List length lines) 1)))
+                             (#t ())))
+          (def prop (if (if (number? pa) (not (null? picked)) #f) (List ref picked forms) ()))
+          (Screen put screen top x (if (pair? pa) (Str8 append "Add to " name) name) (%style st (lit heading)))
+          (unless (pair? pa) (%target! st (lit list) (+ top 2) (+ (+ top 2) (List length lines)) (+ x 1) cols (list (lit props) 0 (List length lines))))
+          (List fold
+            (fn (_ y i)
+              (when (< y (- bottom 1))
+                (%put-text! screen cols y (+ x 1) (List ref i lines) (if (%same? i picked) (%style st (lit cursor)) 0)))
+              (+ y 1))
+            (+ top 2) (List range 0 (List length lines)))
+          (def foot (+ (+ top 2) (List length lines)))
+          (when (< foot (- bottom 1))
+            (%put-text! screen cols foot (+ x 1)
+              (match ((pair? pa) "up down pick   Enter add it   Escape or Tab back")
+                     ((null? prop) "")
+                     ((eq? (first prop) (lit env)) "")
+                     (#t "up down pick   left right change, Alt ten   Enter type it   Insert add   Delete drop   Tab the list"))
+              (%style st (lit empty))))
           (def points (%envelope form))
-          (def env-top (+ (+ top 3) (List length props)))
+          (def env-top (+ foot 1))
           (def high (%min 14 (- (- bottom env-top) 2)))
-          (if (null? points) (%put-text! screen (Screen cols screen) env-top (+ x 1) "No envelope: Enter edits the instrument, (env (MS PCT) ...)." (%style st (lit empty)))
+          (if (null? points) (%put-text! screen cols env-top (+ x 1) "No envelope: Tab, then Insert adds one, (env (MS PCT) ...)." (%style st (lit empty)))
             (when (< 4 high)
               (do (Screen put screen env-top (+ x 1) "Volume envelope" (%style st (lit heading)))
-                  (%draw-envelope! st screen (+ env-top 1) (+ x 1) high (- (Screen cols screen) (+ x 2)) points env-at (%get st %env-held)))))))))
+                  (%draw-envelope! st screen (+ env-top 1) (+ x 1) high (- cols (+ x 2)) points env-at (%get st %env-held)))))))))
 
 ; F3: the samples, the settings of the one picked beside them, and its
 ; sound drawn beneath, its loop between [ and ], its sustain loop
@@ -692,6 +714,7 @@
            (match ((eq? (first input) (lit command)) ":")
                   ((eq? (first input) (lit cell)) "cell: ")
                   ((eq? (first input) (lit effects)) "effects: ")
+                  ((if (pair? (first input)) (eq? (first (first input)) (lit prop)) #f) (Str8 append (symbol->str (List ref 2 (first input))) ": "))
                   (#t "instrument: ")))))
     st))
 

@@ -66,7 +66,8 @@
 (def %midi-held 46) ; the MIDI keyboard's keys held down, their note numbers
 (def %order-loop 47) ; the places of the order looped, (FROM . TO), or nil
 (def %order-loop-at 48) ; the place L marked on F11 as a loop's first, or nil
-(def %slots 49)
+(def %prop-at 49) ; on F4, the prop picked, its place among the instrument's; (add I . AT) while the Ith of the props it lacks is picked to add; nil while the list has the keys
+(def %slots 50)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -135,4 +136,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %prop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )

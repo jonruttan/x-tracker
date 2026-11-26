@@ -420,10 +420,18 @@ the order, and the settings file binds other keys to them,
   sounds at as recorded, START and END the frames it loops between.
   Space or the note keys hear the one picked.  See "Editing a sample".
 - F4 the instruments, numbered as the pattern shows them, with the
-  props of the one picked and its envelope drawn.  Enter edits it, Space
-  or the note keys hear it.  Tab goes into its envelope: left and right
-  pick a point, Enter picks it up for the arrows to move (Alt ten at a
-  time) and puts it down, Insert adds a point after it, Delete drops it.
+  props of the one picked and its envelope drawn.  Enter edits it all,
+  Space or the note keys hear it.  Tab gives the keys to its props: up
+  and down pick one, left and right change it (Alt ten at a time): a
+  number within its range, a wave through the mixer's own and the
+  file's, a pass through low, band and high.  Space turns a layer
+  between calm and tension; Enter types the prop's value, as
+  `gain: 80`; Delete drops the prop; Insert picks one the instrument
+  lacks from a list, Enter adding it after the prop picked and Escape
+  going back.  On its envelope, left and right pick a point, Enter
+  picks it up for the arrows to move (Alt ten at a time) and puts it
+  down, Insert adds a point after it, Delete drops it.  Each change is
+  one undo step; Tab gives the keys back to the list.
 - F11 the order list: up and down pick a place, left and right change
   its pattern, Insert copies it, Delete drops it, Enter edits its
   pattern, L loops places (below).
