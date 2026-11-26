@@ -24,12 +24,14 @@
 ; cannot be bound.
 (def %hp-keys
   (list "Pages"
-        (list () "F1" "this help")
-        (list () "F2" "the pattern editor")
-        (list () "F3" "the samples: their settings, and their sound drawn and edited")
-        (list () "F4" "the instruments, and an instrument's envelope drawn and edited")
-        (list () "F11" "the order list: L on a first place and L on a last loops them; L again stops")
-        (list () "F12" "the song's settings")
+        (list (list (lit page-help)) "F1 Alt-1" "this help")
+        (list (list (lit page-pattern)) "F2 Alt-2" "the pattern editor")
+        (list (list (lit page-samples)) "F3 Alt-3" "the samples: their settings, and their sound drawn and edited")
+        (list (list (lit page-instruments)) "F4 Alt-4" "the instruments, and an instrument's envelope drawn and edited")
+        (list (list (lit page-info)) "F5 Alt-5" "what plays, the song played")
+        (list (list (lit page-order)) "F11 Alt-6" "the order list: L on a first place and L on a last loops them; L again stops")
+        (list (list (lit page-song)) "F12 Alt-7" "the song's settings")
+        (list () ":page NAME" "the page named, or the one its name starts with: :page o the order")
         (list () "F9" "open a file, as :open")
         (list () "F10 ctrl-s" "write the file, as :w")
         (list () "Escape" "on a page, back to the pattern")
@@ -186,6 +188,7 @@
         (list "mute" ":mute [INSTRUMENT]" "mute an instrument; alone, say what is muted and soloed")
         (list "solo" ":solo [INSTRUMENT]" "hear only an instrument; alone, say what is muted and soloed")
         (list "unmute" ":unmute" "hear every channel and instrument again")
+        (list "page" ":page NAME" "the page named, or the first whose name starts with NAME: help pattern samples instruments info order song")
         (list "loop" ":loop [FROM TO]" "loop rows FROM to TO of the pattern; alone, the whole pattern")
         (list "loop" ":loop order [FROM TO]" "loop places FROM to TO of the order, as F11 counts them; alone, stop")
         (list "render" ":render FILE" "the song played once, to a WAV file")

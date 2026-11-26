@@ -84,6 +84,11 @@ and heard as they are typed.  The function keys go to the pages:
     F5 play, and what plays   F6 the pattern   F7 from the row   F8 stop
     Ctrl-F5 play   Shift-F8 pause   ctrl-q quit
 
+A desktop may take an F-key for itself (F11 on macOS): Alt and the
+page's place in the row of pages goes there too, Alt-1 help to Alt-7
+song (Alt-6 the order), `:page NAME` by its name or the start of it,
+and `(key page-order KEY)` binds another.
+
 On F11, L on a first place and L on a last loops those places of the
 order, to practise a section; L again plays the whole order.
 

@@ -166,6 +166,23 @@ function keys, over x-tracker's own song.
  Song   up down pick   left right change   Enter type it   F2 the pattern
 ```
 
+### every page is Alt and its place in the row too, shown beside its F-key where the row fits; :page NAME by name or the start of it; its key can be bound
+
+```tracker
+(def st (edit-make (file-parse "(song \"t\" (instrument a (wave sine)) (pattern p (a \"C4\")) (order p))") () ()))
+(def page (fn (_ k) (spec-keys! st (list k)) (Vector ref 30 st)))
+(def alts (List map page (list 'alt-6 'alt-7 'alt-4 'alt-3 'alt-2)))
+(def typed (List map (fn (_ line) (spec-keys! st (list line 'enter)) (Vector ref 30 st)) (list ":page o" ":page ins" ":page song" ":page pat")))
+(spec-keys! st (list ":page zz" 'enter))
+(def unknown (edit-message st))
+(spec-keys! st (list ":set key page-order \"o\"" 'enter "o"))
+(def bound (Vector ref 30 st))
+(def row-at (fn (_ cols) ((fn (_ s) (spec-draw! st s) (Str8 trim-right (Screen row-text s 2))) (Screen make 8 cols))))
+(write (list alts typed unknown bound (row-at 124) (row-at 90)))
+```
+---
+    (('orders 'song 'instruments 'samples 'pattern) ('orders 'instruments 'song 'pattern) ":page help pattern samples instruments info order song" 'orders " F1/Alt-1 Help  F2/Alt-2 Pattern  F3/Alt-3 Samples  F4/Alt-4 Instruments  F5/Alt-5 Info  F11/Alt-6 Order  F12/Alt-7 Song" " F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song")
+
 ### F4 lists the instruments; Tab picks their envelope's points, Enter picks one up for the arrows
 
 ```tracker

@@ -614,15 +614,19 @@
                   (List range 0 (- thigh 1)))))))))
 
 ; The pages, a row of their keys and names from column 1 of ROW, COLS
-; wide: the page shown in the heading's colour, each a target of the
-; mouse; those past the right edge left out.
+; wide: "F11/Alt-6 Order", or "F11 Order" where the row of those is
+; wider than the screen; the page shown in the heading's colour, each a
+; target of the mouse; those past the right edge left out.
 (def %pages
-  (list (pair (lit help) "F1 Help") (pair (lit pattern) "F2 Pattern") (pair (lit samples) "F3 Samples")
-        (pair (lit instruments) "F4 Instruments") (pair (lit info) "F5 Info") (pair (lit orders) "F11 Order")
-        (pair (lit song) "F12 Song")))
+  (list (list (lit help) "Help" "F1" "Alt-1") (list (lit pattern) "Pattern" "F2" "Alt-2") (list (lit samples) "Samples" "F3" "Alt-3")
+        (list (lit instruments) "Instruments" "F4" "Alt-4") (list (lit info) "Info" "F5" "Alt-5") (list (lit orders) "Order" "F11" "Alt-6")
+        (list (lit song) "Song" "F12" "Alt-7")))
 
 (def %draw-pages!
   (fn (_ st screen row cols)
+    (def label (fn (_ form) (List map (fn (_ p) (pair (first p) (Str8 append (form p) " " (List ref 1 p)))) %pages)))
+    (def width (fn (_ labels) (List fold (fn (_ w l) (+ w (+ 2 (Str8 length (rest l))))) 1 labels)))
+    (def both (label (fn (_ p) (Str8 append (List ref 2 p) "/" (List ref 3 p)))))
     (List fold
       (fn (_ x pg)
         (def end (+ x (Str8 length (rest pg))))
@@ -630,7 +634,7 @@
           (do (Screen put screen row x (rest pg) (if (eq? (first pg) (%get st %page)) (%style st (lit heading)) (%style st (lit empty))))
               (%target! st (lit page) row (+ row 1) x end (first pg))))
         (+ end 2))
-      1 %pages)))
+      1 (if (<= (width both) cols) both (label (fn (_ p) (List ref 2 p)))))))
 
 (def edit-draw!
   (fn (_ st screen)
