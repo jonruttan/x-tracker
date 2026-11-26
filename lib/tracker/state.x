@@ -15,7 +15,7 @@
 (import x/core/doors int- int< str-byte-len str-byte-sub)
 (import tracker/song song-pattern pattern-rows)
 (import tracker/file file-songs)
-(import tracker/config config-style)
+(import tracker/config config-style config-get)
 
 (def %doc 0)
 (def %path 1)
@@ -61,7 +61,9 @@
 (def %sample-cache 41) ; (PATH . SOUND): the file of the sample last drawn, read
 (def %sample-peaks 42) ; (PCM COLS PEAKS): its sound drawn, or nil
 (def %paused 43) ; (MODE AT PATTERN ROW) where Shift-F8 stopped the playing, or nil
-(def %slots 44)
+(def %targets 44) ; what the screen last drawn shows where: ((KIND TOP BOTTOM LEFT RIGHT . DATA) ...)
+(def %drag 45) ; what a mouse button pressed holds while it is dragged, or nil
+(def %slots 46)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -79,6 +81,8 @@
 (def edit-message! (fn (_ st text) (%put! st %msg text)))
 (def edit-player (fn (_ st) (%get st %player)))
 (def edit-place (fn (_ st) (list (%get st %pattern) (%get st %row) (%get st %chan))))
+; Whether the mouse is to be reported: the setting (mouse on).
+(def edit-mouse? (fn (_ st) (config-get (%get st %config) (lit mouse))))
 
 (def %channels
   (fn (_ st)
@@ -103,6 +107,13 @@
 ; once a drawing, not once a cell.
 (def %style (fn (_ st name) (config-style (%get st %config) name)))
 
+; What the screen drawn shows from row TOP to BOTTOM and column LEFT to
+; RIGHT, neither end included: KIND and DATA, as the mouse reads them
+; (tracker/edit).  The last put is over those before it.
+(def %target!
+  (fn (_ st kind top bottom left right data)
+    (%put! st %targets (pair (pair kind (pair top (pair bottom (pair left (pair right data))))) (%get st %targets)))))
+
 (def %browse-hint "n p: the next topic, the one before   arrows PgUp PgDn: scroll   any other key: close")
 
 ; S padded with blanks or cut to W bytes.  A cell is ASCII by its syntax,
@@ -117,4 +128,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? %channels %rows %block %style %target! %browse-hint )

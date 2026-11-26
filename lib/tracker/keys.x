@@ -18,7 +18,8 @@
 ; Alt and a character is 'alt- and the character: 'alt-b, 'alt-B for Alt
 ; and Shift and b, 'alt-0.  Shift and Tab is 'shift-tab; Insert 'insert.
 ; Ctrl and S, Q and Z, which Term key leaves unbound or takes for a
-; line's search, are 'ctrl-s, 'ctrl-q and 'ctrl-z.
+; line's search, are 'ctrl-s, 'ctrl-q and 'ctrl-z.  The mouse, once
+; Term mouse! asks for it, is a list: (mouse ACTION BUTTON ROW COL MODS).
 
 (module tracker/keys)
 
@@ -48,8 +49,13 @@
      params () ())))
 
 ; A CSI sequence's key, its final byte FINAL and parameters PARAMS: Term's
-; name for the key, then the modifiers the second parameter gives.
+; name for the key, then the modifiers the second parameter gives.  A
+; report of the mouse, ESC [ < and its numbers, is Term's (mouse ...).
 (def %ky-csi
+  (fn (_ final params)
+    (if (if (pair? params) (= (first params) 60) #f) (Term %mouse final (rest params)) (%ky-csi-key final params))))
+
+(def %ky-csi-key
   (fn (_ final params)
     (def ns (%ky-numbers params))
     (def m (if (< 1 (List length ns)) (List ref 1 ns) 1))

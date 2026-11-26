@@ -203,7 +203,7 @@ draws.
 ```output
  x-tracker  t.xon   "tune"   bpm 100  rows 2  ticks 6   octave 4  step 1   (no sound)
  order: [p] p
-
+ F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song
      1 lead 01          2 bass 02
   0 C-4 01 ... ....... C-2 02 ... .......
   1 ... .. ... ....... === .. ... .......

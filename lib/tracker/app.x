@@ -17,7 +17,8 @@
 ; is taken are taken too before the screen is drawn.  Once the
 ; first screen is drawn, x/tui/screen's cell loops are compiled
 ; (x/tool/fn-compile), where the engine has a JIT: about a second, before
-; the first key is read.
+; the first key is read.  The terminal reports the mouse while (mouse on)
+; is set, and is told to stop before the editor leaves.
 
 (module tracker/app)
 
@@ -28,7 +29,7 @@
 (import x/tui/screen)
 (import x/tool/fn-compile compile-module!)
 (import tracker/keys keys-read)
-(import tracker/state edit-quit? edit-player edit-message!)
+(import tracker/state edit-quit? edit-player edit-message! edit-mouse?)
 (import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)
 (import tracker/draw edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
@@ -68,6 +69,13 @@
     (edit-draw! st screen)
     (Term emit 1 (Screen render screen))))
 
+; The terminal asked to report the mouse, or to stop, as (mouse on) is
+; set; MOUSE a box of whether it was asked last.
+(def %ap-mouse!
+  (fn (_ st mouse)
+    (unless (eq? (edit-mouse? st) (Vector ref 0 mouse))
+      (do (Vector set! 0 (edit-mouse? st) mouse) (Term mouse! 1 (edit-mouse? st))))))
+
 ; The heap collected, the stream topped up first, for the same reason.
 (def %ap-collect!
   (fn (_ st)
@@ -89,9 +97,9 @@
 ; and sent; (lit resize), kept the terminal's size; (lit collect), the
 ; heap collected; (lit repaint), all drawn again at the next.
 (def %ap-term
-  (fn (_ st screen)
+  (fn (_ st screen mouse)
     (fn (_ what)
-      (match ((eq? what (lit draw)) (%ap-show! st screen))
+      (match ((eq? what (lit draw)) (do (%ap-mouse! st mouse) (%ap-show! st screen)))
              ((eq? what (lit resize)) (%ap-resize! st screen))
              ((eq? what (lit collect)) (%ap-collect! st))
              (#t (Screen repaint screen))))))
@@ -147,13 +155,16 @@
     (def screen (Screen make (rest size) (first size)))
     (def token (Term raw! 0))
     (Term emit 1 (Str8 append (%ap-esc "[?1049h") (%ap-esc "[?25l")))
+    (def mouse (Vector of #f))
     (def failed
       (guard (e e)
-        (do (%ap-show! st screen)
+        (do (%ap-mouse! st mouse)
+            (%ap-show! st screen)
             (compile-module! (lit x/tui/screen))
             (%ap-collect! st)
-            (app-loop st (%ap-reader) (%ap-term st screen) 0 0 0)
+            (app-loop st (%ap-reader) (%ap-term st screen mouse) 0 0 0)
             ())))
+    (when (Vector ref 0 mouse) (Term mouse! 1 #f))
     (Term emit 1 (Str8 append (%ap-esc "[0m") (%ap-esc "[?25h") (%ap-esc "[?1049l")))
     (Term restore! 0 token)
     (unless (null? player) (player-close player))

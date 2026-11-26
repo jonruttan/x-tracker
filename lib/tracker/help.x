@@ -110,6 +110,14 @@
         (list () "+ -  Alt-+ Alt--" "the C-5 speed a semitone up, down; an octave")
         (list () "Alt-O" "write the sound edited to its WAV file")
         (list () "ctrl-z" "undo the last edit of a sound")
+        "The mouse (mouse on)"
+        (list () "click a page" "on the row of pages under the order, show it; F1 the help")
+        (list () "click a place" "on the order, edit its pattern")
+        (list () "click a cell" "move the cursor to the cell's column; a channel's heading, to the channel; Shift, mark to it")
+        (list () "drag" "on the pattern, mark a block; on F4, an envelope's point; on F3's sound, the loop's nearer end")
+        (list () "right-click" "on F3's sound, put the loop's end there")
+        (list () "click a line" "in a list, pick it; the line picked, as Enter")
+        (list () "wheel" "scroll the pattern three rows, a list a line, a setting of F3 up or down, the help")
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
@@ -247,6 +255,7 @@
         (list "backup" "(backup on|off)" "keep FILE.bak of a file before its first :w (on)")
         (list "undo" "(undo N)" "how many changes are kept to undo (200)")
         (list "sound" "(sound on|off)" "open the audio as the editor starts (on)")
+        (list "mouse" "(mouse on|off)" "take the mouse: clicks, drags and the wheel (on); off, the terminal selects text with it again")
         (list "waves" "(waves FILE ...)" "files whose (wave ...) forms are read, as -w")
         (list "colour" "(colour NAME ATTRIBUTES FG BG)" "how NAME is drawn: title empty heading beat off instrument volume"
               "  effect cursor playing block; ATTRIBUTES a list of bold dim italic underline reverse"

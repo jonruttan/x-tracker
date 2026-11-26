@@ -48,7 +48,7 @@
 (import tracker/cell cell-parts cell-join cell-note?)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -1083,7 +1083,7 @@
         (do (%order-key! st key) (%show-page! st (lit pattern))))
       ((%is? key " ") (%play! st (lit song)))
       (#t (%order-key! st key)))
-    (when (null? (%get st %order-at)) (%put! st %order-at 0))))
+    (when (if (null? (%get st %order-at)) (eq? (%get st %page) (lit orders)) #f) (%put! st %order-at 0))))
 
 ; --- the song page ----------------------------------------------------------------
 
@@ -1181,6 +1181,17 @@
       chans)
     (%move! st 1)))
 
+; Point I of instrument NAME's envelope POINTS put at MS and PCT: kept
+; between the points either side of it, the first at its time, and
+; within 0 to 100%.
+(def %put-point!
+  (fn (_ st name points i ms pct)
+    (def n (List length points))
+    (def lo (if (= i 0) 0 (first (List ref (- i 1) points))))
+    (def hi (if (= i (- n 1)) 60000 (first (List ref (+ i 1) points))))
+    (%set-envelope! st name
+      (List update i (list (if (= i 0) (first (List ref 0 points)) (%max lo (%min hi ms))) (%max 0 (%min 100 pct))) points))))
+
 (def %instruments-key!
   (fn (_ st key)
     (def names (song-instruments (edit-song st)))
@@ -1193,10 +1204,7 @@
       (fn (_ dms dpct)
         (def i (%min at (- n 1)))
         (def p (List ref i points))
-        (def lo (if (= i 0) 0 (first (List ref (- i 1) points))))
-        (def hi (if (= i (- n 1)) 60000 (first (List ref (+ i 1) points))))
-        (def ms (if (= i 0) (first p) (%max lo (%min hi (+ (first p) dms)))))
-        (%set-envelope! st name (List update i (list ms (%max 0 (%min 100 (+ (List ref 1 p) dpct)))) points))))
+        (%put-point! st name points i (+ (first p) dms) (+ (List ref 1 p) dpct))))
     (match
       ((null? name) (when (eq? key (lit enter)) (%put! st %input (pair (lit command) "instrument "))))
       ((eq? key (lit complete))
@@ -1754,6 +1762,232 @@
     (def p (cell-parts cell))
     (if (not (cell-note? (first p))) cell
       (cell-join (first p) (%min 400 (int/ (+ 50 (* pct (if (null? (List ref 1 p)) 100 (List ref 1 p)))) 100)) (List ref 2 p)))))
+; --- the mouse --------------------------------------------------------------------
+;
+; Schism Tracker's mouse: a click picks what is under it, a drag marks a
+; block on the pattern or moves an envelope's point or a loop's end, the
+; wheel scrolls.  What is where is read from the screen last drawn
+; (%target!), so a click is taken as what is seen.  A click on the line
+; already picked in a list does what Enter does there.
+
+(def %t-top (fn (_ t) (List ref 1 t)))
+(def %t-left (fn (_ t) (List ref 3 t)))
+(def %t-data (fn (_ t) (rest (rest (rest (rest (rest t)))))))
+
+; The target under ROW and COL, the last drawn of those there, or nil.
+(def %target-at
+  (fn (_ st row col)
+    (List find (fn (_ t) (if (if (<= (List ref 1 t) row) (< row (List ref 2 t)) #f) (if (<= (List ref 3 t) col) (< col (List ref 4 t)) #f) #f))
+      (%get st %targets))))
+
+; The target of KIND last drawn, or nil.
+(def %target-of (fn (_ st kind) (List find (fn (_ t) (eq? (first t) kind)) (%get st %targets))))
+
+; The place of the grid G at screen ROW and COL: (ROW CHANNEL FIELD
+; HEADING), HEADING whether it is the channels' heading.  A row past the
+; grid's top or bottom is the row there, kept within the pattern.
+(def %grid-place
+  (fn (_ st g y x)
+    (def d (%t-data g))
+    (def x0 (List ref 3 d))
+    (def width (List ref 4 d))
+    (def k (%max 0 (%min (- (List ref 2 d) 1) (if (< x x0) 0 (int/ (- x x0) width)))))
+    (def o (if (< x x0) 0 (- (- x x0) (* k width))))
+    (list (%max 0 (%min (- (%rows st) 1) (+ (first d) (- y (+ (%t-top g) 1)))))
+          (%max 0 (%min (- (List length (%channels st)) 1) (+ (List ref 1 d) k)))
+          (List fold (fn (_ f i) (if (<= (List ref i (List ref 5 d)) o) i f)) 0 (List range 0 4))
+          (= y (%t-top g)))))
+
+; The line of the list of KIND the page keeps, and whether the list has
+; the keys: on F4 the envelope can have them, on F3 the settings.
+(def %list-at
+  (fn (_ st kind)
+    (match ((eq? kind (lit orders)) (if (null? (%get st %order-at)) 0 (%get st %order-at)))
+           ((eq? kind (lit song)) (%get st %setting-at))
+           ((eq? kind (lit instruments)) (%get st %inst-at))
+           ((eq? kind (lit samples)) (%get st %sample-at))
+           ((eq? kind (lit sample-field)) (if (null? (%get st %sample-field)) 0 (%get st %sample-field)))
+           (#t (%get st %chan)))))
+
+(def %list-keyed?
+  (fn (_ st kind)
+    (match ((eq? kind (lit instruments)) (null? (%get st %env-at)))
+           ((eq? kind (lit samples)) (null? (%get st %sample-field)))
+           ((eq? kind (lit sample-field)) (not (null? (%get st %sample-field))))
+           (#t #t))))
+
+; The line picked in the list of KIND, or nil while the list has not the keys.
+(def %list-picked (fn (_ st kind) (if (%list-keyed? st kind) (%list-at st kind) ())))
+
+(def %list-pick!
+  (fn (_ st kind i)
+    (match ((eq? kind (lit orders)) (%put! st %order-at i))
+           ((eq? kind (lit song)) (%put! st %setting-at i))
+           ((eq? kind (lit instruments)) (do (%put! st %inst-at i) (%put! st %env-at ()) (%put! st %env-held #f)))
+           ((eq? kind (lit samples)) (do (%put! st %sample-at i) (%put! st %sample-field ()) (%put! st %sample-peaks ())))
+           ((eq? kind (lit sample-field)) (%put! st %sample-field i))
+           (#t (%put! st %chan i)))))
+
+; The point of POINTS nearest column C of the envelope drawn with DATA,
+; (LAST-MS WIDTH HIGH).
+(def %nearest-point
+  (fn (_ points data c)
+    (def col-of (fn (_ ms) (int/ (* ms (- (List ref 1 data) 1)) (first data))))
+    (first (List fold (fn (_ best i) (def dist ((fn (_ v) (if (< v 0) (- 0 v) v)) (- c (col-of (first (List ref i points))))))
+                                     (if (if (null? best) #t (< dist (rest best))) (pair i dist) best))
+             () (List range 0 (List length points))))))
+
+; The envelope's point picked put where screen ROW and COL are in the
+; envelope drawn E.
+(def %drag-point!
+  (fn (_ st e y x)
+    (def d (%t-data e))
+    (def name (%picked-instrument st))
+    (def points (if (null? name) () (%envelope (%instrument-form st name))))
+    (def h1 (%max 1 (- (List ref 2 d) 1)))
+    (unless (null? points)
+      (%put-point! st name points (%min (%get st %env-at) (- (List length points) 1))
+        (int/ (* (%max 0 (- x (%t-left e))) (first d)) (%max 1 (- (List ref 1 d) 1)))
+        (int/ (* (- h1 (%max 0 (%min h1 (- y (%t-top e))))) 100) h1)))))
+
+; The frame of the sound drawn S at screen column COL.
+(def %sound-frame
+  (fn (_ s col)
+    (def d (%t-data s))
+    (%max 0 (%min (first d) (int/ (* (%max 0 (- col (%t-left s))) (first d)) (%max 1 (List ref 1 d)))))))
+
+; The loop's end KEY, loop-start or loop-end, of the sample picked put at
+; FRAME.
+(def %drag-loop!
+  (fn (_ st key frame)
+    (def w (%picked-sample st))
+    (def d (%sound st w))
+    (unless (null? d) (%sample-form! st w (%field-set (%sample-args st w) (List ref 1 d) key frame)))))
+
+; A change made while a button is dragged: the first kept to undo to,
+; the rest made over it, so a drag is one step of undo.
+(def %drag-change!
+  (fn (_ st f)
+    (def before (%get st %undo))
+    (f)
+    (if (List ref 1 (%get st %drag))
+      (unless (same? before (%get st %undo)) (%put! st %undo (rest (%get st %undo))))
+      (%put! st %drag (List update 1 #t (%get st %drag))))))
+
+(def %mouse-press!
+  (fn (_ st button y x mods)
+    (def t (%target-at st y x))
+    (def kind (if (null? t) () (first t)))
+    (def left (eq? button (lit left)))
+    (%put! st %drag ())
+    (match
+      ((null? t) ())
+      ((eq? kind (lit panel))
+        ((fn (_ d)
+           (def i (+ (List ref 2 d) (+ (* (int/ x (List ref 1 d)) (first d)) (- y (%t-top t)))))
+           (if (if (null? (%get st %pick)) #t (not (< i (List ref 3 d)))) (%put! st %help #f)
+             (do (%put! st %pick i) (%pick-key! st (lit enter)))))
+         (%t-data t)))
+      ((eq? kind (lit help)) (if (null? (%get st %pick)) (%put! st %help #f) (%pick-key! st (lit escape))))
+      ((not left) (when (if (eq? kind (lit sound)) (eq? button (lit right)) #f) (do (%put! st %drag (list (lit loop-end) #f)) (%drag-change! st (fn (_) (%drag-loop! st (lit loop-end) (%sound-frame t x)))))))
+      ((eq? kind (lit page)) (if (eq? (%t-data t) (lit help)) (%browse! st 0 0) (%show-page! st (%t-data t))))
+      ((eq? kind (lit order))
+        (if (null? (%get st %order-at)) (do (%goto-at! st (%t-data t)) (%show-page! st (lit pattern))) (%put! st %order-at (%t-data t))))
+      ((eq? kind (lit grid))
+        ((fn (_ p)
+           (%put! st %order-at ())
+           (if (List ref 3 p) (do (%put! st %chan (List ref 1 p)) (%put! st %field 0))
+             (do (if (List includes? (lit shift) mods)
+                   (when (null? (%get st %mark)) (do (%put! st %mark (%mark-at! st)) (%put! st %mark-end ())))
+                   (unless (null? (%get st %mark)) (do (%put! st %mark ()) (%put! st %mark-end ()))))
+                 (%put! st %row (first p)) (%put! st %chan (List ref 1 p)) (%put! st %field (List ref 2 p))
+                 (if (null? (%get st %mark)) (%put! st %drag (list (lit grid) (pair (first p) (List ref 1 p)))) (%block-said! st)))))
+         (%grid-place st t y x)))
+      ((eq? kind (lit list))
+        ((fn (_ d)
+           (def i (+ (List ref 1 d) (- y (%t-top t))))
+           (when (< i (List ref 2 d))
+             (if (%same? i (%list-picked st (first d))) (%page-key! st (lit enter)) (%list-pick! st (first d) i))))
+         (%t-data t)))
+      ((eq? kind (lit envelope))
+        ((fn (_ name)
+           (def points (if (null? name) () (%envelope (%instrument-form st name))))
+           (unless (null? points)
+             (do (%put! st %env-at (%nearest-point points (%t-data t) (- x (%t-left t))))
+                 (%put! st %env-held #t)
+                 (%put! st %drag (list (lit envelope) #f))
+                 (%drag-change! st (fn (_) (%drag-point! st t y x))))))
+         (%picked-instrument st)))
+      ((eq? kind (lit sound))
+        ((fn (_ frame w)
+           (def loop (%sample-loop-of (%sample-args st w) (%sound st w)))
+           (def key (if (null? loop) (lit loop-start)
+                      (if (< (- frame (first loop)) (- (List ref 1 loop) frame)) (lit loop-start) (lit loop-end))))
+           (%put! st %drag (list key #f))
+           (%drag-change! st (fn (_) (%drag-loop! st key frame)))
+           (when (null? loop) (%put! st %drag (list (lit loop-end) #t))))
+         (%sound-frame t x) (%picked-sample st)))
+      (#t ()))))
+
+(def %mouse-drag!
+  (fn (_ st y x)
+    (def d (%get st %drag))
+    (def kind (first d))
+    (def t (%target-of st (if (List includes? kind (list (lit loop-start) (lit loop-end))) (lit sound) kind)))
+    (match
+      ((null? t) ())
+      ((eq? kind (lit grid))
+        ((fn (_ p)
+           (def from (List ref 1 d))
+           (unless (if (null? (%get st %mark)) (if (= (first p) (first from)) (= (List ref 1 p) (rest from)) #f) #f)
+             (do (when (null? (%get st %mark)) (do (%put! st %mark from) (%put! st %mark-end ())))
+                 (%put! st %row (first p)) (%put! st %chan (List ref 1 p))
+                 (%block-said! st))))
+         (%grid-place st t y x)))
+      ((eq? kind (lit envelope)) (%drag-change! st (fn (_) (%drag-point! st t y x))))
+      (#t (%drag-change! st (fn (_) (%drag-loop! st kind (%sound-frame t x))))))))
+
+(def %mouse-wheel!
+  (fn (_ st button y x)
+    (def t (%target-at st y x))
+    (def kind (if (null? t) () (first t)))
+    (def up (eq? button (lit up)))
+    (def three (fn (_ f) (f) (f) (f)))
+    (match
+      ((not (List includes? button (list (lit up) (lit down)))) ())
+      ((null? (%get st %pick)) 
+        (match
+          ((not (null? (%get st %browse))) (three (fn (_) (%browse-key! st (if up (lit up) (lit down))))))
+          ((null? t) ())
+          ((eq? kind (lit grid)) (%put! st %row (%max 0 (%min (- (%rows st) 1) (+ (%get st %row) (if up -3 3))))))
+          ((eq? kind (lit order)) (%goto-at! st (+ (if (null? (%get st %at)) 0 (%get st %at)) (if up -1 1))))
+          ((if (eq? kind (lit list)) (eq? (first (%t-data t)) (lit sample-field)) #f)
+            (do (%put! st %sample-field (%min (- (List ref 2 (%t-data t)) 1) (+ (List ref 1 (%t-data t)) (- y (%t-top t)))))
+                (%samples-key! st (if up (lit right) (lit left)))))
+          ((eq? kind (lit list))
+            (do (when (null? (%list-picked st (first (%t-data t)))) (%list-pick! st (first (%t-data t)) (%list-at st (first (%t-data t)))))
+                (%page-key! st (if up (lit up) (lit down)))))
+          (#t ())))
+      (#t (%pick-key! st (if up (lit up) (lit down)))))))
+
+; A report of the mouse, (mouse ACTION BUTTON ROW COL MODS) as Term key
+; answers it.  While a line is typed the mouse is not taken.
+(def %mouse!
+  (fn (_ st m)
+    (def action (List ref 1 m))
+    (match
+      ((not (null? (%get st %input))) ())
+      ((eq? action (lit release))
+        (do (when (if (null? (%get st %drag)) #f (eq? (first (%get st %drag)) (lit envelope))) (%put! st %env-held #f))
+            (%put! st %drag ())))
+      ((eq? action (lit drag)) (unless (null? (%get st %drag)) (%mouse-drag! st (List ref 3 m) (List ref 4 m))))
+      ((eq? action (lit wheel)) (%mouse-wheel! st (List ref 2 m) (List ref 3 m) (List ref 4 m)))
+      ((eq? action (lit press))
+        (if (%get st %help) (if (null? (%get st %browse)) (%mouse-press! st (List ref 2 m) (List ref 3 m) (List ref 4 m) (List ref 5 m))
+                              (%browse-key! st (lit escape)))
+          (%mouse-press! st (List ref 2 m) (List ref 3 m) (List ref 4 m) (List ref 5 m))))
+      (#t ()))))
+
 ; --- keys --------------------------------------------------------------------
 
 (def %is? (fn (_ key s) (if (str? key) (str=? key s) #f)))
@@ -1799,9 +2033,10 @@
 ; line being typed (tracker/config).
 (def edit-key!
   (fn (_ st typed)
-    (def key (if (null? (%get st %input)) (config-key (%get st %config) typed) typed))
+    (def key (match ((pair? typed) typed) ((null? (%get st %input)) (config-key (%get st %config) typed)) (#t typed)))
     (match
       ((null? key) ())
+      ((pair? key) (when (eq? (first key) (lit mouse)) (%mouse! st key)))
       ((not (null? (%get st %input))) (%input-key! st key))
       ((not (null? (%get st %pick))) (%pick-key! st key))
       ((not (null? (%get st %browse))) (%browse-key! st key))

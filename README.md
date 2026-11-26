@@ -147,6 +147,12 @@ left and right change one, and the sound is drawn beneath.
     + -  Alt-+ Alt--                     the C-5 speed a semitone, an octave
     Alt-O  ctrl-z   write the sound to its WAV file; undo an edit of it
 
+The mouse, as in Schism Tracker: a click moves the cursor to a cell, a
+channel, a list's line, a place in the order or a page in the row of
+pages under it, and a click on the line picked is Enter; a drag marks a
+block, moves an envelope's point on F4 or the loop's end on F3's sound;
+the wheel scrolls.  `(mouse off)` gives the terminal its own selection.
+
 `:` takes a command, as vi does:
 
     :w [FILE]   :q   :q!   :wq       write, quit
@@ -305,6 +311,7 @@ its value.
     (backup on)                ; :w first copies the file to FILE.bak, once a session (on)
     (undo 200)                 ; changes kept to undo, 1-10000 (200)
     (sound on)                 ; off edits without the audio, as -n does (on)
+    (mouse on)                 ; take the mouse: clicks, drags, the wheel (on)
     (waves "sounds.xon")       ; wave files read as -w reads them, from this file's directory
     (colour beat (bold) yellow ())
     (key undo "u")

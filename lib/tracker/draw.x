@@ -24,7 +24,7 @@
 (import tracker/file file-songs file-changed?)
 (import tracker/player player-playing? player-mode player-loop player-tension player-pace player-volume
   player-hears? player-soloed? player-muted? player-voices)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 ; TEXT put on SCREEN, COLS wide, at ROW and COL; nothing when COL is
 ; past its right edge.  x/tui/screen's put keeps to the rows but not to
@@ -61,6 +61,7 @@
     (def first-col (if (null? hi) 0 (%max 0 (+ (- (int/ hi h) shown) 1))))
     (def from (* first-col h))
     (def to (%min n (* (+ first-col shown) h)))
+    (%target! st (lit panel) (+ top 1) (+ (+ top 1) h) 0 cols (list h w from to))
     (def heading (%style st (lit heading)))
     (def cursor (%style st (lit cursor)))
     (def style (fn (_ l) (if (< 0 (Str8 length l)) (if (Str8 starts? " " l) 0 heading) 0)))
@@ -149,13 +150,16 @@
 
 ; ITEMS joined by blanks in WIDTH columns, item F among them: from the
 ; first item that leaves room for F, as many as fit after it.  "..."
-; stands for the items left out at either end.
+; stands for the items left out at either end.  PLACE! is told of each
+; item shown: its index, and the columns of the text it starts and ends.
 (def %window
-  (fn (_ items f width)
+  (fn (_ items f width place!)
     (def n (List length items))
     (def fits? (fn (_ s e) (<= (+ (+ (if (< 0 s) 4 0) (%joined-length (%slice items s e))) (if (< e n) 4 0)) width)))
     (def s ((fn (self s) (if (if (< s f) (not (fits? s (+ f 1))) #f) (self (+ s 1)) s)) 0))
     (def e ((fn (self e) (if (if (< e n) (fits? s (+ e 1)) #f) (self (+ e 1)) e)) (%min n (+ f 1))))
+    (List fold (fn (_ c i) (place! i c (+ c (Str8 length (List ref i items)))) (+ (+ c 1) (Str8 length (List ref i items))))
+      (if (< 0 s) 4 0) (List range s e))
     (Str8 append (if (< 0 s) "... " "") (Str8 join " " (%slice items s e)) (if (< e n) " ..." ""))))
 
 ; The order, COLS wide: the place edited marked [NAME], the place picked
@@ -184,7 +188,8 @@
                              (#t mark)))
             (List range 0 (List length order)))
           (%min focus (- (List length order) 1))
-          (- (- cols 8) (Str8 length tail))))
+          (- (- cols 8) (Str8 length tail))
+          (fn (_ i from to) (%target! st (lit order) 1 2 (+ 8 from) (+ 8 to) i))))
       tail)))
 
 
@@ -256,6 +261,7 @@
     (def insts (List map (fn (_ ch) ((fn (_ e) (if (null? e) "??" (rest e))) (List find (fn (_ e) (str=? (first e) (first ch))) numbers))) shown-chs))
     (def heard (%heard-row st))
     (def first-row (%get st %top))
+    (%target! st (lit grid) top (+ (+ top 1) shown) 0 cols (list first-row left (List length shown-chs) 4 %chan-width %field-at))
     (def cur-row (%get st %row))
     (def cur-chan (int- (%get st %chan) left))
     (def field (%get st %field))
@@ -312,12 +318,17 @@
 ; --- the pages ------------------------------------------------------------------
 
 ; LINES put from row TOP to BOTTOM at column X, the line AT in CURSOR,
-; scrolled so it shows; each line a string, or (TEXT . STYLE).
+; scrolled so it shows; each line a string, or (TEXT . STYLE).  The
+; lines shown are a target of the mouse, (list KIND FROM COUNT): FROM the
+; first line shown, COUNT the lines.
 (def %draw-list!
-  (fn (_ screen top bottom x lines at cursor)
+  (fn (_ st kind screen top bottom x lines at cursor)
     (def cols (Screen cols screen))
     (def high (%max 1 (- bottom top)))
     (def from (if (null? at) 0 (%max 0 (+ (- at high) 1))))
+    (def n (List length lines))
+    (def wide (List fold (fn (_ m l) (%max m (Str8 length (if (str? l) l (first l))))) 1 lines))
+    (%target! st (lit list) top (+ top (%min high (- n from))) x (+ x wide) (list kind from n))
     (List fold
       (fn (_ i l)
         (when (if (<= from i) (< (- i from) high) #f)
@@ -337,7 +348,7 @@
     (def playing (if (null? (%get st %player)) #f (player-playing? (%get st %player))))
     (Screen put screen top 1 "Order list" (%style st (lit heading)))
     (if (null? order) (Screen put screen (+ top 2) 2 "No order yet: Insert puts the first pattern in it." 0)
-      (%draw-list! screen (+ top 2) bottom 1
+      (%draw-list! st (lit orders) screen (+ top 2) bottom 1
         (List map (fn (_ i)
                     (Str8 append (if (if playing (%same? i heard) #f) ">" " ") (Str8 pad-left 3 #\0 (Str8 str i)) "  "
                       (%pad 16 (List ref i order)) " " (Str8 str (pattern-rows (song-pattern s (List ref i order)))) " rows"))
@@ -348,7 +359,7 @@
 (def %draw-song-page!
   (fn (_ st screen top bottom)
     (Screen put screen top 1 "Song variables" (%style st (lit heading)))
-    (%draw-list! screen (+ top 2) bottom 1
+    (%draw-list! st (lit song) screen (+ top 2) bottom 1
       (List map (fn (_ l) (Str8 append " " (%pad 30 (first l)) " " (List ref 1 l))) (%song-settings st))
       (%get st %setting-at) (%style st (lit cursor)))))
 
@@ -379,6 +390,7 @@
                   (#t (self (rest ps)))))
          points)))
     (def dim (%style st (lit empty)))
+    (%target! st (lit envelope) top (+ top h) (+ x 4) (+ (+ x 4) w) (list last-ms w h))
     (%put-text! screen cols top x "100" dim)
     (%put-text! screen cols (+ top (- h 1)) x "  0" dim)
     (List for-each (fn (_ c) (%put-text! screen cols (+ top (row-of (level-at c))) (+ (+ x 4) c) "." (%style st (lit volume))))
@@ -408,7 +420,7 @@
     (def name (%picked-instrument st))
     (def env-at (%get st %env-at))
     (Screen put screen top 1 "Instrument list" (%style st (lit heading)))
-    (%draw-list! screen (+ top 2) bottom 1
+    (%draw-list! st (lit instruments) screen (+ top 2) bottom 1
       (List map (fn (_ i) (Str8 append " " (Str8 pad-left 2 #\0 (Str8 str (+ i 1))) " " (%pad 18 (List ref i names)))) (List range 0 (List length names)))
       (if (null? names) () (%min (%get st %inst-at) (- (List length names) 1)))
       (if (null? env-at) (%style st (lit cursor)) (%style st (lit block))))
@@ -441,7 +453,7 @@
           (def d (%sound st w))
           (def edited (player-edited))
           (def high (List length %sample-fields))
-          (%draw-list! screen (+ top 2) (+ (+ top 2) high) 1
+          (%draw-list! st (lit samples) screen (+ top 2) (+ (+ top 2) high) 1
             (List map (fn (_ x)
                         (Str8 append (if (List includes? (List ref 1 x) edited) "*" " ") (%pad 14 (%wave-name x)) " "
                           (%pad 24 (first (rest (List ref 2 x))))))
@@ -450,6 +462,7 @@
             (if (null? (%get st %sample-field)) (%style st (lit cursor)) (%style st (lit heading))))
           (def x 44)
           (Screen put screen top x (Str8 append "Settings of " (%wave-name w)) (%style st (lit heading)))
+          (%target! st (lit list) (+ top 2) (+ (+ top 2) high) x (+ x 26) (list (lit sample-field) 0 high))
           (List fold
             (fn (_ i f)
               (def v (%field-value args d (List ref 1 f)))
@@ -499,6 +512,7 @@
         ((fn (_ ps) (%put! st %sample-peaks (list (List ref 2 d) wide ps)) ps) (sample-peaks (List ref 2 d) frames wide))))
     (def row-of (fn (_ v) (%min (- h 1) (%max 0 (int/ (* (- 32767 v) (- h 1)) 65535)))))
     (def style (%style st (lit volume)))
+    (%target! st (lit sound) top (+ top high) x (+ x wide) (list frames wide))
     (List fold
       (fn (_ c pk)
         (def a (row-of (rest pk)))
@@ -541,6 +555,7 @@
           (def n (List length pat))
           (def chan-high (%min n (%max 1 (int/ (- bottom (+ top 2)) 2))))
           (%put-text! screen cols (+ top 1) 1 "Ch  Instrument    Note  Gain  Rows ago" (%style st (lit empty)))
+          (%target! st (lit list) (+ top 2) (+ (+ top 2) chan-high) 1 cols (list (lit info) 0 chan-high))
           (List for-each
             (fn (_ i)
               (def ch (List ref i pat))
@@ -571,6 +586,25 @@
                         (if (= r row) (%style st (lit heading)) 0))))
                   (List range 0 (- thigh 1)))))))))
 
+; The pages, a row of their keys and names from column 1 of ROW, COLS
+; wide: the page shown in the heading's colour, each a target of the
+; mouse; those past the right edge left out.
+(def %pages
+  (list (pair (lit help) "F1 Help") (pair (lit pattern) "F2 Pattern") (pair (lit samples) "F3 Samples")
+        (pair (lit instruments) "F4 Instruments") (pair (lit info) "F5 Info") (pair (lit orders) "F11 Order")
+        (pair (lit song) "F12 Song")))
+
+(def %draw-pages!
+  (fn (_ st screen row cols)
+    (List fold
+      (fn (_ x pg)
+        (def end (+ x (Str8 length (rest pg))))
+        (when (< end cols)
+          (do (Screen put screen row x (rest pg) (if (eq? (first pg) (%get st %page)) (%style st (lit heading)) (%style st (lit empty))))
+              (%target! st (lit page) row (+ row 1) x end (first pg))))
+        (+ end 2))
+      1 %pages)))
+
 (def edit-draw!
   (fn (_ st screen)
     (Screen clear screen)
@@ -578,7 +612,11 @@
     (def cols (Screen cols screen))
     (Screen fill screen 0 0 cols (%style st (lit title)))
     (Screen put screen 0 0 (%title st cols) (%style st (lit title)))
+    (%put! st %targets ())
     (Screen put screen 1 0 (%order-line st cols) 0)
+    (if (if (%get st %help) #t (not (null? (%get st %browse))))
+      (%target! st (lit help) 2 rows 0 cols ())
+      (%draw-pages! st screen 2 cols))
     (match
       ((not (null? (%get st %browse))) (%draw-page! st screen (%get st %help) (rest (%get st %browse)) 2 (- rows 3)))
       ; A list with nothing picked in it, too wide for the screen, pages

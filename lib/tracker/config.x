@@ -12,7 +12,7 @@
 ; and never evaluated.  Each form is a setting, (NAME VALUE ...), and :set
 ; NAME VALUE ... in the editor is the same form typed:
 ;
-;   (octave 4)  (step 1)  (follow on)  (backup on)  (undo 200)  (sound on)
+;   (octave 4)  (step 1)  (follow on)  (backup on)  (undo 200)  (sound on)  (mouse on)
 ;   (waves "sounds.xon" ...)
 ;   (colour NAME ATTRIBUTES FOREGROUND BACKGROUND)
 ;   (key ACTION KEY ...)
@@ -54,6 +54,7 @@
         (list (lit backup) (lit switch) #t)
         (list (lit undo) (lit number) 200 1 10000)
         (list (lit sound) (lit start-switch) #t)
+        (list (lit mouse) (lit switch) #t)
         (list (lit waves) (lit files) ())))
 
 ; The colours the editor draws with, (NAME ATTRIBUTES FOREGROUND
