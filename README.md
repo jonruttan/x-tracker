@@ -366,6 +366,11 @@ sound needs SDL3: without it the editor runs silent and says so.
 
     make test     # the spec suite
     make check    # the suite against tests/contract/known-failures.txt
+    make card     # docs/card.md: its format, its rows and its programs
+
+[docs/card.md](docs/card.md) is the card: the command line, a song file,
+the editor's keys and its commands, in tables and songs that `make card`
+runs.
 
 ## Licence
 
