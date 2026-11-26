@@ -63,7 +63,8 @@
 (def %paused 43) ; (MODE AT PATTERN ROW) where Shift-F8 stopped the playing, or nil
 (def %targets 44) ; what the screen last drawn shows where: ((KIND TOP BOTTOM LEFT RIGHT . DATA) ...)
 (def %drag 45) ; what a mouse button pressed holds while it is dragged, or nil
-(def %slots 46)
+(def %input-at 46) ; (TEXT . AT): the cursor in the line typed, AT characters into TEXT; at its end when TEXT is not the line
+(def %slots 47)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -83,6 +84,8 @@
 (def edit-place (fn (_ st) (list (%get st %pattern) (%get st %row) (%get st %chan))))
 ; Whether the mouse is to be reported: the setting (mouse on).
 (def edit-mouse? (fn (_ st) (config-get (%get st %config) (lit mouse))))
+; Whether a line is being typed: a command, a cell, effects or an instrument.
+(def edit-typing? (fn (_ st) (not (null? (%get st %input)))))
 
 (def %channels
   (fn (_ st)
@@ -128,4 +131,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? %channels %rows %block %style %target! %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? %channels %rows %block %style %target! %browse-hint )

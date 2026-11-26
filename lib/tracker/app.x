@@ -29,7 +29,7 @@
 (import x/tui/screen)
 (import x/tool/fn-compile compile-module!)
 (import tracker/keys keys-read)
-(import tracker/state edit-quit? edit-player edit-message! edit-mouse?)
+(import tracker/state edit-quit? edit-player edit-message! edit-mouse? edit-typing?)
 (import tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key!)
 (import tracker/draw edit-draw!)
 (import tracker/player player-playing? player-start! player-pump! player-place player-over? player-queued player-close)
@@ -62,12 +62,13 @@
 
 ; The screen drawn and sent, the stream topped up first: the drawing
 ; keeps the loop from coming round, and the music plays on what is
-; queued meanwhile.
+; queued meanwhile.  The terminal's cursor is shown while a line is
+; typed, at the place in it, and hidden otherwise.
 (def %ap-show!
   (fn (_ st screen)
     (edit-feed! st)
     (edit-draw! st screen)
-    (Term emit 1 (Screen render screen))))
+    (Term emit 1 (Str8 append (Screen render screen) (%ap-esc (if (edit-typing? st) "[?25h" "[?25l"))))))
 
 ; The terminal asked to report the mouse, or to stop, as (mouse on) is
 ; set; MOUSE a box of whether it was asked last.
