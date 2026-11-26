@@ -401,7 +401,15 @@ well, and opened again.
 ### The pages
 
 The function keys go to the editor's pages, as in Impulse Tracker and
-Schism Tracker; Escape on a page goes back to the pattern.
+Schism Tracker; Escape on a page goes back to the pattern.  A desktop
+or a terminal may take an F-key for itself, as macOS takes F11, so
+each page is also Alt and its place in the row of pages: Alt-1 the
+help, Alt-2 the pattern, Alt-3 the samples, Alt-4 the instruments,
+Alt-5 the info page, Alt-6 the order and Alt-7 the song; a screen 122
+columns wide shows them beside the F-keys in the row.
+`:page NAME` goes to a page by its name or the start of it, `:page o`
+the order, and the settings file binds other keys to them,
+`(key page-order "o")`.
 
 - F1 the help, F2 the pattern.
 - F3 the samples: the WAV files the file keeps as waves, the settings

@@ -632,6 +632,7 @@
                  (edit-message! st "Places are numbers from 0, as F11 shows them."))
                ((null? (song-order s)) (edit-message! st "The song has no order: :order NAME ..."))
                (#t (%order-loop! st (%num (List ref 1 args)) (%num (List ref 2 args))))))
+      ((str=? cmd "page") (%page-command! st (Str8 join " " args)))
       ((str=? cmd "loop")
         (match ((null? args) (if (null? (%get st %player)) (edit-message! st %no-sound) (%start! st (lit pattern) 0 () #f "Looping the whole pattern.")))
                ((not (= (List length args) 2)) (edit-message! st ":loop FROM TO   rows of the pattern, played over and over"))
@@ -1082,6 +1083,35 @@
     (edit-message! st "")
     #t))
 
+; The pages, in the order of the row of pages: (PAGE NAME F-KEY
+; ALT-KEY), each reached by its F-key, by Alt and its place in the row,
+; or by :page NAME.
+(def %page-keys
+  (list (list (lit help) "help" (lit f1) (lit alt-1)) (list (lit pattern) "pattern" (lit f2) (lit alt-2))
+        (list (lit samples) "samples" (lit f3) (lit alt-3)) (list (lit instruments) "instruments" (lit f4) (lit alt-4))
+        (list (lit info) "info" (lit f5) (lit alt-5)) (list (lit orders) "order" (lit f11) (lit alt-6))
+        (list (lit song) "song" (lit f12) (lit alt-7))))
+
+; PAGE shown: help opens the help, and the info page plays the song as
+; F5 does in Schism Tracker.
+(def %go-page!
+  (fn (_ st page)
+    (match ((eq? page (lit help)) (%browse! st 0 0))
+           ((eq? page (lit info)) (do (%play-start! st) (%show-page! st page)))
+           (#t (%show-page! st page)))
+    #t))
+
+; The entry of %page-keys whose F-key or Alt key KEY is, or nil.
+(def %page-of-key (fn (_ key) (List find (fn (_ p) (if (eq? key (List ref 2 p)) #t (eq? key (List ref 3 p)))) %page-keys)))
+
+; :page NAME: the page whose name NAME is, or starts with.
+(def %page-command!
+  (fn (_ st name)
+    ((fn (_ e)
+       (if (null? e) (edit-message! st (Str8 append ":page " (Str8 join " " (List map (fn (_ p) (List ref 1 p)) %page-keys))))
+         (%go-page! st (first e))))
+     (if (str=? name "") () (List find (fn (_ p) (Str8 starts? name (List ref 1 p))) %page-keys)))))
+
 ; The song played from the start of its order, its first pattern shown.
 (def %play-start!
   (fn (_ st)
@@ -1096,21 +1126,15 @@
     (%put! st %paused ())
     (edit-message! st "")))
 
-; The keys every page takes, Impulse Tracker's: the pages on F1 to F4,
-; F11 and F12, playing on F5 to F8, writing and leaving.  Answers whether
-; KEY was one.
+; The keys every page takes, Impulse Tracker's: the pages on F1 to F5,
+; F11 and F12 and Alt-1 to Alt-7, playing on F5 to F8, writing and
+; leaving.  Answers whether KEY was one.
 (def %global-key!
   (fn (_ st key)
     (def has-pattern (not (null? (%get st %pattern))))
     (match
       ((not (symbol? key)) #f)
-      ((eq? key (lit f1)) (do (%browse! st 0 0) #t))
-      ((eq? key (lit f2)) (%show-page! st (lit pattern)))
-      ((eq? key (lit f3)) (%show-page! st (lit samples)))
-      ((eq? key (lit f4)) (%show-page! st (lit instruments)))
-      ((eq? key (lit f11)) (%show-page! st (lit orders)))
-      ((eq? key (lit f12)) (%show-page! st (lit song)))
-      ((eq? key (lit f5)) (do (%play-start! st) (%show-page! st (lit info)) #t))
+      ((pair? (%page-of-key key)) (%go-page! st (first (%page-of-key key))))
       ((eq? key (lit ctrl-f5)) (do (%play-start! st) #t))
       ((eq? key (lit shift-f8)) (do (%pause! st) #t))
       ((eq? key (lit f6)) (do (%start! st (lit pattern) 0 () #f "") #t))

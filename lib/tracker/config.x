@@ -97,7 +97,10 @@
         (pair (lit play-here) "G") (pair (lit loop) "L")
         (pair (lit mute-channel) "M") (pair (lit solo-channel) "S") (pair (lit mute-instrument) "H") (pair (lit solo-instrument) "A")
         (pair (lit tension-down) ";") (pair (lit tension-up) "'") (pair (lit pace-down) "_") (pair (lit pace-up) "+")
-        (pair (lit volume-down) "9") (pair (lit volume-up) "0")))
+        (pair (lit volume-down) "9") (pair (lit volume-up) "0")
+        (pair (lit page-help) (lit f1)) (pair (lit page-pattern) (lit f2)) (pair (lit page-samples) (lit f3))
+        (pair (lit page-instruments) (lit f4)) (pair (lit page-info) (lit f5)) (pair (lit page-order) (lit f11))
+        (pair (lit page-song) (lit f12))))
 
 (def %cf-find (fn (_ name alist) (List find (fn (_ e) (eq? (first e) name)) alist)))
 
