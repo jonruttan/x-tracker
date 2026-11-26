@@ -102,6 +102,32 @@ written back to its WAV file.
 ---
     ((254 -32768 32767 4096) (254 -32768 32767 4096) ((-32768 32767 4096) ('sample "e.wav" 0 2)) "The song has changed: :w writes it, :q! leaves without." #t () 3)
 
+### a sound's edits and the song's are one history: ctrl-z and U undo either, ctrl-y and R redo
+
+```tracker
+(def dir (Str8 append ((fn (_ d) (if (null? d) "/tmp" d)) (Sys getenv "TMPDIR")) "/x-tracker-spec-samples"))
+(unless (File exists? dir) (File mkdir dir))
+(def path (Str8 append dir "/u.wav"))
+(sample-write! (first (Bytes of-hex "0010ff7f0080fe00")) 4 8000 path)
+(def st (edit-make (file-parse "(wave u (sample \"u.wav\"))\n(song \"t\" (instrument a (wave u)) (pattern p (a \". .\")) (order p))") (Str8 append dir "/t.xon") ()))
+(def heard (fn (_) (List map (fn (_ i) (sample-frame (List ref 2 (player-pcm 'u)) i)) (List range 0 (List ref 1 (player-pcm 'u))))))
+(def cells (fn (_) (rest (first (song-pattern (edit-song st) "p")))))
+(spec-keys! st (list 'f3 'alt-g 'f2 "z"))
+(def edited (list (heard) (cells)))
+(spec-keys! st (list 'ctrl-z))
+(def one (list (heard) (cells)))
+(spec-keys! st (list 'f3 'ctrl-z))
+(def two (list (heard) (edit-message st)))
+(spec-keys! st (list 'ctrl-y))
+(def redone (list (heard) (edit-message st)))
+(spec-keys! st (list 'f2 "R"))
+(def both (list (heard) (cells)))
+(spec-keys! st (list "U" "U" "U"))
+(write (list edited one two redone both (cells) (edit-message st)))
+```
+---
+    (((254 -32768 32767 4096) ("C4" ".")) ((254 -32768 32767 4096) ("." ".")) ((4096 32767 -32768 254) "Undone: the sound of u.") ((254 -32768 32767 4096) "Redone: the sound of u.") ((254 -32768 32767 4096) ("C4" ".")) ("." ".") "Nothing to undo.")
+
 ### :sound edits over frames, refuses what it cannot do
 
 ```tracker

@@ -57,17 +57,16 @@
 (def %setting-at 37) ; the line picked on the song page
 (def %sample-at 38) ; the sample picked on the samples page
 (def %sample-field 39) ; the setting picked on the samples page, or nil while the list has the keys
-(def %sample-undo 40) ; the sounds before their edits, ((NAME SOUND ARGS) ...), the last first
-(def %sample-cache 41) ; (PATH . SOUND): the file of the sample last drawn, read
-(def %sample-peaks 42) ; (PCM COLS PEAKS): its sound drawn, or nil
-(def %paused 43) ; (MODE AT PATTERN ROW) where Shift-F8 stopped the playing, or nil
-(def %targets 44) ; what the screen last drawn shows where: ((KIND TOP BOTTOM LEFT RIGHT . DATA) ...)
-(def %drag 45) ; what a mouse button pressed holds while it is dragged, or nil
-(def %input-at 46) ; (TEXT . AT): the cursor in the line typed, AT characters into TEXT; at its end when TEXT is not the line
-(def %midi-held 47) ; the MIDI keyboard's keys held down, their note numbers
-(def %order-loop 48) ; the places of the order looped, (FROM . TO), or nil
-(def %order-loop-at 49) ; the place L marked on F11 as a loop's first, or nil
-(def %slots 50)
+(def %sample-cache 40) ; (PATH . SOUND): the file of the sample last drawn, read
+(def %sample-peaks 41) ; (PCM COLS PEAKS): its sound drawn, or nil
+(def %paused 42) ; (MODE AT PATTERN ROW) where Shift-F8 stopped the playing, or nil
+(def %targets 43) ; what the screen last drawn shows where: ((KIND TOP BOTTOM LEFT RIGHT . DATA) ...)
+(def %drag 44) ; what a mouse button pressed holds while it is dragged, or nil
+(def %input-at 45) ; (TEXT . AT): the cursor in the line typed, AT characters into TEXT; at its end when TEXT is not the line
+(def %midi-held 46) ; the MIDI keyboard's keys held down, their note numbers
+(def %order-loop 47) ; the places of the order looped, (FROM . TO), or nil
+(def %order-loop-at 48) ; the place L marked on F11 as a loop's first, or nil
+(def %slots 49)
 
 (def %get (fn (_ st i) (Vector ref i st)))
 (def %put! (fn (_ st i x) (Vector set! i x st)))
@@ -136,4 +135,4 @@
            (#t (Str8 pad-right w #\space s)))))
 
 (provide tracker/state
-  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-undo %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )
+  %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place edit-mouse? edit-typing? edit-setting %channels %rows %block %style %target! %browse-hint )

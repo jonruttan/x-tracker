@@ -665,8 +665,13 @@ no tension and nothing muted.
 
 ### Undo
 
-`U` undoes and `R` redoes, as far back as the session goes (200 changes
-unless the settings say otherwise), a dropped song included.
+`U` or ctrl-z undoes and `R` or ctrl-y redoes, on every page, as far
+back as the session goes (200 changes unless the settings say
+otherwise), a dropped song included.  Every edit is one history: a
+cell, the order, an instrument, a setting on F12, an envelope's point
+dragged, a sample's setting or its sound cut, faded or resampled on
+F3.  An undo goes back to the song and pattern the edit was made in,
+and a sound undone is heard as it was, written or not.
 
 ### Settings
 

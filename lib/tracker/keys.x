@@ -17,9 +17,10 @@
 ; order shift alt ctrl: 'shift-up, 'alt-f9, 'ctrl-page-up, 'shift-alt-q.
 ; Alt and a character is 'alt- and the character: 'alt-b, 'alt-B for Alt
 ; and Shift and b, 'alt-0.  Shift and Tab is 'shift-tab; Insert 'insert.
-; Ctrl and S, Q and Z, which Term key leaves unbound or takes for a
-; line's search, are 'ctrl-s, 'ctrl-q and 'ctrl-z.  The mouse, once
-; Term mouse! asks for it, is a list: (mouse ACTION BUTTON ROW COL MODS).
+; Ctrl and S, Q, Y and Z, which Term key leaves unbound or takes for a
+; line's editing, are 'ctrl-s, 'ctrl-q, 'ctrl-y and 'ctrl-z.  The
+; mouse, once Term mouse! asks for it, is a list: (mouse ACTION BUTTON
+; ROW COL MODS).
 
 (module tracker/keys)
 
@@ -99,6 +100,7 @@
               ((= b 27) (%ky-escape read-byte))
               ((= b 17) (lit ctrl-q))
               ((= b 19) (lit ctrl-s))
+              ((= b 25) (lit ctrl-y))
               ((= b 26) (lit ctrl-z))
               ; Any other byte is Term's, given back to it first.
               (#t ((fn (_ given) (Term key (fn (_) (if given (do (set! given #f) b) (read-byte))))) #t))))
