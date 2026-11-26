@@ -120,15 +120,15 @@ tracker/config: the user's file, read as data, and :set in the editor.
 ```
 ---
 ```output
-  octave 5                         key next "]"                     key cut "X"
-  step 1                           key octave-down "<"              key paste "P"
-  follow on                        key octave-up ">"                key play-here "G"
-  backup on                        key step-down "{"                key loop "L"
-  undo 200                         key step-up "}"                  key mute-channel "M"
-  sound on                         key up up                        key solo-channel "S"
+  octave 5                         key previous "["                 key copy "Y"
+  step 1                           key next "]"                     key cut "X"
+  follow on                        key octave-down "<"              key paste "P"
+  backup on                        key octave-up ">"                key play-here "G"
+  undo 200                         key step-down "{"                key loop "L"
+  sound on                         key step-up "}"                  key mute-channel "M"
+  mouse on                         key up up                        key solo-channel "S"
   waves                            key down down                    key mute-instrument "H"
   colour title (reverse) () ()     key left left                    key solo-instrument "A"
-  colour empty (dim) () ()         key right right                  key tension-down ";"
 #t
 ```
 

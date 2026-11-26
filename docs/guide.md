@@ -41,7 +41,7 @@ A new file looks like this:
 ```
  x-tracker  harbour.xon [+]   "untitled"   bpm 120  rows 4  ticks 6   octave 4  step 1
  order: [a]
-
+ F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song
      1 lead 01
   0 ... .. ... .......
   1 ... .. ... .......
@@ -70,6 +70,8 @@ the order they play, the one being edited in brackets, and while the
 song plays, the one heard marked `>`.  An order wider than the screen
 shows the part around the one heard while the song plays, else the
 one edited, `...` for the rest.
+Under the order are the pages, by their keys; the one shown is drawn
+bold, and a click on one shows it.
 
 Then the pattern: a row a line, numbered from 0, and a channel a
 column, headed by its number, the instrument that plays it and the
@@ -132,7 +134,7 @@ The hats go on every other row, eight of them at a step of 2:
 ```
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 4  step 2
  order: [a]
-
+ F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song
      1 lead 01          2 kick 02          3 hat 03
   0 ... .. ... ....... C-4 02 ... ....... C-4 03 ... .......
   1 ... .. ... ....... ... .. ... ....... ... .. ... .......
@@ -224,7 +226,7 @@ bottom of `?`, and [writing.md](writing.md) has each with an example.
 ```
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 4  step 2
  order: [a]
-
+ F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song
      1 lead 01          2 kick 02          3 hat 03           4 bass 04
   0 E-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... A-2 04 ... .......
   1 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
@@ -304,7 +306,7 @@ G in octave 5, comes in only with the tension:
 ```
  x-tracker  harbour.xon [+]   "harbour"   bpm 100  rows 4  ticks 6   octave 5  step 8
  order: a [b] a b
-
+ F1 Help  F2 Pattern  F3 Samples  F4 Instruments  F5 Info  F11 Order  F12 Song
      1 lead 01          2 kick 02          3 hat 03           4 bass 04          5 bell 05
   0 E-5 01 ... ....... C-4 02 ... ....... C-4 03 ... ....... C-2 04 ... ....... E-5 05 ... .......
   1 ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... ....... ... .. ... .......
@@ -426,6 +428,25 @@ Schism Tracker; Escape on a page goes back to the pattern.
   from where it stopped.
 - F9 opens another file, as `:open FILE`; F10 or ctrl-s writes, as
   `:w`; ctrl-q quits, as `:q`.
+
+### The mouse
+
+The mouse works as in Schism Tracker, where the terminal reports it.
+A click picks what is under it:
+
+- on the pattern, the cell's column, and on a channel's heading, the
+  channel; Shift and a click marks a block from the cursor to there;
+- on a list (F3, F4, F5, F11, F12), its line; a click on the line
+  already picked does what Enter does there;
+- on the order, the place, its pattern to edit;
+- on the row of pages, the page; F1 the help.
+
+A drag marks a block on the pattern, moves an envelope's point on F4,
+and moves the loop's nearer end on F3's sound; the right button puts
+the loop's end where it is.  A drag is one step of undo.  The wheel
+scrolls the pattern three rows, a list a line, a setting on F3 up or
+down, and the help.  While the editor has the mouse the terminal
+cannot select text with it; `:set mouse off` gives it back.
 
 ### Editing a sample
 
@@ -621,10 +642,11 @@ unless the settings say otherwise), a dropped song included.
 
 ### Settings
 
-The octave, the step, following, the backup, undo, the colours and the
-keys can be set in `~/.config/x/tracker.xon`, and for a session with
-`:set NAME VALUE`; `:set` alone lists them.  The README has the file's
-forms and every key's action name, to bind it to another key.
+The octave, the step, following, the backup, undo, the mouse, the
+colours and the keys can be set in `~/.config/x/tracker.xon`, and for
+a session with `:set NAME VALUE`; `:set` alone lists them.  The README
+has the file's forms and every key's action name, to bind it to
+another key.
 
 ## Where next
 
