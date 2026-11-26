@@ -25,7 +25,7 @@ x -l tracker -- help /v | head -1 -> cell effect  /vD,P
 | Option               | Does                                               |
 |----------------------|----------------------------------------------------|
 | `-s`, `--song NAME`  | the song to edit, play or render; import's name    |
-| `-w`, `--waves FILE` | read FILE's `(wave ...)` forms too; may repeat     |
+| `-w`, `--waves SONGS.xon` | another song file's waves; may repeat     |
 | `-l`, `--loop`       | play the song over and over, until q               |
 | `-o`, `--output FILE` | the WAV file render writes; the file import adds to |
 | `-r`, `--rows N`     | rows a beat for an imported MIDI file, 1-64 (4)    |
@@ -128,7 +128,7 @@ x -l tracker -- help /v | head -1 -> cell effect  /vD,P
 
 | Prop                   | Is                                               |
 |------------------------|--------------------------------------------------|
-| `(wave NAME)`          | the wave a voice reads (`sine`)                  |
+| `(wave NAME [AMP ...])` | the wave a voice reads (`sine`), or makes there  |
 | `(env (MS PCT) ...)`   | the level over time, straight between points     |
 | `(release MS)`         | how long a note fades once let go (200)          |
 | `(gain PCT)`           | the voice's level                                |

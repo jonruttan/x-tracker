@@ -8,14 +8,14 @@
 
 (import tracker/node node-tokens node-read node-form? node-text node-parts node-head node-value)
 (import tracker/song song-from-node song-parse song-new song-name song-items song-rename song-patterns song-pattern
-  song-order song-prop song-instruments song-instrument-text song-waves song-set-pattern song-drop-pattern song-set-order
+  song-order song-prop song-instruments song-instrument-text song-waves song-wave-forms song-set-wave-form song-set-pattern song-drop-pattern song-set-order
   song-set-prop song-set-instrument pattern-rows pattern-cell pattern-set-cell pattern-resize pattern-insert-row
   pattern-delete-row pattern-add-channel pattern-drop-channel song-form song-text song-cell-problem
   song-effects song-set-effect song-drop-effect song-copy-instrument song-rename-instrument song-drop-instrument
   song-instrument-uses song-rename-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste
   pattern-map-block song-note-name cell-transpose cell-gain)
 (import tracker/file file-parse file-text file-songs file-song! file-add-song file-drop-song file-changed? file-written
-  file-waves file-wave file-set-wave file-read file-write!)
+  file-waves file-wave-clash file-wave file-set-wave file-read file-write!)
 (import tracker/player player-open player-playing? player-mode player-start! player-stop! player-update!
   player-preview! player-pump! player-place player-over? player-queued player-tension! player-pace! player-close
   player-waves player-waves! player-wave? player-start-at! player-tension player-pace player-volume player-volume!

@@ -158,18 +158,18 @@ command  :mute [INSTRUMENT]
 ```output
 cli: the command line's words and options
   x -l tracker -- [OPTIONS] [edit] [FILE]   the editor; with no FILE, a new song to write with :w FILE
-                                            -s NAME the song to edit, -w FILE waves to read, -n no sound
+                                            -s NAME the song to edit, -w SONGS.xon waves to read, -n no sound
   x -l tracker -- [OPTIONS] play FILE       play a song, the pattern heard written to standard error; q stops
-                                            -s NAME the song (the file's first), -l loop it, -w FILE waves to read
+                                            -s NAME the song (the file's first), -l loop it, -w SONGS.xon waves to read
   x -l tracker -- list FILE                 each song of FILE: how long it lasts, its patterns and its order
   x -l tracker -- render FILE -o OUT.wav    a song played once, to a WAV file
-                                            -s NAME the song (the file's first), -w FILE waves to read
+                                            -s NAME the song (the file's first), -w SONGS.xon waves to read
   x -l tracker -- import FILE -o OUT.xon    a MIDI (.mid) or SID (.sid) file read into a song, added to OUT.xon
                                             -s NAME the song's name (the file's); MIDI: -r N rows a beat (4);
                                             SID: -u N the tune (its first), -t SECS how long it is played (HVSC's length, or 60)
   x -l tracker -- help [WORD]               this help: the topics, a topic, or every entry named WORD
 word  x -l tracker -- render FILE -o OUT.wav
   a song played once, to a WAV file
-  -s NAME the song (the file's first), -w FILE waves to read
+  -s NAME the song (the file's first), -w SONGS.xon waves to read
 (0 0 1)
 ```

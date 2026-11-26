@@ -92,7 +92,19 @@ spec-play!.  Nothing here opens an audio device.
 (write (list refused (str=? refused heard) (player-playing? pl2)))
 ```
 ---
-    ("x-tracker: no wave named spec-reedy: read the file its (wave ...) form is in with -w FILE" #t #t)
+    ("x-tracker: no wave named spec-reedy: make it with :wave spec-reedy AMP ..., or a (wave spec-reedy AMP ...) form beside the songs or in the instrument; -w SONGS.xon borrows the waves of another song file" #t #t)
+
+### a wave made in its instrument plays as one beside the songs would
+
+```tracker
+(def doc (file-parse "(song \"s\" (bpm 240) (rows 4)\n  (instrument bell (wave spec-glass 5 0 0 2 0 0 0 1))\n  (pattern p (bell \"C4 . E4 .\"))\n  (order p))\n"))
+(def pl (player-open (spec-front) (file-waves doc)))
+(player-start! pl (first (file-songs doc)) 'song 0 ())
+(player-pump! pl)
+(write (list (file-waves doc) (player-playing? pl)))
+```
+---
+    ((('wave 'spec-glass 5 0 0 2 0 0 0 1)) #t)
 
 ### a wave of points is drawn by its points, and one of harmonics by its harmonics
 
@@ -172,7 +184,7 @@ Waves   :wave NAME AMP ... makes or changes one   :waves keep copies the borrowe
 (write (list first-queued cleared (guard (e (e msg)) (player-preview! pl s "b" "C3") "played")))
 ```
 ---
-    (#t 0 "x-tracker: no wave named spec-missing: read the file its (wave ...) form is in with -w FILE")
+    (#t 0 "x-tracker: no wave named spec-missing: make it with :wave spec-missing AMP ..., or a (wave spec-missing AMP ...) form beside the songs or in the instrument; -w SONGS.xon borrows the waves of another song file")
 
 ### a song loaded starts afresh: the playing stopped, and an undo goes back to its own song
 

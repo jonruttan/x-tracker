@@ -36,7 +36,7 @@
   song-copy-instrument song-rename-instrument song-drop-instrument song-instrument-uses song-rename-pattern
   song-drop-pattern pattern-set-instrument pattern-move-channel pattern-block pattern-paste pattern-map-block
   cell-transpose cell-gain pattern-insert-rows pattern-delete-rows pattern-slide pattern-stretch)
-(import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave file-set-wave file-sample? file-sample-at file-dir file-form-text)
+(import tracker/file file-songs file-song! file-add-song file-drop-song file-changed? file-write! file-waves file-wave-clash file-wave file-set-wave file-sample? file-sample-at file-dir file-form-text)
 (import tracker/player player-playing? player-mode player-start! player-stop! player-update! player-preview!
   player-pump! player-place player-tension! player-pace! player-waves player-waves! player-wave? player-open player-give!
   player-start-at! player-tension player-pace player-volume player-volume! player-hears? player-mute! player-solo!
@@ -160,10 +160,12 @@
     (if (null? (%get st %path)) (file-waves (%get st %doc)) (file-waves (%get st %doc) (file-dir (%get st %path))))))
 
 ; The mixer given the document's waves, and the borrowed ones it does
-; not have, as they were: after a change or an undo of one.
+; not have, as they were: after a change or an undo of one.  Two waves
+; that make one name differently are told, the first heard.
 (def %sync-waves!
   (fn (_ st)
     (def doc (%get st %doc))
+    ((fn (_ m) (unless (null? m) (edit-message! st m))) (file-wave-clash doc))
     (unless (null? (%get st %player))
       (player-waves! (%get st %player)
         (List append (List filter (fn (_ w) (null? (file-wave doc (symbol->str (List ref 1 w))))) (%get st %borrowed))
