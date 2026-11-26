@@ -49,7 +49,7 @@
 (import tracker/field field-make field-kind field-line field-key! field-history field-remember! history-kind history-read history-of history-put history-add!)
 (import tracker/config config-default config-set-text! config-get config-put! config-style config-key config-lines
   config-backup!)
-(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %history %history-path %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
+(import tracker/state %blanks %pad %doc %path %song %pattern %at %row %chan %top %left %octave %step %msg %input %undo %redo %player %quit %help %warned %heard %follow %pick %stale %borrowed %config %order-at %mark %clip %loop-at %browse %page %field %digit %mark-end %inst-at %env-at %env-held %setting-at %sample-at %sample-field %sample-cache %sample-peaks %paused %targets %drag %input-at %midi-held %order-loop %order-loop-at %history %history-path %prop-at %slots %get %put! %max %min %same? %num edit-song edit-doc edit-quit? edit-message edit-message! edit-player edit-place %channels %rows %block %style %target! %browse-hint )
 
 
 ; The pattern to edit in song S: the first of its order, or its first
@@ -1072,7 +1072,7 @@
 (def %page-hints
   (list (pair (lit pattern) "")
         (pair (lit samples) "Samples   up down pick   Tab the settings   Space or the piano hear it   Alt-G I H M B L E F edit   Alt-O write   Ctrl-Z undo")
-        (pair (lit instruments) "Instruments   up down pick   Enter edit   Tab its envelope   Space or the piano hear it   F2 the pattern")
+        (pair (lit instruments) "Instruments   up down pick   Enter edit   Tab its props   Space or the piano hear it   F2 the pattern")
         (pair (lit info) "Playing   up down a channel   M S mute, solo it   Enter or G edit the pattern heard   + - the next, previous place   F8 stop")
         (pair (lit orders) "Order   up down pick   left right its pattern   Insert copy   Delete drop   [ ] move   Enter edit")
         (pair (lit song) "Song   up down pick   left right change   Enter type it   F2 the pattern")))
@@ -1159,6 +1159,7 @@
   (fn (_ st key)
     (def page (%get st %page))
     (match
+      ((if (eq? key (lit escape)) (if (eq? page (lit instruments)) (pair? (%get st %prop-at)) #f) #f) (%instruments-key! st key))
       ((eq? key (lit escape)) (%show-page! st (lit pattern)))
       ((eq? key (lit interrupt)) (%quit! st #f))
       ((%is? key ":") (%put! st %input (pair (lit command) "")))
@@ -1261,9 +1262,74 @@
     (def props (rest (rest form)))
     (def env (pair (lit env) points))
     (def had (List any? (fn (_ p) (if (pair? p) (eq? (first p) (lit env)) #f)) props))
-    (def made (List append (list (lit instrument) (List ref 1 form))
-                (if had (List map (fn (_ p) (if (if (pair? p) (eq? (first p) (lit env)) #f) env p)) props) (List append props (list env)))))
-    (%try! st "not an instrument" (fn (_) (%change! st (song-set-instrument (edit-song st) (%write-form made))) ()))))
+    (%set-props! st name
+      (if had (List map (fn (_ p) (if (if (pair? p) (eq? (first p) (lit env)) #f) env p)) props) (List append props (list env))))))
+
+; Instrument NAME with its props made PROPS, one undo step.
+(def %set-props!
+  (fn (_ st name props)
+    (%try! st "not an instrument"
+      (fn (_) (%change! st (song-set-instrument (edit-song st) (%write-form (pair (lit instrument) (pair (str->sym name) props))))) ()))))
+
+; A prop's name, the symbol it starts with, or nil.
+(def %prop-name (fn (_ p) (if (pair? p) (if (symbol? (first p)) (first p) ()) ())))
+
+; The props F4 changes with left and right a step at a time, Alt ten:
+; (NAME LOW HIGH), nil for no bound.  A prop of one number not here
+; steps unbounded.
+(def %prop-ranges
+  (list (list (lit release) 0 ()) (list (lit gain) 0 400) (list (lit pan) -100 100) (list (lit cut) 0 100)
+        (list (lit res) 0 100) (list (lit hz) 1 ()) (list (lit at) 0 ())))
+
+; The props F4's Insert adds, in the help's order, each as it is added.
+(def %prop-defaults
+  (list "(wave sine)" "(env (0 100) (500 0))" "(release 200)" "(gain 100)" "(pan 0)" "(cut 100)" "(filter (0 100))"
+        "(width (0 50))" "(cutoff (0 2000))" "(res 0)" "(pass low)" "(ring 0)" "(sync 0)" "(detune 0)" "(note \"C4\")"
+        "(hz 440)" "(slide \"C5\")" "(bend (0 0))" "(at 0)" "(layer calm)" "(voice (wave sine))"))
+
+; The props instrument PROPS lacks, as %prop-defaults writes them; a
+; voice is never lacked, an instrument having any number.
+(def %props-lacking
+  (fn (_ props)
+    (List filter
+      (fn (_ text)
+        ((fn (_ n) (if (eq? n (lit voice)) #t (not (List any? (fn (_ p) (eq? (%prop-name p) n)) props))))
+         (first (first (Xon parse text)))))
+      %prop-defaults)))
+
+; The waves F4 steps a (wave NAME) through: the mixer's own, then the
+; ones the file has or its songs name.
+(def %prop-waves
+  (fn (_ st)
+    (def own (list "sine" "square" "triangle" "saw" "inverse-saw" "pulse" "noise" "metal"))
+    (List append own (List filter (fn (_ n) (not (List includes? n own))) (%wave-names st)))))
+
+; The prop P stepped by D: a number within its range, a wave or a pass
+; to the next or the one before, a layer to the other; nil when P is
+; none of those.
+(def %prop-stepped
+  (fn (_ st p d)
+    (def n (%prop-name p))
+    (def one (if (pair? (rest p)) (if (null? (rest (rest p))) (List ref 1 p) ()) ()))
+    (def turn
+      (fn (_ names)
+        (def k (List length names))
+        (def i (List find-index (fn (_ x) (str=? x (symbol->str one))) names))
+        (def j (if (null? i) 0 (+ (+ i k) (if (< d 0) -1 1))))
+        (list n (str->sym (List ref (- j (* k (int/ j k))) names)))))
+    (def bounded
+      (fn (_ r)
+        (def v (+ one d))
+        (def lo (if (null? r) () (List ref 1 r)))
+        (def hi (if (null? r) () (List ref 2 r)))
+        (def up (if (null? lo) v (%max lo v)))
+        (list n (if (null? hi) up (%min hi up)))))
+    (match ((if (number? one) (not (eq? n (lit voice))) #f) (bounded (Assoc entry n %prop-ranges)))
+           ((not (symbol? one)) ())
+           ((eq? n (lit wave)) (turn (%prop-waves st)))
+           ((eq? n (lit pass)) (turn (list "low" "band" "high")))
+           ((eq? n (lit layer)) (turn (list "calm" "tension")))
+           (#t ()))))
 
 ; A note of instrument NAME heard, SEMI semitones above the octave's C.
 (def %hear-instrument!
@@ -1297,54 +1363,130 @@
     (%set-envelope! st name
       (List update i (list (if (= i 0) (first (List ref 0 points)) (%max lo (%min hi ms))) (%max 0 (%min 100 pct))) points))))
 
+; Prop I of instrument NAME's PROPS picked, the envelope's first point
+; with it when that is its envelope; nil gives the list the keys.
+(def %prop-pick!
+  (fn (_ st props i)
+    (%put! st %prop-at i)
+    (%put! st %env-held #f)
+    (%put! st %env-at (if (null? i) () (if (eq? (%prop-name (List ref i props)) (lit env)) 0 ())))))
+
+; A key on F4.  The list has the keys until Tab gives them to the props
+; of the instrument picked: up and down pick a prop, left and right
+; change it (Alt ten at a time), Space turns a layer, Enter types its
+; value, Delete drops it and Insert picks one it lacks to add.  On its
+; envelope, left and right pick a point, Enter picks it up for the
+; arrows, Insert and Delete add and drop one.
 (def %instruments-key!
   (fn (_ st key)
     (def names (song-instruments (edit-song st)))
     (def name (%picked-instrument st))
+    (def props (if (null? name) () (rest (rest (%instrument-form st name)))))
+    (def pa (%get st %prop-at))
+    (def pi (if (if (number? pa) (pair? props) #f) (%min pa (- (List length props) 1)) ()))
+    (def prop (if (null? pi) () (List ref pi props)))
     (def points (if (null? name) () (%envelope (%instrument-form st name))))
-    (def at (%get st %env-at))
+    (def on-env (if (eq? (%prop-name prop) (lit env)) (pair? points) #f))
+    (def at (if on-env (%min (if (null? (%get st %env-at)) 0 (%get st %env-at)) (- (List length points) 1)) ()))
     (def n (List length points))
     (def piano (if (str? key) (%str-entry key %piano) ()))
+    (def step (match ((List includes? key (list (lit left))) -1) ((List includes? key (list (lit right))) 1)
+                     ((eq? key (lit alt-left)) -10) ((eq? key (lit alt-right)) 10) (#t ())))
     (def move-point!
       (fn (_ dms dpct)
-        (def i (%min at (- n 1)))
-        (def p (List ref i points))
-        (%put-point! st name points i (+ (first p) dms) (+ (List ref 1 p) dpct))))
+        (def p (List ref at points))
+        (%put-point! st name points at (+ (first p) dms) (+ (List ref 1 p) dpct))))
     (match
       ((null? name) (when (eq? key (lit enter)) (%put! st %input (pair (lit command) "instrument "))))
-      ((eq? key (lit complete))
-        (if (null? at) (if (null? points) (edit-message! st "No envelope: Enter edits the instrument, (env (MS PCT) ...).") (%put! st %env-at 0))
-          (do (%put! st %env-at ()) (%put! st %env-held #f))))
-      ((%is? key " ") (%hear-instrument! st name 0))
-      ((not (null? piano)) (%hear-instrument! st name (rest piano)))
+      ((pair? pa) (%prop-add-key! st name props key))
+      ((List includes? key (list (lit complete) (lit shift-tab)))
+        (match ((not (null? pi)) (%prop-pick! st props ()))
+               ((null? props) (%put! st %prop-at (pair (lit add) (pair 0 0))))
+               (#t (%prop-pick! st props 0))))
       ; The list has the keys.
-      ((null? at)
+      ((null? pi)
         (match ((eq? key (lit up)) (%put! st %inst-at (%max 0 (- (%min (%get st %inst-at) (- (List length names) 1)) 1))))
                ((eq? key (lit down)) (%put! st %inst-at (%min (- (List length names) 1) (+ (%get st %inst-at) 1))))
                ((eq? key (lit enter)) (%put! st %input (pair (lit instrument) (%one-line (song-instrument-text (edit-song st) name)))))
                ((eq? key (lit insert)) (%put! st %input (pair (lit command) "instrument ")))
+               ((%is? key " ") (%hear-instrument! st name 0))
+               ((not (null? piano)) (%hear-instrument! st name (rest piano)))
                (#t ())))
-      ; The envelope has them: a point picked, picked up with Enter and
-      ; moved with the arrows, Alt for ten at a time.
-      ((eq? key (lit enter)) (%put! st %env-held (not (%get st %env-held))))
-      ((if (%get st %env-held) (List includes? key (list (lit left) (lit right) (lit up) (lit down) (lit alt-left) (lit alt-right) (lit alt-up) (lit alt-down))) #f)
-        (match ((eq? key (lit left)) (move-point! -1 0)) ((eq? key (lit right)) (move-point! 1 0))
+      ; A point of the envelope picked up: the arrows move it, Alt ten at a time.
+      ((if on-env (%get st %env-held) #f)
+        (match ((eq? key (lit enter)) (%put! st %env-held #f))
+               ((eq? key (lit left)) (move-point! -1 0)) ((eq? key (lit right)) (move-point! 1 0))
                ((eq? key (lit alt-left)) (move-point! -10 0)) ((eq? key (lit alt-right)) (move-point! 10 0))
                ((eq? key (lit up)) (move-point! 0 1)) ((eq? key (lit down)) (move-point! 0 -1))
-               ((eq? key (lit alt-up)) (move-point! 0 10)) (#t (move-point! 0 -10))))
-      ((eq? key (lit left)) (%put! st %env-at (%max 0 (- at 1))))
-      ((eq? key (lit right)) (%put! st %env-at (%min (- n 1) (+ at 1))))
-      ((eq? key (lit insert))
-        ((fn (_ i)
-           (def p (List ref i points))
-           (def q (if (< i (- n 1)) (List ref (+ i 1) points) (list (+ (first p) 50) 0)))
-           (%set-envelope! st name (List insert (+ i 1) (list (int/ (+ (first p) (first q)) 2) (int/ (+ (List ref 1 p) (List ref 1 q)) 2)) points))
-           (%put! st %env-at (+ i 1)))
-         (%min at (- n 1))))
+               ((eq? key (lit alt-up)) (move-point! 0 10)) ((eq? key (lit alt-down)) (move-point! 0 -10))
+               ((%is? key " ") (%hear-instrument! st name 0))
+               ((not (null? piano)) (%hear-instrument! st name (rest piano)))
+               (#t ())))
+      ((eq? key (lit up)) (%prop-pick! st props (%max 0 (- pi 1))))
+      ((eq? key (lit down)) (%prop-pick! st props (%min (- (List length props) 1) (+ pi 1))))
+      ; The envelope's points.
+      ((if on-env (eq? key (lit enter)) #f) (%put! st %env-held #t))
+      ((if on-env (eq? key (lit left)) #f) (%put! st %env-at (%max 0 (- at 1))))
+      ((if on-env (eq? key (lit right)) #f) (%put! st %env-at (%min (- n 1) (+ at 1))))
+      ((if on-env (eq? key (lit insert)) #f)
+        ((fn (_ p q)
+           (%set-envelope! st name (List insert (+ at 1) (list (int/ (+ (first p) (first q)) 2) (int/ (+ (List ref 1 p) (List ref 1 q)) 2)) points))
+           (%put! st %env-at (+ at 1)))
+         (List ref at points) (if (< at (- n 1)) (List ref (+ at 1) points) (list (+ (first (List ref at points)) 50) 0))))
+      ((if on-env (eq? key (lit delete)) #f)
+        (if (< n 2) (edit-message! st "An envelope keeps one point: Tab, then Delete on another prop, or Enter on the list to edit it all.")
+          (do (%set-envelope! st name (List remove at 1 points)) (%put! st %env-at (%max 0 (- at 1))))))
+      ; Any other prop.
+      ((not (null? step))
+        ((fn (_ p) (if (null? p) (edit-message! st (Str8 append "Enter types " (symbol->str (%prop-name prop)) "'s value."))
+                     (%set-props! st name (List update pi p props))))
+         (%prop-stepped st prop step)))
+      ((if (%is? key " ") (eq? (%prop-name prop) (lit layer)) #f) (%set-props! st name (List update pi (%prop-stepped st prop 1) props)))
+      ((eq? key (lit enter))
+        (%put! st %input (pair (list (lit prop) pi (%prop-name prop)) (Str8 join " " (List map %write-form (rest prop))))))
       ((eq? key (lit delete))
-        (if (< n 2) (edit-message! st "An envelope keeps one point.")
-          (do (%set-envelope! st name (List remove (%min at (- n 1)) 1 points)) (%put! st %env-at (%max 0 (- (%min at (- n 1)) 1))))))
+        (do (%set-props! st name (List remove pi 1 props))
+            (%prop-pick! st (List remove pi 1 props) (if (< 1 (List length props)) (%max 0 (- pi (if (= pi (- (List length props) 1)) 1 0))) ()))))
+      ((eq? key (lit insert)) (%put! st %prop-at (pair (lit add) (pair 0 pi))))
+      ((%is? key " ") (%hear-instrument! st name 0))
+      ((not (null? piano)) (%hear-instrument! st name (rest piano)))
       (#t ()))))
+
+
+; The value TEXT typed for prop I of the instrument picked on F4: the
+; prop made (NAME TEXT), in its place.
+(def %prop-typed!
+  (fn (_ st i text)
+    (def name (%picked-instrument st))
+    (def props (if (null? name) () (rest (rest (%instrument-form st name)))))
+    (if (if (number? i) (< i (List length props)) #f)
+      ((fn (_ p)
+         (if (null? p) (edit-message! st (Str8 append "Not a value of " (symbol->str (%prop-name (List ref i props))) ": " text))
+           (%set-props! st name (List update i p props))))
+       (guard (e ())
+         (first (Xon parse (Str8 append "(" (symbol->str (%prop-name (List ref i props))) " " text ")")))))
+      ())))
+
+; A key while F4 picks a prop to add, the Ith of those instrument NAME's
+; PROPS lacks: up and down pick, Enter adds it after the prop picked,
+; Escape or Tab goes back.
+(def %prop-add-key!
+  (fn (_ st name props key)
+    (def lacking (%props-lacking props))
+    (def pa (%get st %prop-at))
+    (def i (%min (first (rest pa)) (- (List length lacking) 1)))
+    (def from (rest (rest pa)))
+    (match ((eq? key (lit up)) (%put! st %prop-at (pair (lit add) (pair (%max 0 (- i 1)) from))))
+           ((eq? key (lit down)) (%put! st %prop-at (pair (lit add) (pair (%min (- (List length lacking) 1) (+ i 1)) from))))
+           ((eq? key (lit enter))
+             ((fn (_ to made)
+                (%set-props! st name made)
+                (%prop-pick! st made to))
+              (if (null? props) 0 (+ (%min from (- (List length props) 1)) 1))
+              (List insert (if (null? props) 0 (+ (%min from (- (List length props) 1)) 1)) (first (Xon parse (List ref i lacking))) props)))
+           ((List includes? key (list (lit escape) (lit complete) (lit shift-tab) (lit backspace)))
+             (%prop-pick! st props (if (null? props) () (%min from (- (List length props) 1)))))
+           (#t ()))))
 
 ; --- the info page ------------------------------------------------------------------
 ;
@@ -1965,13 +2107,15 @@
     (match ((eq? kind (lit orders)) (if (null? (%get st %order-at)) 0 (%get st %order-at)))
            ((eq? kind (lit song)) (%get st %setting-at))
            ((eq? kind (lit instruments)) (%get st %inst-at))
+           ((eq? kind (lit props)) (if (number? (%get st %prop-at)) (%get st %prop-at) 0))
            ((eq? kind (lit samples)) (%get st %sample-at))
            ((eq? kind (lit sample-field)) (if (null? (%get st %sample-field)) 0 (%get st %sample-field)))
            (#t (%get st %chan)))))
 
 (def %list-keyed?
   (fn (_ st kind)
-    (match ((eq? kind (lit instruments)) (null? (%get st %env-at)))
+    (match ((eq? kind (lit instruments)) (null? (%get st %prop-at)))
+           ((eq? kind (lit props)) (number? (%get st %prop-at)))
            ((eq? kind (lit samples)) (null? (%get st %sample-field)))
            ((eq? kind (lit sample-field)) (not (null? (%get st %sample-field))))
            (#t #t))))
@@ -1983,7 +2127,8 @@
   (fn (_ st kind i)
     (match ((eq? kind (lit orders)) (%put! st %order-at i))
            ((eq? kind (lit song)) (%put! st %setting-at i))
-           ((eq? kind (lit instruments)) (do (%put! st %inst-at i) (%put! st %env-at ()) (%put! st %env-held #f)))
+           ((eq? kind (lit instruments)) (do (%put! st %inst-at i) (%put! st %env-at ()) (%put! st %prop-at ()) (%put! st %env-held #f)))
+           ((eq? kind (lit props)) (%prop-pick! st (rest (rest (%instrument-form st (%picked-instrument st)))) i))
            ((eq? kind (lit samples)) (do (%put! st %sample-at i) (%put! st %sample-field ()) (%put! st %sample-peaks ())))
            ((eq? kind (lit sample-field)) (%put! st %sample-field i))
            (#t (%put! st %chan i)))))
@@ -2073,7 +2218,8 @@
         ((fn (_ name)
            (def points (if (null? name) () (%envelope (%instrument-form st name))))
            (unless (null? points)
-             (do (%put! st %env-at (%nearest-point points (%t-data t) (- x (%t-left t))))
+             (do (%put! st %prop-at (List find-index (fn (_ p) (eq? (%prop-name p) (lit env))) (rest (rest (%instrument-form st name)))))
+                 (%put! st %env-at (%nearest-point points (%t-data t) (- x (%t-left t))))
                  (%put! st %env-held #t)
                  (%put! st %drag (list (lit envelope) #f))
                  (%drag-change! st (fn (_) (%drag-point! st t y x))))))
@@ -2166,6 +2312,7 @@
       ((eq? kind (lit cell)) (%put-cell! st (Str8 trim text)))
       ((eq? kind (lit effects))
         (%parts-change! st (fn (_ p) (list (first p) (List ref 1 p) (List filter (fn (_ e) (not (str=? e ""))) (Str8 split "/" (Str8 trim text))))) #t))
+      ((if (pair? kind) (eq? (first kind) (lit prop)) #f) (%prop-typed! st (List ref 1 kind) text))
       ((pair? kind)
         (%try! st "not an effect" (fn (_) (%change! st (song-set-effect (edit-song st) (rest kind) (Str8 trim text))) ())))
       (#t ((fn (_ e) (unless (null? e) (edit-message! st e)))
@@ -2423,4 +2570,4 @@
 
 (provide tracker/edit edit-make edit-feed! edit-settle! edit-tick! edit-key! edit-history-open!
   %page-hints %song-settings %samples %envelope %instrument-form %picked-instrument %write-form %wave-name
-  %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-field)
+  %props-lacking %picked-sample %sample-args %sound %sample-fields %field-value %heard-pattern %struck %input-field)

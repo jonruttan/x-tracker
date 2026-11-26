@@ -194,8 +194,8 @@
            (#t (Str8 append home "/.local/state/x/tracker-history")))))
 
 ; The kind a line's history is kept under: an effect of the song's mix
-; with the others of its kind.
-(def history-kind (fn (_ kind) (if (pair? kind) (lit effect) kind)))
+; with the others of its kind, an F4 prop's value with the props'.
+(def history-kind (fn (_ kind) (if (pair? kind) (if (eq? (first kind) (lit prop)) (lit prop) (lit effect)) kind)))
 
 ; The history read from PATH: ((KIND LINE ...) ...), each kind's lines
 ; newest first, %fd-keep of them; nil for a file there is not.  A line
