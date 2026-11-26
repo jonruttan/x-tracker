@@ -122,6 +122,7 @@ x -l tracker -- help /v | head -1 -> cell effect  /vD,P
 | `/cN`      | cut: let go N ticks into the row                             |
 | `/dN`      | delay: start N ticks into the row                            |
 | `/rN`      | retrigger: start again every N ticks                         |
+| `/eMS,P,N` | echo: again MS ms later at P percent (50), N times (1)       |
 
 ## Instruments
 

@@ -17,6 +17,7 @@
 ; `min`/`max` replace `least`/`greatest` (the tracker's are local names).
 ; v0.63.0: (Term mouse! fd on) and (mouse ...) from Term key (x-lang#1479); x/sys/midi,
 ; MIDI input from a device (x-lang#1481): the mouse and MIDI keyboard.
-(requires-release "v0.63.0")
+; v0.64.0: a cell's /eMS,P,N echoes the note (x-lang#1495).
+(requires-release "v0.64.0")
 
 (entry run)
