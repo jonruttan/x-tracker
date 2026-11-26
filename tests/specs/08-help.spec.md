@@ -118,7 +118,7 @@ effects: a cell's effects, after /
 ```
 ---
 ```output
-keys: every key, and the action :set key binds it by   (2 above)   (99 below)
+keys: every key, and the action :set key binds it by   (2 above)   (100 below)
   F2 Alt-2                    the pattern editor
   F3 Alt-3                    the samples: their settings, and their sound drawn and edited
   F4 Alt-4                    the instruments, and an instrument's envelope drawn and edited

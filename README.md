@@ -166,8 +166,12 @@ A MIDI keyboard, `(midi on)`: a note played is heard, and on the
 pattern put at the cursor, its velocity the gain, the cursor moved on
 by the step; `(midi-off on)` puts a let-go as the keys are let go.
 
-`:` takes a command, as vi does; the line has a cursor that the arrows,
-Home and End move, as a text field's does:
+`:` takes a command, as vi does.  A line typed edits as x-lang's own
+do: the arrows, Home and End move its cursor, ctrl-k, ctrl-u and ctrl-w
+kill and ctrl-y puts back, Up and Down walk the lines of its kind typed
+before and ctrl-r searches them, kept in
+`~/.local/state/x/tracker-history`; a command is coloured as x-lang
+text is:
     :w [FILE]   :q   :q!   :wq       write, quit
     :song [NAME]                      edit or make a song; alone, list
                                       them to pick one with up, down, Enter

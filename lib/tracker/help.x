@@ -126,8 +126,10 @@
         (list () "wheel" "scroll the pattern three rows, a list a line, a setting of F3 up or down, the help")
         "The editor"
         (list (list (lit command)) ":" "type a command (:help commands)")
-        (list () "left right Home End" "in a line typed, move the cursor; with Ctrl, a word; text goes in at it"
-              "  Backspace Delete, ctrl-u ctrl-k ctrl-w: the character before, at it, all before, after, the word before")
+        (list () "left right Home End" "in a line typed, move the cursor; with Ctrl or Alt b, f, a word; text goes in at it"
+              "  Backspace Delete, ctrl-u ctrl-k ctrl-w: the character before, at it, all before, after, the word before; ctrl-y puts it back")
+        (list () "up down  ctrl-r ctrl-s" "in a line typed, the lines of its kind typed before; search them back, forward as you type"
+              "  kept in ~/.local/state/x/tracker-history, each kind its own: commands, cells, effects, instruments")
         (list (list (lit help)) "?" "this help: n, p the next and previous topic")
         (list (list (lit quit)) "ctrl-c  ctrl-q" "quit, as :q")))
 

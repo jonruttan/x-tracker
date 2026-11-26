@@ -83,11 +83,20 @@ rows on the beat are drawn in a colour of their own.  The cursor is
 the column drawn reversed.  The last line shows the keys to start
 with, a line being typed, or a message.  A line being typed has its
 prompt in bold and a cursor, drawn reversed, that left and right, Home
-and End move (Ctrl and left or right, a word); text goes in at the
-cursor, Backspace and Delete take the character before it and under
-it, and ctrl-u, ctrl-k and ctrl-w all before it, all after it and the
-word before.  A line longer than the screen shows the part about the
-cursor, `...` for what is before it.  `?` shows every key and command;
+and End move (Ctrl and left or right, or Alt-b and Alt-f, a word);
+text goes in at the cursor, Backspace and Delete take the character
+before it and under it, ctrl-u, ctrl-k and ctrl-w all before it, all
+after it and the word before, and ctrl-y puts back what they took.  A
+line longer than the screen shows the part about the cursor, `...` for
+what is before it.  Up and Down walk the lines of the same kind typed
+before, the line being typed kept at the bottom: commands, cells,
+effects and instruments each have their own.  ctrl-r searches them
+back as the search is typed, ctrl-r again the match before, ctrl-s
+forward; Enter takes the match and ctrl-g leaves the search.  The
+lines are kept in `~/.local/state/x/tracker-history` (under
+`$XDG_STATE_HOME` when it is set), the last 500 of each kind read as
+the editor starts.  A command or an instrument is coloured as x-lang
+text is, a cell's volume and effects as the pattern draws them.  `?` shows every key and command;
 any key closes it.  A list too wide for the screen, such as
 `:patterns` in a song of many, pages the way `?` does.
 
