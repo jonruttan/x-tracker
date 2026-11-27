@@ -269,10 +269,13 @@ SID's three voices are taken down: frequency, waveform, pulse width,
 envelope, gate and filter.  A row is as many frames as the notes are
 apart (where a driver runs a frame late now and then, their time apart
 on average), and a tick a frame, so a note started inside a row is
-delayed (`/d`).  A note is held through its release and faded (`/f`) to
-the level the SID's envelope leaves, then cut (`/c`) where it ends,
-which is where a driver writes a quick release or the voice's next note
-starts.  A pitch wobbling less than a semitone is a vibrato (`/v`),
+delayed (`/d`).  An instrument's envelope is the SID's: a straight climb,
+then a fall to the sustain that slows as it gets quieter, its pace
+divided at the levels reSID measured on the chip.  A note is held
+through its release and faded (`/f`) to the level the SID's envelope
+leaves, a fade from each row the fall's pace changes in, then cut
+(`/c`) where it ends, which is where a driver writes a quick release or
+the voice's next note starts.  A pitch wobbling less than a semitone is a vibrato (`/v`),
 one stepping by semitones from frame to frame an arpeggio (`/a`), and
 one gliding or moving from row to row a slide (`/s`).  A pulse's width
 moves in its cells (`/w`), and so does a filtered voice's cut-off

@@ -23,8 +23,8 @@
 ; it spans, a note a frame early on its row.  A tick is a frame, so a
 ; cell's effects run at the frame's pace: a note started off the row's
 ; first frame is delayed (/d).  A note is held through its release and
-; faded (/f) to the level the SID's envelope leaves, each frame's release
-; taking its share, and cut (/c) where it ends: its level spent, a quick
+; faded (/f) to the level the SID's envelope leaves, a fade from each row
+; its fall's pace changes in, and cut (/c) where it ends: its level spent, a quick
 ; release written, or the voice's next note.  Inside a row, a pitch
 ; wobbling less than a semitone about its centre is a vibrato (/v),
 ; stepping by semitones an arpeggio (/a), and moving by smaller steps or
@@ -393,6 +393,7 @@
 (def %sd-clock (fn (_ s) (Str8 append (Str8 str (int/ s 60)) ":" (if (int< (int% s 60) 10) "0" "") (Str8 str (int% s 60)))))
 
 (def %sd-at-least (fn (_ n x) (if (< x n) n x)))
+(def %sd-at-most (fn (_ n x) (if (< n x) n x)))
 
 ; --- pitches -------------------------------------------------------------------
 
@@ -465,27 +466,129 @@
          (self (rest xs) (pair (int- (first (rest xs)) (first xs)) acc))))
      rs ())))
 
-; The envelope's times: attack, and decay or release, in ms.
+; The envelope's times, as the Commodore 64 Programmer's Reference Guide
+; gives them: attack, a climb from 0 to the peak, and decay or release, a
+; fall from the peak to 0, in ms.
 (def %attack-ms (list 2 8 16 24 38 56 68 80 100 250 500 800 1000 3000 5000 8000))
 (def %decay-ms (list 6 24 48 72 114 168 204 240 300 750 1500 2400 3000 9000 15000 24000))
+
+; The envelope is a counter, 0 to 255, stepped at its rate's pace: up by
+; one a step in the attack, down by one in the decay and the release, a
+; fall's steps each taking longer as the counter gets lower.  Its pace is
+; divided by 1 above 93, then by 2, 4, 8, 16 and 30 from 93, 54, 26, 14
+; and 6 down, a straight-line exponential (reSID's envelope.cc, its
+; period measured on the chip by sampling ENV3).  Each is (LOW .
+; DIVIDER): the counter's values above LOW and up to the one before's.
+(def %sd-fall (list (pair 93 1) (pair 54 2) (pair 26 4) (pair 14 8) (pair 6 16) (pair 0 30)))
+
+; Counters here are in thousandths of a step, 0 to %sd-top.
+(def %sd-top 255000)
+
+; The divided steps a fall takes from counter C down to D, in thousandths.
+(def %sd-cost
+  (fn (_ c d)
+    (first (List fold (fn (_ acc seg)
+                        (def hi (if (int< c (rest acc)) c (rest acc)))
+                        (def lo (if (int< (int* 1000 (first seg)) d) d (int* 1000 (first seg))))
+                        (pair (int+ (first acc) (if (int< lo hi) (int* (int- hi lo) (rest seg)) 0)) (int* 1000 (first seg))))
+             (pair 0 %sd-top) %sd-fall))))
+
+; The divided steps of a whole fall, 255 to 0: what a decay or release
+; time is the length of.
+(def %sd-fall-steps (int/ (%sd-cost %sd-top 0) 1000))
+
+; Counter C after a fall of BUDGET thousandths of a divided step, not
+; below FLOOR.
+(def %sd-sink
+  (fn (_ c budget floor)
+    (first (List fold (fn (_ acc seg)
+                        (def at (first acc))
+                        (def left (rest acc))
+                        (def to (if (int< (int* 1000 (first seg)) floor) floor (int* 1000 (first seg))))
+                        (if (if (int< to at) (int< 0 left) #f)
+                          ((fn (_ cost) (if (int< left cost) (pair (int- at (int/ left (rest seg))) 0) (pair to (int- left cost))))
+                           (int* (int- at to) (rest seg)))
+                          acc))
+             (pair c budget) %sd-fall))))
+
+; Voice V's attack, decay and release in frame FR, ms each, and its
+; sustain as a counter.
+(def %v-adsr
+  (fn (_ fr v)
+    (def ad (%fb fr (int+ (int* v 7) 5)))
+    (def sr (%fb fr (int+ (int* v 7) 6)))
+    (list (List ref (int>> ad 4) %attack-ms) (List ref (int& ad 15) %decay-ms) (List ref (int& sr 15) %decay-ms)
+          (int* (int* 17 (int>> sr 4)) 1000))))
+
+; Voice V's counter C, ATTACKING or not, after frame FR of US: with the
+; gate on a climb at the attack's pace, its peak the start of the decay to
+; the sustain; off, the release.  Answers (C . ATTACKING).
+(def %sd-step
+  (fn (_ fr v c attacking us)
+    (def adsr (%v-adsr fr v))
+    (def sink (fn (_ c us ms floor) (%sd-sink c (int/ (int* %sd-fall-steps us) ms) floor)))
+    (if (int= 0 (%v-gate fr v)) (pair (sink c us (List ref 2 adsr) 0) #f)
+      (if attacking
+        ((fn (_ need) (if (int< us need) (pair (int+ c (int/ (int* 255 us) (first adsr))) #t)
+                        (pair (sink %sd-top (int- us need) (List ref 1 adsr) (List ref 3 adsr)) #f)))
+         (int* (int/ (int- %sd-top c) 255) (first adsr)))
+        (pair (sink c us (List ref 1 adsr) (List ref 3 adsr)) #f)))))
+
+; The envelope voice V's notes start with in frame FR, its points (MS
+; PCT): its attack's climb to the peak, then its decay to the sustain
+; through the points its fall's pace changes at, straight between, as the
+; counter falls.
+(def %sd-env
+  (fn (_ fr v)
+    (def adsr (%v-adsr fr v))
+    (def a (first adsr))
+    (def s (List ref 3 adsr))
+    (def at (fn (_ c) (int+ a (int/ (int* (int/ (%sd-cost %sd-top c) 1000) (List ref 1 adsr)) %sd-fall-steps))))
+    (def pct (fn (_ c) (int/ (int* c 100) %sd-top)))
+    (List append (list (list 0 0) (list a 100))
+      (List map (fn (_ seg) (list (at (int* 1000 (first seg))) (pct (int* 1000 (first seg)))))
+        (List filter (fn (_ seg) (if (int< s (int* 1000 (first seg))) (int< (first seg) 255) #f)) %sd-fall))
+      (if (int= s %sd-top) () (list (list (at s) (pct s)))))))
+
+; The level of envelope PTS, (MS PCT) each, at T ms, in thousandths of a
+; percent, straight between points and held after the last.
+(def %sd-env-at
+  (fn (self pts t)
+    (match ((null? (rest pts)) (int* 1000 (List ref 1 (first pts))))
+           ((int< t (first (first (rest pts))))
+             ((fn (_ a b)
+                (def span (int- (first b) (first a)))
+                (if (int< span 1) (int* 1000 (List ref 1 b))
+                  (int+ (int* 1000 (List ref 1 a)) (int* (int- (List ref 1 b) (List ref 1 a)) (int/ (int* 1000 (int- t (first a))) span)))))
+              (first pts) (first (rest pts))))
+           (#t (self (rest pts) t)))))
 
 ; Whether voice V is heard in frame FR: a wave, and no test bit.
 (def %v-heard? (fn (_ fr v) (if (null? (%v-wave (%v-ctrl fr v))) #f (int= 0 (int& (%v-ctrl fr v) 8)))))
 
-; The tail of the note voice V lets go in frame FALL of the N FRAMES, at
-; US a frame: (STOP PCT), STOP the frame it ends in and PCT its level
-; there.  Each frame's release takes its share of the level, as a driver
-; ends a note early by writing a quick release; the tail ends where its
-; level is spent, at the voice's next note, or where it has no wave.
+; The tail of the note voice V starts in frame RISE and lets go in frame
+; FALL of the N FRAMES, at US a frame: (STOP KNOTS LEVELS).  The counter
+; is followed frame by frame from the note's start, each frame at its own
+; attack, decay, sustain and release, as a driver ends a note early by
+; writing a quick release.  STOP is the frame the tail ends in: where its
+; level is spent, at the voice's next note, or where it has no wave;
+; KNOTS the frames from FALL its fall changes pace at, a divider or a
+; release of its own; LEVELS the counter at the start of each frame from
+; RISE to STOP.
 (def %sd-tail
-  (fn (_ frames n fall v us)
-    (def rel (fn (_ k) (List ref (int& (%fb (%fr frames k) (int+ (int* v 7) 6)) 15) %decay-ms)))
-    ((fn (self k level)
-       (if (if (int< k n) (if (%v-heard? (%fr frames k) v) (not (%rise? frames k v)) #f) #f)
-         ((fn (_ next) (if (int< 0 next) (self (int+ k 1) next) (list k (int/ level 1000))))
-          (int- level (int/ (int* 100 us) (rel k))))
-         (list k (int/ level 1000))))
-     fall 100000)))
+  (fn (_ frames n rise fall v us)
+    (def seg (fn (_ c) (List index-of #t (List map (fn (_ s) (int< (int* 1000 (first s)) c)) %sd-fall))))
+    (def rel (fn (_ k) (int& (%fb (%fr frames k) (int+ (int* v 7) 6)) 15)))
+    ((fn (self k c attacking levels knots)
+       (def on (if (int< k n) (if (int< k fall) #t (if (%v-heard? (%fr frames k) v) (if (int= k fall) #t (not (%rise? frames k v))) #f)) #f))
+       (if (if on (if (int< k fall) #t (int< 0 c)) #f)
+         ((fn (_ next)
+            (self (int+ k 1) (first next) (rest next) (pair c levels)
+                  (if (int= k fall) (list k)
+                    (if (if (int< fall k) (if (equal? (seg c) (seg (first levels))) (int= (rel k) (rel (int- k 1))) #f) #t) knots (pair k knots)))))
+          (%sd-step (%fr frames k) v c attacking us))
+         (list k (List reverse knots) (Vector from-list (List reverse (pair c levels))))))
+     rise 0 #t () ())))
 
 ; How PS, the pitches of a row's frames in cents, move: (CENTRE SPREAD
 ; CROSSINGS STEPPED PERIOD), CENTRE midway between the highest and the
@@ -541,21 +644,17 @@
 
 ; An instrument's props from voice V in frame FR, but for a pulse's
 ; width and a filter's cut-off, which are its notes' means and move in
-; their cells.  Its release is the SID's quickest: a note's tail is in
-; its cells, a fade to its end.  The filter's resonance, 0 to 15, is a
+; their cells.  Its envelope is the SID's (see %sd-env).  Its release is
+; the SID's quickest: a note's tail is in its cells, faded to its end.  The filter's resonance, 0 to 15, is a
 ; Q from 0.707 to 1.707, as reSID has it: the mixer's RES 31 to 75.
 (def %sd-props
   (fn (_ fr v)
     (def ctrl (%v-ctrl fr v))
-    (def ad (%fb fr (int+ (int* v 7) 5)))
-    (def sr (%fb fr (int+ (int* v 7) 6)))
     (def wave (%v-wave ctrl))
-    (def a (List ref (int>> ad 4) %attack-ms))
-    (def d (List ref (int& ad 15) %decay-ms))
     (def mode (%fb fr 24))
     (def passes (List filter (fn (_ p) (int< 0 (int& mode (first p)))) (list (pair 16 "low") (pair 32 "band") (pair 64 "high"))))
     (Str8 append "(wave " (if (str=? wave "noise") "noise" wave) ")"
-      " (env (0 0) (" (Str8 str a) " 100) (" (Str8 str (int+ a d)) " " (Str8 str (int/ (int* (int>> sr 4) 100) 15)) "))"
+      " (env " (Str8 join " " (List map (fn (_ p) (Str8 append "(" (Str8 str (first p)) " " (Str8 str (List ref 1 p)) ")")) (%sd-env fr v))) ")"
       " (release " (Str8 str (first %decay-ms)) ")"
       (if (%v-filtered? fr v)
         (Str8 append " (res " (Str8 str (int+ 31 (int/ (int* (int>> (%fb fr 23) 4) 44) 15))) ")"
@@ -649,7 +748,7 @@
                (self (int+ k 1) (if (if (int< k 0) #t (if (int< k nr) #t (not (equal? noisy (noise? k))))) acc (pair k acc)))
                (List reverse acc)))
            a ()))))
-    ((fn (self r on stop0 base at arp slid vib0 nrise0 nnoise0)
+    ((fn (self r on stop0 base at arp slid vib0 nrise0 nnoise0 ntone0 knots0 prod0)
        (when (int< r rows)
          (do (when (int= 0 (int% r 8)) (Heap collect))
              (when (if (null? say) #f (if (int< 0 r) (int= 0 (int% r every)) #f))
@@ -670,10 +769,34 @@
              (def held (if struck #t on))
              (def from (List filter (fn (_ k) (if struck (not (int< k rise)) #t)) fs))
              (def fall (if (if held (if struck #t (null? stop0)) #f) (List find (fn (_ k) (int= 0 (%v-gate (%fr frames k) v))) from) ()))
-             (def tail (if (null? fall) () (%sd-tail frames n fall v us)))
+             (def nrise (if struck rise nrise0))
+             (def ntone (if struck tone ntone0))
+             (def tail (if (null? fall) () (%sd-tail frames n nrise fall v us)))
              (def stop (if (null? fall) (if struck () stop0) (first tail)))
              (def end (if (null? stop) () (if (int< stop f1) stop ())))
-             (def nrise (if struck rise nrise0))
+             ; The tail's fades, (ROW . PCT) each: from each row its fall
+             ; changes pace in, to the level the counter is at when the next
+             ; such row starts, or at the tail's end, as a share of the level
+             ; the note's envelope is at then.
+             (def frame-of (fn (_ q) (int+ start (int/ (int* q span) units))))
+             (def row-of (fn (_ k) ((fn (self q) (if (int< k (frame-of (int+ q 1))) q (self (int+ q 1)))) r)))
+             (def knots
+               (if (null? tail) (if struck () knots0)
+                 (if (int< fall stop)
+                   ((fn (_ rs)
+                      (def env (%sd-env (%fr frames ntone) v))
+                      (def share
+                        (fn (_ e)
+                          (def lm (int/ (int* (Vector ref (int- e nrise) (List ref 2 tail)) 100) 255))
+                          (def em (%sd-env-at env (int/ (int* (int- e nrise) us) 1000)))
+                          (if (int< em 1) 0 (%sd-at-most 100 (int/ (int* lm 100) em)))))
+                      ((fn (self rs acc)
+                         (if (null? rs) (List reverse acc)
+                           (self (rest rs) (pair (pair (first rs) (share (if (null? (rest rs)) stop (frame-of (first (rest rs)))))) acc))))
+                       rs ()))
+                    (List fold (fn (_ acc k) ((fn (_ q) (if (if (null? acc) #f (int= q (List ref -1 acc))) acc (List append acc (list q)))) (row-of k)))
+                      () (List ref 1 tail)))
+                   ())))
              (def nnoise (if struck (noise? tone) nnoise0))
              ; A tone's pitch is not taken from its frames of noise, a drum's
              ; strike, whose frequency is no note.
@@ -705,7 +828,16 @@
                                 ((if was-vib (not vib) #f) (Str8 append "/v0," (Str8 str was-vib)))
                                 (#t "")))
              (def p-note (if struck (if vib (first wide) (pitch tone)) ()))
-             (def fade (if (null? fall) "" (if (if (int< fall stop) (int< (List ref 1 tail) 100) #f) (Str8 append "/f" (Str8 str (List ref 1 tail))) "")))
+             ; A fade is a share of the fades before it in the note, the
+             ; product the tracker takes of them, so each is the share that
+             ; brings the product nearest its level; a row that holds after a
+             ; fade says so, so the fade before it ends with its row.
+             (def prod (if struck 100 prod0))
+             (def here (if (null? knots) () (if (int= (first (first knots)) r) (rest (first knots)) ())))
+             (def f-pct (if (if (null? here) #t (int< prod 1)) () (%sd-at-most 100 (int/ (int+ (int* here 100) (int/ prod 2)) prod))))
+             (def prod1 (if (null? f-pct) prod (int/ (int* prod f-pct) 100)))
+             (def fade (if (null? f-pct) "" (if (if (int= f-pct 100) (int= prod 100) #f) "" (Str8 append "/f" (Str8 str f-pct)))))
+             (def knots1 (if (null? here) knots (rest knots)))
              (def cut (if (null? end) "" (if (if (not struck) (int= end f) #f) "" (Str8 append "/c" (Str8 str (int- end f))))))
              (def head
                (match (struck
@@ -754,8 +886,9 @@
                                 (pair (inst-of (%sd-props (%fr frames tone) v) (pair (%v-width (%fr frames tone) v) (%sd-hz (%fr frames tone))))
                                       (list head (first mv) (List ref 1 mv) fx)))
                  cells))
-             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f) nrise nnoise))))
-     0 #f () 0 0 () #f #f 0 #f)
+             (self (int+ r 1) now-on stop now-base (int+ now-at slide) (if now-on arpeggio ()) (not (int= slide 0)) (if now-on vib-per #f) nrise nnoise
+                   ntone knots1 prod1))))
+     0 #f () 0 0 () #f #f 0 #f 0 () 100)
     ; Each struck cell named: its start's width and cut-off where they are
     ; not its instrument's means.
     (def means (List map (fn (_ ws) (pair (mean ws first) (mean ws rest))) (Vector ref 1 props)))
