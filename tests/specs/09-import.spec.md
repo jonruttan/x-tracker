@@ -138,9 +138,9 @@ B4 D5 a frame each, then C5 held.
 ```output
 (song "chip" (bpm 125) (rows 4) (ticks 6)
   (limit 90 120)
-  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
+  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (86 66)) (release 6) (gain 35))
   (pattern p1
-    (pulse1 "C4/f76 E4/f76 G4/a4,7 ./a/s500 ./s0 .  .  .  ."))
+    (pulse1 "C4/f29 E4/f29 G4/a4,7 ./a/s500 ./s0 .  .  .  ."))
   (order p1))
 ```
 
@@ -171,7 +171,7 @@ climbing a little every frame.
 ```output
 (song "moving" (bpm 125) (rows 4) (ticks 6)
   (limit 90 120)
-  (instrument pulse1 (wave pulse) (width (0 1)) (env (0 0) (2 100) (752 66)) (release 6) (res 75) (pass low) (cutoff (0 30)) (gain 35))
+  (instrument pulse1 (wave pulse) (width (0 1)) (env (0 0) (2 100) (86 66)) (release 6) (res 75) (pass low) (cutoff (0 30)) (gain 35))
   (pattern p1
     (pulse1 "C4/w18/o2275/y400 ./w37/o4520 ./w56/o6766 ./w68/o8637 .  .  .  .  ."))
   (order p1))
@@ -204,9 +204,9 @@ over an arpeggio.
 ```output
 (song "tail" (bpm 74) (rows 3) (ticks 14)
   (limit 90 120)
-  (instrument saw1 (wave saw) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
+  (instrument saw1 (wave saw) (env (0 0) (2 100) (86 66)) (release 6) (gain 35))
   (pattern p1
-    (saw1 "C4/f40/c6 E4/f28/c7 G4/f4/c9/a5 ."))
+    (saw1 "C4/f0/c7 E4/f0/c8 G4/f0/c10/a5 ."))
   (order p1))
 ```
 
@@ -240,9 +240,9 @@ again, then a second note.
 ```output
 (song "vib" (bpm 115) (rows 2) (ticks 13)
   (limit 90 120)
-  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (752 66)) (release 6) (gain 35))
+  (instrument pulse1 (wave pulse) (width (0 50)) (env (0 0) (2 100) (86 66)) (release 6) (gain 35))
   (pattern p1
-    (pulse1 "C4/v29,6 ./v0,6/s-401 ./f88/v29,6/s0 G#3"))
+    (pulse1 "C4/v29,6 ./v0,6/s-401 ./f51/v29,6/s0 G#3"))
   (order p1))
 #t
 ```
@@ -265,7 +265,7 @@ again, then a second note.
 (write (song-patterns (sid-song (spec-sid "PSID" 0x1000 0x1000 0x1020 drum-code) "drum" 0 1 ())))
 ```
 ---
-    (("p1" ("pulse1" "C4/f88" "E4" "./c2" "." ".")))
+    (("p1" ("pulse1" "C4/f51" "E4" "./c2" "." ".")))
 
 ### a tune with no frame's call has its interrupt's handler called, ended through the KERNAL's
 
@@ -279,7 +279,7 @@ again, then a second note.
 (write (song-instrument-text (sid-song (spec-sid "RSID" 0x1000 0x1000 0 irq-code) "irq" 0 1 ()) "triangle1"))
 ```
 ---
-    (("p1" ("triangle1" "C4" "." "." "." "." "." "." "." ".")))"(instrument triangle1 (wave triangle) (env (0 0) (2 100) (752 0)) (release 6) (gain 35))"
+    (("p1" ("triangle1" "C4" "." "." "." "." "." "." "." ".")))"(instrument triangle1 (wave triangle) (env (0 0) (2 100) (162 36) (240 21) (351 10) (446 5) (573 2) (752 0)) (release 6) (gain 35))"
 
 ### what is no SID file, a tune it does not have, or one of no notes is refused
 
